@@ -3,12 +3,15 @@ package de.dnpm.dip.mtb.query.api
 
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.coding.atc.ATC
+import de.dnpm.dip.coding.icd.ICD10GM
+import de.dnpm.dip.coding.icd.ICDO3
 import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.model.{
   Gender,
   Interval,
   Site,
   Reference,
+  Quantity
 }
 import de.dnpm.dip.service.query.{
   PatientFilter,
@@ -19,7 +22,8 @@ import de.dnpm.dip.service.query.{
 }
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
-  Variant
+  Variant,
+  RECIST
 }
 import play.api.libs.json.{
   Json,
@@ -32,7 +36,6 @@ final case class MTBResultSummary
   id: Query.Id,
   numPatients: Int,
   distributions: MTBResultSummary.Distributions,
-  therapeutics:
 ) 
 extends ResultSet.Summary
 {
@@ -52,11 +55,20 @@ object MTBResultSummary
   extends ResultSet.Distributions
 
 
-  final case class Therapeutics
+  final case class TumorDiagnostics
+  (
+    entities: Seq[ConceptCount[Coding[ICD10GM]]],
+    morphologies: Seq[ConceptCount[Coding[ICD10GM]]]
+  )
+
+
+  final case class Treatment
   (
     recommendationsTotal: Seq[ConceptCount[Coding[ATC]]],
     recommendationBySupportingVariant: Seq[Entry[Reference[Variant],Seq[ConceptCount[Coding[ATC]]]]],
-    therapies: Seq[ConceptCount[Coding[ATC]]]
+    therapies: Seq[ConceptCount[Set[Coding[ATC]]]],
+    meanTherapyDurations: Seq[Entry[Set[Coding[ATC]],Int]],
+    responsesByTherapy: Seq[Entry[Set[Coding[ATC]],Seq[ConceptCount[RECIST.Value]]]]
   )
 
 

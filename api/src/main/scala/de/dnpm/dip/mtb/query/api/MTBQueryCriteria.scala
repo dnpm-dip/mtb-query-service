@@ -99,3 +99,23 @@ final case class MTBQueryCriteria
 //  medications: Option[Set[MedicationCriteria]],
   responses: Option[Set[Coding[RECIST.Value]]]
 )
+
+
+object MTBQueryCriteria
+{
+
+  implicit val formatSNVCriteria: OFormat[SNVCriteria] =
+    Json.format[SNVCriteria]
+
+  implicit val formatCNVCriteria: OFormat[CNVCriteria] =
+    Json.format[CNVCriteria]
+
+  implicit val formatFusionCriteria: OFormat[FusionCriteria] =
+    Json.format[FusionCriteria]
+
+  implicit val formatMedicationCriteria: OFormat[MedicationCriteria] =
+    Json.format[MedicationCriteria]
+
+  implicit val format: OFormat[MTBQueryCriteria] =
+    Json.format[MTBQueryCriteria]
+}
