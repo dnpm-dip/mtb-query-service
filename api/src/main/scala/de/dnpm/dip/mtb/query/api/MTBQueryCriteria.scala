@@ -72,18 +72,11 @@ with DefaultCodeSystem
 
 }
 
-/*
-final case class MedicationCriteria
-(
-  medication: Coding[ATC],
-  usage: Option[Set[Coding[MedicationUsage.Value]]]
-)
-*/
 
 final case class MedicationCriteria
 (
   medication: Set[Coding[ATC]],
-  usage: Option[Set[Coding[MedicationUsage.Value]]]
+  usage: Set[Coding[MedicationUsage.Value]]
 )
 
 
@@ -96,9 +89,18 @@ final case class MTBQueryCriteria
   dnaFusions: Option[Set[FusionCriteria]],
   rnaFusions: Option[Set[FusionCriteria]],
   medications: Option[MedicationCriteria],
-//  medications: Option[Set[MedicationCriteria]],
   responses: Option[Set[Coding[RECIST.Value]]]
 )
+{
+  def getDiagnoses = diagnoses.getOrElse(Set.empty)
+
+  def getTumorMorphologies  = tumorMorphologies.getOrElse(Set.empty) 
+  def getSimpleVariants     = simpleVariants.getOrElse(Set.empty)    
+  def getCopyNumberVariants = copyNumberVariants.getOrElse(Set.empty)
+  def getDnaFusions         = dnaFusions.getOrElse(Set.empty) 
+  def getRnaFusions         = rnaFusions.getOrElse(Set.empty)        
+  def geResponses           = responses.getOrElse(Set.empty)        
+}
 
 
 object MTBQueryCriteria

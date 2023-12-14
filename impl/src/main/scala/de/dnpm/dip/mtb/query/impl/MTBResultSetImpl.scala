@@ -10,6 +10,7 @@ import de.dnpm.dip.service.query.{
   PatientFilter,
   PatientMatch,
   Query,
+  ResultSet,
   BaseResultSet,
   Distribution,
   ReportingOps
@@ -18,7 +19,6 @@ import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.mtb.query.api.{
   MTBQueryCriteria,
   MTBResultSet,
-  MTBResultSummary,
 }
 
 
@@ -32,29 +32,38 @@ with BaseResultSet[MTBPatientRecord,MTBQueryCriteria]
 with ReportingOps
 {
 
-  override def summary(
-    filter: MTBPatientRecord => Boolean
-  ) = {
-
-    val records =
-      results.collect {
-        case (Snapshot(patRec,_),_) if (filter(patRec)) => patRec
-      }
-
-    val patients =
-      records.map(_.patient)
-
-
-    MTBResultSummary(
-      id,
-      records.size,
-      MTBResultSummary.Distributions(
-        DistributionOf(patients.map(_.gender)),
-        AgeDistribution(patients.map(_.age)),
-        DistributionOf(patients.flatMap(_.managingSite)),
-      )
-    )
-
+  import scala.util.chaining._
+  import MTBResultSet.{
+    Summary,
+    TumorDiagnostics,
+    Treatment
   }
+
+  override def summary(
+    f: MTBPatientRecord => Boolean
+  ): Summary =
+    records
+      .filter(f)
+      .pipe {
+        recs =>
+
+        Summary(
+          id,
+          recs.size,
+          ResultSet.Demographics.on(recs.map(_.patient)),
+          TumorDiagnostics(
+            DistributionOf(
+              recs.flatMap(_.diagnoses.toList)
+                .map(_.code)
+            ),
+            DistributionOf(
+              recs.flatMap(_.getHistologyReports)
+                .flatMap(_.results.tumorMorphology.map(_.value))
+            )
+          )
+
+        )
+
+    }
 
 }

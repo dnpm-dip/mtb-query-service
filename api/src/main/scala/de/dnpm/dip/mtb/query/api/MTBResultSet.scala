@@ -31,34 +31,20 @@ import play.api.libs.json.{
 }
 
 
-final case class MTBResultSummary
-(
-  id: Query.Id,
-  numPatients: Int,
-  distributions: MTBResultSummary.Distributions,
-) 
-extends ResultSet.Summary
+trait MTBResultSet
+extends ResultSet[MTBPatientRecord,MTBQueryCriteria]
 {
-  type DistributionsType = MTBResultSummary.Distributions
+  type SummaryType = MTBResultSet.Summary
 }
 
 
-object MTBResultSummary
+object MTBResultSet
 {
-
-  final case class Distributions
-  (
-    gender: Seq[ConceptCount[Coding[Gender.Value]]],
-    age: Seq[ConceptCount[Interval[Int]]],
-    site: Seq[ConceptCount[Coding[Site]]],
-  )
-  extends ResultSet.Distributions
-
 
   final case class TumorDiagnostics
   (
     entities: Seq[ConceptCount[Coding[ICD10GM]]],
-    morphologies: Seq[ConceptCount[Coding[ICD10GM]]]
+    morphologies: Seq[ConceptCount[Coding[ICDO3.M]]]
   )
 
 
@@ -68,21 +54,28 @@ object MTBResultSummary
     recommendationBySupportingVariant: Seq[Entry[Reference[Variant],Seq[ConceptCount[Coding[ATC]]]]],
     therapies: Seq[ConceptCount[Set[Coding[ATC]]]],
     meanTherapyDurations: Seq[Entry[Set[Coding[ATC]],Int]],
-    responsesByTherapy: Seq[Entry[Set[Coding[ATC]],Seq[ConceptCount[RECIST.Value]]]]
+    responsesByTherapy: Seq[Entry[Set[Coding[ATC]],Seq[ConceptCount[Coding[RECIST.Value]]]]]
   )
 
+  final case class Summary
+  (
+    id: Query.Id,
+    numPatients: Int,
+    demographics: ResultSet.Demographics,
+    diagnostics: TumorDiagnostics,
+//    treatment: Treatment
+  )
+  extends ResultSet.Summary
 
-  implicit val writesDistributions: OWrites[Distributions] =
-    Json.writes[Distributions]
 
-  implicit val writes: OWrites[MTBResultSummary] =
-    Json.writes[MTBResultSummary]
+
+  implicit val writesTumorDiagnostics: OWrites[TumorDiagnostics] =
+    Json.writes[TumorDiagnostics]
+
+  implicit val writesTreatment: OWrites[Treatment] =
+    Json.writes[Treatment]
+
+  implicit val writes: OWrites[Summary] =
+    Json.writes[Summary]
+
 }
-
-
-trait MTBResultSet
-extends ResultSet[MTBPatientRecord,MTBQueryCriteria]
-{
-  type Summary = MTBResultSummary
-}
-
