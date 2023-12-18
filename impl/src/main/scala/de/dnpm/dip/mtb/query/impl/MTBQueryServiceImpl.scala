@@ -8,7 +8,11 @@ import scala.util.{
   Try,
   Failure
 }
-import cats.Monad
+import cats.{
+  Id,
+  Applicative,
+  Monad
+}
 import de.dnpm.dip.util.{
   Completer,
   Logging
@@ -34,7 +38,13 @@ import de.dnpm.dip.service.query.{
 }
 import de.dnpm.dip.coding.{
   Coding,
-  CodeSystem
+  CodeSystem,
+  CodeSystemProvider
+}
+import de.dnpm.dip.coding.atc.ATC
+import de.dnpm.dip.coding.icd.{
+  ICD10GM,
+  ICDO3
 }
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.mtb.model.MTBPatientRecord
@@ -69,8 +79,7 @@ object MTBQueryServiceImpl extends Logging
 
   private val db =
     new InMemLocalDB[Future,Monad,MTBQueryCriteria,MTBPatientRecord](
-      ???
-//      MTBQueryCriteriaOps.criteriaMatcher(strict = true)
+      MTBQueryCriteriaOps.criteriaMatcher(strict = true)
     )
     with MTBLocalDB
 
@@ -84,7 +93,7 @@ object MTBQueryServiceImpl extends Logging
     )
 
   Try(
-    Option(System.getProperty("dnpm.dip.rd.query.data.generate")).get
+    Option(System.getProperty("dnpm.dip.mtb.query.data.generate")).get
   )
   .map(_.toInt)
   .foreach {
@@ -145,14 +154,30 @@ with Completers
   override val localSite: Coding[Site] =
     connector.localSite
       
-/*
+    
   override implicit val hgnc: CodeSystem[HGNC] =
     HGNC.GeneSet
       .getInstance[cats.Id]
       .get
       .latest
-*/
-        
+
+  override implicit val atc: CodeSystemProvider[ATC,Id,Applicative[Id]] =
+    ATC.Catalogs
+      .getInstance[cats.Id]
+      .get
+
+
+  override implicit val icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]] =
+    ICD10GM.Catalogs
+      .getInstance[cats.Id]
+      .get
+
+  override val icdo3: ICDO3.Catalogs[Id,Applicative[Id]] =
+    ICDO3.Catalogs  
+      .getInstance[cats.Id]
+      .get
+
+
 
   //TODO: Complete codings, etc
   override val preprocess: MTBPatientRecord => MTBPatientRecord =

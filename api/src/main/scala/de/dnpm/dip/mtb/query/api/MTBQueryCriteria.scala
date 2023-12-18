@@ -25,7 +25,36 @@ import de.dnpm.dip.mtb.model.{
 import play.api.libs.json.{
   Json,
   Format,
-  OFormat
+  Reads,
+  Writes,
+  OFormat,
+  JsString
+}
+
+
+
+sealed trait LogicalOperator
+object LogicalOperator
+{
+
+  final case object And extends LogicalOperator
+  final case object Or extends LogicalOperator
+
+  implicit val reads: Reads[LogicalOperator] =
+    Reads(
+      _.validate[String]
+        .map(_.toLowerCase)
+        .map {
+          case "and" => And
+          case "or"  => Or
+        }
+    )
+
+  implicit val writes: Writes[LogicalOperator] =
+    Writes { 
+      case And => JsString("and")
+      case Or  => JsString("or")
+    }
 }
 
 
@@ -75,6 +104,7 @@ with DefaultCodeSystem
 
 final case class MedicationCriteria
 (
+  operator: Option[LogicalOperator],
   medication: Set[Coding[ATC]],
   usage: Set[Coding[MedicationUsage.Value]]
 )
@@ -92,8 +122,7 @@ final case class MTBQueryCriteria
   responses: Option[Set[Coding[RECIST.Value]]]
 )
 {
-  def getDiagnoses = diagnoses.getOrElse(Set.empty)
-
+  def getDiagnoses          = diagnoses.getOrElse(Set.empty)
   def getTumorMorphologies  = tumorMorphologies.getOrElse(Set.empty) 
   def getSimpleVariants     = simpleVariants.getOrElse(Set.empty)    
   def getCopyNumberVariants = copyNumberVariants.getOrElse(Set.empty)
@@ -120,4 +149,5 @@ object MTBQueryCriteria
 
   implicit val format: OFormat[MTBQueryCriteria] =
     Json.format[MTBQueryCriteria]
+
 }

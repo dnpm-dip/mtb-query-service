@@ -58,7 +58,7 @@ private trait MTBQueryCriteriaOps
         criteria.medications.map(
           med =>
             other.medications match {
-              case Some(MedicationCriteria(medications,_)) if medications.nonEmpty => 
+              case Some(MedicationCriteria(_,medications,_)) if medications.nonEmpty => 
                 med.copy(
                   medication = med.medication intersect medications
                 )
@@ -174,6 +174,7 @@ private trait MTBQueryCriteriaOps
       case _ => None -> true
     }
 
+
   def medicationsMatch(
     criteria: Option[MedicationCriteria],
     recommendedDrugs: => Set[Coding[ATC]],
@@ -183,27 +184,42 @@ private trait MTBQueryCriteriaOps
     import MedicationUsage._
 
     criteria match {
-      case Some(MedicationCriteria(selectedMedications,usage)) if selectedMedications.nonEmpty => 
+      case Some(MedicationCriteria(op,selectedMedications,usage)) if selectedMedications.nonEmpty => 
         usage
           .map(c => MedicationUsage withName c.code.value)
           .pipe {
-            case s if s.contains(Recommended) && s.contains(Used) => recommendedDrugs intersect usedDrugs
+            case s if s.contains(Recommended) && s.contains(Used) => recommendedDrugs & usedDrugs
             case s if s.contains(Recommended)                     => usedDrugs
             case s if s.contains(Used)                            => usedDrugs
-            case s                                                => recommendedDrugs intersect usedDrugs
+            case s                                                => recommendedDrugs | usedDrugs
           }
           .pipe {
             _.flatMap(_.display).map(_.toLowerCase)
           }
           .pipe {
             medicationNames =>
-              selectedMedications collect { 
-                case coding if medicationNames.exists(name => coding.display.exists(name contains _.toLowerCase)) => coding
+              import LogicalOperator.{And,Or}
+
+              op.getOrElse(Or) match {
+
+                case Or =>
+                  selectedMedications collect { 
+                    case coding if medicationNames.exists(name => coding.display.exists(name contains _.toLowerCase)) => coding
+                  }
+
+                case And =>
+                  selectedMedications.forall( 
+                    coding => medicationNames.exists(name => coding.display.exists(name contains _.toLowerCase))
+                  ) match {
+                    case true  => selectedMedications
+                    case false => Set.empty[Coding[ATC]]
+                  }
+ 
               }
           }
           .pipe {
             case matches if matches.nonEmpty =>
-              Some(MedicationCriteria(matches,usage)) -> true
+              Some(MedicationCriteria(op,matches,usage)) -> true
             case _ =>
               None  -> false
           }
@@ -212,6 +228,7 @@ private trait MTBQueryCriteriaOps
     }
 
   }
+
 
   def criteriaMatcher(
     strict: Boolean = true
@@ -294,6 +311,7 @@ private trait MTBQueryCriteriaOps
               morphologyFulfilled,
               snvsFulfilled,
               cnvsFulfilled,
+              //TODO: DNA-/RNA-Fusions
               responseFulfilled
             )(
               strict

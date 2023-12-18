@@ -48,10 +48,10 @@ object MTBResultSet
   )
 
 
-  final case class Treatment
+  final case class Medication
   (
     recommendationsTotal: Seq[ConceptCount[Coding[ATC]]],
-    recommendationBySupportingVariant: Seq[Entry[Reference[Variant],Seq[ConceptCount[Coding[ATC]]]]],
+    recommendationsBySupportingVariant: Seq[Entry[Reference[Variant],Seq[ConceptCount[Coding[ATC]]]]],
     therapies: Seq[ConceptCount[Set[Coding[ATC]]]],
     meanTherapyDurations: Seq[Entry[Set[Coding[ATC]],Int]],
     responsesByTherapy: Seq[Entry[Set[Coding[ATC]],Seq[ConceptCount[Coding[RECIST.Value]]]]]
@@ -63,7 +63,7 @@ object MTBResultSet
     numPatients: Int,
     demographics: ResultSet.Demographics,
     diagnostics: TumorDiagnostics,
-//    treatment: Treatment
+//    medication: Medication
   )
   extends ResultSet.Summary
 
@@ -72,8 +72,8 @@ object MTBResultSet
   implicit val writesTumorDiagnostics: OWrites[TumorDiagnostics] =
     Json.writes[TumorDiagnostics]
 
-  implicit val writesTreatment: OWrites[Treatment] =
-    Json.writes[Treatment]
+  implicit val writesMedication: OWrites[Medication] =
+    Json.writes[Medication]
 
   implicit val writes: OWrites[Summary] =
     Json.writes[Summary]

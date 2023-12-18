@@ -36,7 +36,7 @@ with ReportingOps
   import MTBResultSet.{
     Summary,
     TumorDiagnostics,
-    Treatment
+    Medication
   }
 
   override def summary(
