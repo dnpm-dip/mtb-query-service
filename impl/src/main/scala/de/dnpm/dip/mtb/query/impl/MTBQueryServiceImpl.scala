@@ -53,8 +53,7 @@ import de.dnpm.dip.connector.peer2peer.PeerToPeerConnector
 
 
 
-class MTBQueryServiceProviderImpl
-extends MTBQueryServiceProvider
+class MTBQueryServiceProviderImpl extends MTBQueryServiceProvider
 {
 
   override def getInstance: MTBQueryService =

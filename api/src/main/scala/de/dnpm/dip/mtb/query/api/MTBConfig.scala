@@ -15,4 +15,5 @@ sealed trait MTBConfig extends UseCaseConfig
   type Filter = MTBFilters
 
   type Results = MTBResultSet
+
 }

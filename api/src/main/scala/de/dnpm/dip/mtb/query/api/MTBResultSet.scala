@@ -60,7 +60,7 @@ object MTBResultSet
   final case class Summary
   (
     id: Query.Id,
-    numPatients: Int,
+    patientCount: Int,
     demographics: ResultSet.Demographics,
     diagnostics: TumorDiagnostics,
 //    medication: Medication
