@@ -11,7 +11,7 @@ import de.dnpm.dip.model.{
   Interval,
   Site,
   Reference,
-  Quantity
+  Duration
 }
 import de.dnpm.dip.service.query.{
   PatientFilter,
@@ -43,27 +43,51 @@ object MTBResultSet
 
   final case class TumorDiagnostics
   (
-    entities: Seq[ConceptCount[Coding[ICD10GM]]],
-    morphologies: Seq[ConceptCount[Coding[ICDO3.M]]]
+    tumorEntityDistribution: Seq[ConceptCount[Coding[ICD10GM]]],
+    tumorMorphologyDistribution: Seq[ConceptCount[Coding[ICDO3.M]]]
   )
 
 
   final case class Medication
   (
-    recommendationsTotal: Seq[ConceptCount[Coding[ATC]]],
-    recommendationsBySupportingVariant: Seq[Entry[Reference[Variant],Seq[ConceptCount[Coding[ATC]]]]],
-    therapies: Seq[ConceptCount[Set[Coding[ATC]]]],
-    meanTherapyDurations: Seq[Entry[Set[Coding[ATC]],Int]],
-    responsesByTherapy: Seq[Entry[Set[Coding[ATC]],Seq[ConceptCount[Coding[RECIST.Value]]]]]
+    recommendations: Medication.Recommendations,
+    therapies: Medication.Therapies
   )
+  object Medication
+  {
+    final case class Recommendations
+    (
+      overallDistribution: Seq[ConceptCount[Set[String]]],
+//    distributionBySupportingVariant: Seq[Entry[Reference[Variant],Seq[Entry[Set[String],Int]]]]
+    )
+
+    final case class Therapies
+    (
+      overallDistribution: Seq[Entry[Set[String],(Int,Duration)]],
+//      responseDistributionsByTherapy: Seq[Entry[Set[String],Seq[ConceptCount[Coding[RECIST.Value]]]]]
+    )
+
+
+    implicit val writesRecommendations: OWrites[Recommendations] =
+      Json.writes[Recommendations]
+
+    implicit val writesTherapies: OWrites[Therapies] =
+      Json.writes[Therapies]
+
+    implicit val writes: OWrites[Medication] =
+      Json.writes[Medication]
+
+  }
+ 
+
 
   final case class Summary
   (
     id: Query.Id,
     patientCount: Int,
     demographics: ResultSet.Demographics,
-    diagnostics: TumorDiagnostics,
-//    medication: Medication
+    tumorDiagnostics: TumorDiagnostics,
+    medication: Medication
   )
   extends ResultSet.Summary
 

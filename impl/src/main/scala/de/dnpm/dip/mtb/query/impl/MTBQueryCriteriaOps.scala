@@ -18,17 +18,6 @@ import de.dnpm.dip.mtb.query.api._
 private trait MTBQueryCriteriaOps
 {
 
-  private implicit class SetExtensions[T](ts: Set[T]){
-
-    def intersectOn[U](others: Set[T])(f: T => U) = {
-
-      val us = others.map(f)
-
-      ts.filter(t => us contains f(t))
-    }
-  }
-
-
   private[impl] implicit class Extensions(criteria: MTBQueryCriteria){
 
     def isEmpty: Boolean =
@@ -175,7 +164,7 @@ private trait MTBQueryCriteriaOps
     }
 
 
-  def medicationsMatch(
+  private def medicationsMatch(
     criteria: Option[MedicationCriteria],
     recommendedDrugs: => Set[Coding[ATC]],
     usedDrugs: => Set[Coding[ATC]],
@@ -203,9 +192,12 @@ private trait MTBQueryCriteriaOps
               op.getOrElse(Or) match {
 
                 case Or =>
-                  selectedMedications collect { 
-                    case coding if medicationNames.exists(name => coding.display.exists(name contains _.toLowerCase)) => coding
-                  }
+                  selectedMedications.filter( 
+                    coding => medicationNames.exists(name => coding.display.exists(name contains _.toLowerCase))
+                  )
+//                  selectedMedications collect { 
+//                    case coding if medicationNames.exists(name => coding.display.exists(name contains _.toLowerCase)) => coding
+//                  }
 
                 case And =>
                   selectedMedications.forall( 

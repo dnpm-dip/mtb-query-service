@@ -1,12 +1,16 @@
 package de.dnpm.dip.mtb.query.impl
 
 
+//import java.time.temporal.ChronoUnit.WEEKS
 import de.dnpm.dip.model.{
   Id,
+  Duration,
   Patient,
-  Snapshot
+  Snapshot,
 }
+import de.dnpm.dip.model.UnitOfTime.Weeks
 import de.dnpm.dip.service.query.{
+  Entry,
   PatientFilter,
   PatientMatch,
   Query,
@@ -60,8 +64,40 @@ with ReportingOps
               recs.flatMap(_.getHistologyReports)
                 .flatMap(_.results.tumorMorphology.map(_.value))
             )
-          )
+          ),
+          Medication(
+            Medication.Recommendations(
+              DistributionBy(
+                recs.flatMap(_.getCarePlans.flatMap(_.medicationRecommendations))
+                  .map(_.medication)
+              )(
+                _.flatMap(_.display)
+              )
+            ),
+            Medication.Therapies(
+              recs
+                .flatMap(_.getMedicationTherapies)
+                .flatMap(_.history.maxByOption(_.recordedOn))
+                .filter(_.medication.isDefined)
+                .groupBy(_.medication.get.flatMap(_.display))
+                .map {
+                  case (meds,therapies) =>
+                    Entry(
+                      meds,
+                      (
+                        therapies.size,
+                        therapies
+                          .flatMap(_.period.flatMap(_.duration(Weeks)))
+                          .map(_.value)
+                          .pipe(mean(_))
+                          .pipe(Duration(_,Weeks))
+                      )
+                    )
+                }
+                .toSeq
 
+            )
+          )
         )
 
     }

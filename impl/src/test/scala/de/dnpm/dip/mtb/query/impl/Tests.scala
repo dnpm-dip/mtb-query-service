@@ -39,6 +39,8 @@ class Tests extends AsyncFlatSpec
   import scala.util.chaining._
   import de.dnpm.dip.mtb.gens.Generators._
 
+  System.setProperty("dnpm.dip.connector.type","fake")
+
 
   implicit val rnd: Random =
     new Random
@@ -59,71 +61,39 @@ class Tests extends AsyncFlatSpec
     LazyList.fill(50)(Gen.of[MTBPatientRecord].next)
 
 
-/*
   // Generator for non-empty Query Criteria based on features occurring in a given dataset,
   // and thus guaranteed to always match at least this one data set
   val genCriteria: Gen[MTBQueryCriteria] =
     for {
-      patRec <-
-        Gen.oneOf(dataSets)
+      patRec <- Gen.oneOf(dataSets)
 
-      category =
-        patRec.diagnosis
-          .categories
-          .head
-          .copy(display = None)  // Undefine display value to test whether Criteria completion works
-
-      hpoCoding <-
-        Gen.oneOf(
-          patRec
-            .hpoTerms
-            .map(_.value)
-            .toList
-            .distinctBy(_.code)
-        )
-        .map(_.copy(display = None)) // Undefine display value to test whether Criteria completion works
-
-      variant =
-        patRec
-          .ngsReports
-          .head 
-          .variants.getOrElse(List.empty)
-          .head // Safe: generated variant lists always non-empty
-
-      variantCriteria =  
-        VariantCriteria(
-          Some(variant.gene),
-          variant.cDNAChange,
-          variant.gDNAChange,
-          variant.proteinChange,
-          None,
-          None,
-          None,
-          None,
-          None,
-          None,
-        )
+      icd10 = patRec.diagnoses.head.code
       
     } yield MTBQueryCriteria(
-      Some(Set(category)),
-      Some(Set(hpoCoding)),
-      Some(Set(variantCriteria))
+      Some(Set(icd10)),
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
+      None,
     )
 
 
-
+/*
   private def printJson[T: Writes](t: T) =
     t.pipe(Json.toJson(_))
      .pipe(Json.prettyPrint)
      .tap(println)
 */
 
-/*
+
   "SPI" must "have worked" in {
 
      MTBQueryService.getInstance.isSuccess mustBe true
   }
-*/
+
 
   "Importing MTBPatientRecords" must "have worked" in {
 
@@ -160,7 +130,6 @@ class Tests extends AsyncFlatSpec
   }
 
 
-/*
   it must "contain a non-empty list of correctly matching data sets for a query with criteria" in {
 
     import MTBQueryCriteriaOps._
@@ -184,9 +153,6 @@ class Tests extends AsyncFlatSpec
 
       _ = all (query.criteria.diagnoses.value.map(_.display)) must be (defined)  
       _ = all (query.criteria.diagnoses.value.map(_.version)) must be (defined)  
-
-      _ = all (query.criteria.hpoTerms.value.map(_.display)) must be (defined)  
-      _ = all (query.criteria.hpoTerms.value.map(_.version)) must be (defined)  
 
       _ = patientMatches must not be empty
 
@@ -224,6 +190,5 @@ class Tests extends AsyncFlatSpec
     } yield query must be (defined)
 
   }
-*/
 
 }

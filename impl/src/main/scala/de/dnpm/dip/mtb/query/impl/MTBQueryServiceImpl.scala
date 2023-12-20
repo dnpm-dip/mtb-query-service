@@ -50,6 +50,7 @@ import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.mtb.query.api._
 import de.dnpm.dip.connector.peer2peer.PeerToPeerConnector
+import de.dnpm.dip.connector.fake.FakeConnector
 
 
 
@@ -69,11 +70,19 @@ object MTBQueryServiceImpl extends Logging
     new BaseQueryCache[MTBQueryCriteria,MTBFilters,MTBResultSet,MTBPatientRecord]
 
 
-  private val connector =
-    PeerToPeerConnector(
-      "/api/mtb/peer2peer/",
-      PartialFunction.empty
-    )
+  private lazy val connector =
+    System.getProperty("dnpm.dip.connector.type") match {
+      case "peer2peer" =>
+        PeerToPeerConnector(
+          "/api/mtb/peer2peer/",
+          PartialFunction.empty
+        )
+
+      case _ =>
+        import scala.concurrent.ExecutionContext.Implicits._
+        log.warn("Falling back to Fake Connector!")
+        FakeConnector[Future]
+    }
 
 
   private val db =
