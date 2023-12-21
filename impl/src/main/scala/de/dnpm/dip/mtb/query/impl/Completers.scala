@@ -221,9 +221,6 @@ trait Completers
       implicit variants: List[Variant]
     ): Completer[MTBMedicationRecommendation] = {
 
-      implicit val resolver =
-        Resolver.on(variants)
-
       Completer.of(
         recommendation => recommendation.copy(
           levelOfEvidence = recommendation.levelOfEvidence.map(
@@ -235,11 +232,10 @@ trait Completers
           priority        = recommendation.priority.complete,
           medication      = recommendation.medication.complete,
           supportingEvidence =
-            recommendation.supportingEvidence.flatMap {
-              _.resolve
-               .map(
-                 variant => Reference(variant.id,Some(Variant.display(variant)))
-               )
+            recommendation.supportingEvidence
+              .flatMap {
+                _.resolve
+                 .map(variant => Reference(variant.id,Some(Variant.display(variant))))
             }
         )
       )

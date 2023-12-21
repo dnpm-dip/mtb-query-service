@@ -1,14 +1,13 @@
 package de.dnpm.dip.mtb.query.impl
 
 
-//import java.time.temporal.ChronoUnit.WEEKS
-import de.dnpm.dip.model.{
-  Id,
-  Duration,
-  Patient,
-  Snapshot,
+
+import de.dnpm.dip.coding.{
+  Coding,
+  CodeSystem
 }
-import de.dnpm.dip.model.UnitOfTime.Weeks
+import de.dnpm.dip.coding.hgnc.HGNC
+import de.dnpm.dip.model.Snapshot
 import de.dnpm.dip.service.query.{
   Entry,
   PatientFilter,
@@ -30,10 +29,12 @@ class MTBResultSetImpl
 (
   val id: Query.Id,
   val results: Seq[(Snapshot[MTBPatientRecord],MTBQueryCriteria)]
-)
+)(
+  implicit hgnc: CodeSystem[HGNC]
+)  
 extends MTBResultSet
 with BaseResultSet[MTBPatientRecord,MTBQueryCriteria]
-with ReportingOps
+with MTBReportingOps
 {
 
   import scala.util.chaining._
@@ -68,34 +69,19 @@ with ReportingOps
           Medication(
             Medication.Recommendations(
               DistributionBy(
-                recs.flatMap(_.getCarePlans.flatMap(_.medicationRecommendations))
+                recs
+                  .flatMap(
+                    _.getCarePlans.flatMap(_.medicationRecommendations)
+                  )
                   .map(_.medication)
               )(
                 _.flatMap(_.display)
-              )
+              ),
+              RecommendationsBySupportingVariant(records)
             ),
             Medication.Therapies(
-              recs
-                .flatMap(_.getMedicationTherapies)
-                .flatMap(_.history.maxByOption(_.recordedOn))
-                .filter(_.medication.isDefined)
-                .groupBy(_.medication.get.flatMap(_.display))
-                .map {
-                  case (meds,therapies) =>
-                    Entry(
-                      meds,
-                      (
-                        therapies.size,
-                        therapies
-                          .flatMap(_.period.flatMap(_.duration(Weeks)))
-                          .map(_.value)
-                          .pipe(mean(_))
-                          .pipe(Duration(_,Weeks))
-                      )
-                    )
-                }
-                .toSeq
-
+              TherapiesWithMeanDuration(records),
+              ResponsesByTherapy(records)  
             )
           )
         )

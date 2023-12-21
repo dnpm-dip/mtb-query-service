@@ -125,7 +125,17 @@ class Tests extends AsyncFlatSpec
       resultSet <-
         service.resultSet(query.id).map(_.value)
 
-    } yield resultSet.summary().patientCount must equal (dataSets.size) 
+      summary = resultSet.summary()
+
+      _ = summary.patientCount must equal (dataSets.size) 
+
+      _ = summary.diagnostics.tumorEntityDistribution must not be empty
+
+      _ = summary.medication.recommendations.distributionbySupportingVariant must not be empty
+
+      _ = summary.medication.therapies.responseDistributionByTherapy must not be empty
+
+    } yield succeed
 
   }
 
