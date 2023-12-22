@@ -7,6 +7,7 @@ import de.dnpm.dip.coding.{
   CodeSystem
 }
 import de.dnpm.dip.coding.hgnc.HGNC
+import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.model.{
   Duration,
   Therapy
@@ -57,6 +58,23 @@ trait MTBReportingOps extends ReportingOps
       }
       .toSeq
   }
+
+
+  def TumorEntitiesByVariant(
+    records: Seq[MTBPatientRecord]
+  )(
+    implicit hgnc: CodeSystem[HGNC]
+  ): Seq[Entry[String,Seq[ConceptCount[Coding[ICD10GM]]]]] =
+    DistributionsOn(
+      records
+    )(
+      _.getNgsReports
+       .flatMap(_.variants)
+       .map(Variant.display),
+      _.diagnoses
+       .toList
+       .map(_.code) 
+    )
 
 
   def RecommendationsBySupportingVariant(
@@ -143,9 +161,7 @@ trait MTBReportingOps extends ReportingOps
                    )
                 )              
           }
-          .foldLeft(
-            acc
-          ){
+          .foldLeft(acc){
             case (accPr,(meds,recist)) =>
               accPr.updatedWith(meds){
                 _.map(_ :+ recist)

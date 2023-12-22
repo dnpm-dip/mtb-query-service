@@ -44,6 +44,7 @@ object MTBResultSet
   final case class TumorDiagnostics
   (
     tumorEntityDistribution: Seq[ConceptCount[Coding[ICD10GM]]],
+    tumorEntityDistributionByVariant: Seq[Entry[String,Seq[ConceptCount[Coding[ICD10GM]]]]],
     tumorMorphologyDistribution: Seq[ConceptCount[Coding[ICDO3.M]]]
   )
 

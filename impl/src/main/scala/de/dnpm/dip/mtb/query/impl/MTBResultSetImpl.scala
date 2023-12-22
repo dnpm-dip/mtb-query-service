@@ -61,6 +61,7 @@ with MTBReportingOps
               recs.flatMap(_.diagnoses.toList)
                 .map(_.code)
             ),
+            TumorEntitiesByVariant(records),
             DistributionOf(
               recs.flatMap(_.getHistologyReports)
                 .flatMap(_.results.tumorMorphology.map(_.value))
