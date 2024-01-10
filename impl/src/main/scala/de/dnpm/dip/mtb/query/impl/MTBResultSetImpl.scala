@@ -57,19 +57,19 @@ with MTBReportingOps
           recs.size,
           ResultSet.Demographics.on(recs.map(_.patient)),
           TumorDiagnostics(
-            DistributionOf(
+            distribution(
               recs.flatMap(_.diagnoses.toList)
                 .map(_.code)
             ),
-            TumorEntitiesByVariant(records),
-            DistributionOf(
+            tumorEntitiesByVariant(records),
+            distribution(
               recs.flatMap(_.getHistologyReports)
                 .flatMap(_.results.tumorMorphology.map(_.value))
             )
           ),
           Medication(
             Medication.Recommendations(
-              DistributionBy(
+              distributionBy(
                 recs
                   .flatMap(
                     _.getCarePlans.flatMap(_.medicationRecommendations)
@@ -78,11 +78,11 @@ with MTBReportingOps
               )(
                 _.flatMap(_.display)
               ),
-              RecommendationsBySupportingVariant(records)
+              recommendationsBySupportingVariant(records)
             ),
             Medication.Therapies(
-              TherapiesWithMeanDuration(records),
-              ResponsesByTherapy(records)  
+              therapiesWithMeanDuration(records),
+              responsesByTherapy(records)  
             )
           )
         )

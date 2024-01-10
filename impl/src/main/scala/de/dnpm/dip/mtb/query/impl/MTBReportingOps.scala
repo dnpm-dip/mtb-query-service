@@ -33,7 +33,7 @@ trait MTBReportingOps extends ReportingOps
   import scala.util.chaining._
 
 
-  def TherapiesWithMeanDuration(
+  def therapiesWithMeanDuration(
     records: Seq[MTBPatientRecord]
   ): Seq[Entry[Set[String],CountWithMeanDuration]] = {
 
@@ -60,12 +60,12 @@ trait MTBReportingOps extends ReportingOps
   }
 
 
-  def TumorEntitiesByVariant(
+  def tumorEntitiesByVariant(
     records: Seq[MTBPatientRecord]
   )(
     implicit hgnc: CodeSystem[HGNC]
   ): Seq[Entry[String,Seq[ConceptCount[Coding[ICD10GM]]]]] =
-    DistributionsOn(
+    distributionsOn(
       records
     )(
       _.getNgsReports
@@ -77,7 +77,7 @@ trait MTBReportingOps extends ReportingOps
     )
 
 
-  def RecommendationsBySupportingVariant(
+  def recommendationsBySupportingVariant(
     records: Seq[MTBPatientRecord]
   )(
     implicit hgnc: CodeSystem[HGNC]
@@ -124,13 +124,13 @@ trait MTBReportingOps extends ReportingOps
       case (variant,meds) =>
         Entry(
           variant,
-          DistributionOf(meds)
+          distribution(meds)
         )
     }
     .toSeq
 
 
-  def ResponsesByTherapy(
+  def responsesByTherapy(
     records: Seq[MTBPatientRecord]
   ): Seq[Entry[Set[String],Seq[ConceptCount[Coding[RECIST.Value]]]]] =
     records.foldLeft(
@@ -174,7 +174,7 @@ trait MTBReportingOps extends ReportingOps
       case (meds,recists) =>
         Entry(
           meds,
-          DistributionOf(recists)
+          distribution(recists)
         )
     }
     .toSeq

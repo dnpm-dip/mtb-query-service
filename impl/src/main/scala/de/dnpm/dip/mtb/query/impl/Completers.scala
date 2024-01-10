@@ -298,8 +298,8 @@ trait Completers
   implicit val medicationCriteriaCompleter: Completer[MedicationCriteria] =
     Completer.of(
       med => med.copy(
-        medication = med.medication.complete,
-        usage      = med.usage.complete
+        drugs = med.drugs.complete,
+        usage = med.usage.complete
       )
     )
 
@@ -345,7 +345,7 @@ trait Completers
         copyNumberVariants = criteria.copyNumberVariants.complete,
         dnaFusions         = criteria.dnaFusions.complete,
         rnaFusions         = criteria.rnaFusions.complete,
-        medications        = criteria.medications.complete,
+        medication         = criteria.medication.complete,
         responses          = criteria.responses.complete,
       )
     )
@@ -406,7 +406,7 @@ trait Completers
       criteria => criteria.copy(
         diagnoses         = criteria.diagnoses.complete,
         tumorMorphologies = criteria.tumorMorphologies.complete,
-        medications       = criteria.medications.complete,
+        medication        = criteria.medication.complete,
       )
     )
 

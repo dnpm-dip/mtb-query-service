@@ -31,7 +31,7 @@ private trait MTBQueryCriteriaOps
         criteria.geResponses
       )
       .isEmpty &&
-      criteria.medications.exists(_.medication.nonEmpty)
+      criteria.medication.exists(_.drugs.nonEmpty)
 
     def nonEmpty = !criteria.isEmpty
 
@@ -44,12 +44,12 @@ private trait MTBQueryCriteriaOps
         criteria.copyNumberVariants.map(_ intersect other.getCopyNumberVariants),
         criteria.dnaFusions.map(_ intersect other.getDnaFusions),
         criteria.rnaFusions.map(_ intersect other.getRnaFusions),
-        criteria.medications.map(
+        criteria.medication.map(
           med =>
-            other.medications match {
-              case Some(MedicationCriteria(_,medications,_)) if medications.nonEmpty => 
+            other.medication match {
+              case Some(MedicationCriteria(_,drugs,_)) if drugs.nonEmpty => 
                 med.copy(
-                  medication = med.medication intersect medications
+                  drugs = med.drugs intersect drugs
                 )
               case _ => 
                 med
@@ -173,7 +173,7 @@ private trait MTBQueryCriteriaOps
     import MedicationUsage._
 
     criteria match {
-      case Some(MedicationCriteria(op,selectedMedications,usage)) if selectedMedications.nonEmpty => 
+      case Some(MedicationCriteria(op,selectedDrugs,usage)) if selectedDrugs.nonEmpty => 
         usage
           .map(c => MedicationUsage withName c.code.value)
           .pipe {
@@ -186,24 +186,21 @@ private trait MTBQueryCriteriaOps
             _.flatMap(_.display).map(_.toLowerCase)
           }
           .pipe {
-            medicationNames =>
+            drugNames =>
               import LogicalOperator.{And,Or}
 
               op.getOrElse(Or) match {
 
                 case Or =>
-                  selectedMedications.filter( 
-                    coding => medicationNames.exists(name => coding.display.exists(name contains _.toLowerCase))
+                  selectedDrugs.filter( 
+                    coding => drugNames.exists(name => coding.display.exists(name contains _.toLowerCase))
                   )
-//                  selectedMedications collect { 
-//                    case coding if medicationNames.exists(name => coding.display.exists(name contains _.toLowerCase)) => coding
-//                  }
 
                 case And =>
-                  selectedMedications.forall( 
-                    coding => medicationNames.exists(name => coding.display.exists(name contains _.toLowerCase))
+                  selectedDrugs.forall( 
+                    coding => drugNames.exists(name => coding.display.exists(name contains _.toLowerCase))
                   ) match {
-                    case true  => selectedMedications
+                    case true  => selectedDrugs
                     case false => Set.empty[Coding[ATC]]
                   }
  
@@ -275,7 +272,7 @@ private trait MTBQueryCriteriaOps
 
             val (medicationMatches, medicationFulfilled) =
               medicationsMatch(
-                criteria.medications,
+                criteria.medication,
                 record.getCarePlans
                   .flatMap(_.medicationRecommendations)
                   .flatMap(_.medication)

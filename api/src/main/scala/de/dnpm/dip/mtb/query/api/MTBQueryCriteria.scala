@@ -105,7 +105,7 @@ with DefaultCodeSystem
 final case class MedicationCriteria
 (
   operator: Option[LogicalOperator],
-  medication: Set[Coding[ATC]],
+  drugs: Set[Coding[ATC]],
   usage: Set[Coding[MedicationUsage.Value]]
 )
 
@@ -118,7 +118,7 @@ final case class MTBQueryCriteria
   copyNumberVariants: Option[Set[CNVCriteria]],
   dnaFusions: Option[Set[FusionCriteria]],
   rnaFusions: Option[Set[FusionCriteria]],
-  medications: Option[MedicationCriteria],
+  medication: Option[MedicationCriteria],
   responses: Option[Set[Coding[RECIST.Value]]]
 )
 {
