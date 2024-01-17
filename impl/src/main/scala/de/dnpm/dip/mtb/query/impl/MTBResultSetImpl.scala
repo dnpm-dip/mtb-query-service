@@ -1,7 +1,7 @@
 package de.dnpm.dip.mtb.query.impl
 
 
-
+import scala.math.round
 import de.dnpm.dip.coding.{
   Coding,
   CodeSystem
@@ -15,7 +15,6 @@ import de.dnpm.dip.service.query.{
   Query,
   ResultSet,
   BaseResultSet,
-  Distribution,
   ReportingOps
 }
 import de.dnpm.dip.mtb.model.MTBPatientRecord
@@ -52,6 +51,9 @@ with MTBReportingOps
       .pipe {
         recs =>
 
+        val (therapyCounts,meanTherapyDurations) =  
+          therapyCountsWithMeanDuration(records)
+
         Summary(
           id,
           recs.size,
@@ -81,7 +83,8 @@ with MTBReportingOps
               recommendationsBySupportingVariant(records)
             ),
             Medication.Therapies(
-              therapiesWithMeanDuration(records),
+              therapyCounts,
+              meanTherapyDurations,
               responsesByTherapy(records)  
             )
           )

@@ -56,27 +56,30 @@ object MTBResultSet
   )
   object Medication
   {
+/*    
     final case class CountWithMeanDuration
     (
       count: Int,
       meanDuration: Duration
     )
-
+*/
     final case class Recommendations
     (
       overallDistribution: Seq[ConceptCount[Set[String]]],
-      distributionbySupportingVariant: Seq[Entry[String,Seq[ConceptCount[Set[String]]]]]
+      distributionBySupportingVariant: Seq[Entry[String,Seq[ConceptCount[Set[String]]]]]
     )
 
     final case class Therapies
     (
-      overallDistribution: Seq[Entry[Set[String],CountWithMeanDuration]],
+//      overallDistribution: Seq[Entry[Set[String],CountWithMeanDuration]],
+      overallDistribution: Seq[ConceptCount[Set[String]]],
+      meanDurations: Seq[Entry[Set[String],Double]],
       responseDistributionByTherapy: Seq[Entry[Set[String],Seq[ConceptCount[Coding[RECIST.Value]]]]]
     )
 
 
-    implicit val writesCountWithMeanDuration: OWrites[CountWithMeanDuration] =
-      Json.writes[CountWithMeanDuration]
+//    implicit val writesCountWithMeanDuration: OWrites[CountWithMeanDuration] =
+//      Json.writes[CountWithMeanDuration]
 
     implicit val writesRecommendations: OWrites[Recommendations] =
       Json.writes[Recommendations]

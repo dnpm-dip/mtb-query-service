@@ -7,6 +7,7 @@ import cats.{
 }
 import de.dnpm.dip.util.Completer
 import de.dnpm.dip.coding.{
+  Code,
   Coding,
   CodeSystem,
   CodeSystemProvider
@@ -305,14 +306,27 @@ trait Completers
 
   implicit protected val criteriaCompleter: Completer[MTBQueryCriteria] = {
 
-    implicit val snvCriteriaCompleter: Completer[SNVCriteria] =
+    implicit val snvCriteriaCompleter: Completer[SNVCriteria] = {
+/*
+      val proteinChangeCompleter: Completer[Coding[HGVS]] =
+        Completer.of {
+          coding =>
+            val threeLetterCode = HGVS.Protein.to3LetterCode(coding.code.value)
+            coding.copy(
+              code = Code[HGVS](threeLetterCode),
+              display = coding.display.orElse(Some(threeLetterCode))
+            )
+        }
+*/
       Completer.of(
         snv => snv.copy(
           gene          = snv.gene.complete,
           dnaChange     = snv.dnaChange.complete,
           proteinChange = snv.proteinChange.complete
+//          proteinChange = snv.proteinChange.map(proteinChangeCompleter)
         )
       )
+    }
 
     implicit val cnvCriteriaCompleter: Completer[CNVCriteria] =
       Completer.of(

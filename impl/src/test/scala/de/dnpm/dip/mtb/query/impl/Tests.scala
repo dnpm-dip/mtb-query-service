@@ -131,7 +131,7 @@ class Tests extends AsyncFlatSpec
 
       _ = summary.diagnostics.tumorEntityDistribution must not be empty
 
-      _ = summary.medication.recommendations.distributionbySupportingVariant must not be empty
+      _ = summary.medication.recommendations.distributionBySupportingVariant must not be empty
 
       _ = summary.medication.therapies.responseDistributionByTherapy must not be empty
 

@@ -23,8 +23,6 @@ import de.dnpm.dip.mtb.model.{
   RECIST,
   Variant
 }
-import de.dnpm.dip.mtb.query.api.MTBResultSet.Medication.CountWithMeanDuration
-
 
 
 trait MTBReportingOps extends ReportingOps
@@ -33,6 +31,37 @@ trait MTBReportingOps extends ReportingOps
   import scala.util.chaining._
 
 
+  def therapyCountsWithMeanDuration(
+    records: Seq[MTBPatientRecord]
+  ): (Seq[Entry[Set[String],Int]],Seq[Entry[Set[String],Double]]) = {
+
+    records
+      .flatMap(_.getMedicationTherapies)
+      .flatMap(_.history.maxByOption(_.recordedOn))
+      .filter(_.medication.isDefined)
+      .groupBy(_.medication.get.flatMap(_.display))
+      .map {
+        case (meds,therapies) =>
+          (
+            Entry(
+              meds,
+              therapies.size
+            ),
+            Entry(
+              meds,
+              therapies
+                .flatMap(_.period.flatMap(_.duration(Weeks)))
+                .map(_.value)
+                .pipe(mean(_))
+            )
+          )
+      }
+      .toSeq
+      .unzip
+  }
+
+
+/*  
   def therapiesWithMeanDuration(
     records: Seq[MTBPatientRecord]
   ): Seq[Entry[Set[String],CountWithMeanDuration]] = {
@@ -58,7 +87,7 @@ trait MTBReportingOps extends ReportingOps
       }
       .toSeq
   }
-
+*/
 
   def tumorEntitiesByVariant(
     records: Seq[MTBPatientRecord]
