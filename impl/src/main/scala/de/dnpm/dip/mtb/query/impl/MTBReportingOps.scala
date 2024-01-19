@@ -116,7 +116,7 @@ trait MTBReportingOps extends ReportingOps
     ){
       (acc,record) =>
 
-        implicit val variants =
+        val variants =
           record
             .getNgsReports
             .flatMap(_.variants)
@@ -134,7 +134,7 @@ trait MTBReportingOps extends ReportingOps
                     recommendation
                       .supportingEvidence
                       .flatMap(
-                        _.resolve
+                        _.resolveOn(variants)
                          .map(Variant.display)
                       )
                       .map(_ -> meds)
@@ -167,7 +167,7 @@ trait MTBReportingOps extends ReportingOps
     ){
       (acc,record) =>
 
-        implicit val therapies =
+        val therapies =
           record
             .getMedicationTherapies
             .flatMap(_.history.maxByOption(_.recordedOn))
@@ -182,7 +182,7 @@ trait MTBReportingOps extends ReportingOps
             response =>
               response
                 .therapy
-                .resolve
+                .resolveOn(therapies)
                 .flatMap(
                   _.medication
                    .map(

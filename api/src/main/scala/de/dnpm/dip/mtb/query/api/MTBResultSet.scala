@@ -45,7 +45,7 @@ object MTBResultSet
   (
     tumorEntityDistribution: Seq[ConceptCount[Coding[ICD10GM]]],
     tumorEntityDistributionByVariant: Seq[Entry[String,Seq[ConceptCount[Coding[ICD10GM]]]]],
-    tumorMorphologyDistribution: Seq[ConceptCount[Coding[ICDO3.M]]]
+    tumorMorphologyDistribution: Seq[ConceptCount[Coding[ICDO3.M]]],
   )
 
 
@@ -56,13 +56,7 @@ object MTBResultSet
   )
   object Medication
   {
-/*    
-    final case class CountWithMeanDuration
-    (
-      count: Int,
-      meanDuration: Duration
-    )
-*/
+
     final case class Recommendations
     (
       overallDistribution: Seq[ConceptCount[Set[String]]],
@@ -71,15 +65,11 @@ object MTBResultSet
 
     final case class Therapies
     (
-//      overallDistribution: Seq[Entry[Set[String],CountWithMeanDuration]],
       overallDistribution: Seq[ConceptCount[Set[String]]],
       meanDurations: Seq[Entry[Set[String],Double]],
       responseDistributionByTherapy: Seq[Entry[Set[String],Seq[ConceptCount[Coding[RECIST.Value]]]]]
     )
 
-
-//    implicit val writesCountWithMeanDuration: OWrites[CountWithMeanDuration] =
-//      Json.writes[CountWithMeanDuration]
 
     implicit val writesRecommendations: OWrites[Recommendations] =
       Json.writes[Recommendations]
@@ -100,7 +90,8 @@ object MTBResultSet
     patientCount: Int,
     demographics: ResultSet.Demographics,
     diagnostics: TumorDiagnostics,
-    medication: Medication
+    medication: Medication,
+//    survivalStatistics: KaplanMeier.CombinedSurvivalStatistics
   )
   extends ResultSet.Summary
 

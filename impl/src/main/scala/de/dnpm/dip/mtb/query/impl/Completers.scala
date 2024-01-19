@@ -235,7 +235,7 @@ trait Completers
           supportingEvidence =
             recommendation.supportingEvidence
               .flatMap {
-                _.resolve
+                _.resolveOn(variants)
                  .map(variant => Reference(variant.id,Some(Variant.display(variant))))
             }
         )

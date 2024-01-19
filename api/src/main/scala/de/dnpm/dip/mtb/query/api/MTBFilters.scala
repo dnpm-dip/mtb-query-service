@@ -11,28 +11,35 @@ import de.dnpm.dip.service.query.{
   Filters,
   PatientFilter
 }
-import de.dnpm.dip.mtb.model.MTBPatientRecord
+import de.dnpm.dip.mtb.model.{
+  MTBDiagnosis,
+  MTBPatientRecord
+}
 
 
-/*
 final case class DiagnosisFilter
 (
-  code: Option[Seq[Coding[ICD10GM]]]
+  code: Option[Set[Coding[ICD10GM]]]
 )
 extends (MTBDiagnosis => Boolean)
-*/
+{
+  def apply(d: MTBDiagnosis) =
+    code.exists(_.exists(_.code == d.code.code))
+}
 
 
 final case class MTBFilters
 (
-  patientFilter: PatientFilter
+  patientFilter: PatientFilter,
+//  diagnosisFilter: DiagnosisFilter
 )
 extends Filters[MTBPatientRecord]
 {
 
   override def apply(patRec: MTBPatientRecord): Boolean = {
 
-    patientFilter(patRec.patient) 
+    patientFilter(patRec.patient) //&& patRec.diagnoses.exists(diagnosisFilter)
+
   }
 
 }
@@ -40,6 +47,9 @@ extends Filters[MTBPatientRecord]
 
 object MTBFilters
 {
+
+  implicit val writesDiagnosisFilter: OWrites[DiagnosisFilter] =
+    Json.writes[DiagnosisFilter]
 
   implicit val writes: OWrites[MTBFilters] =
     Json.writes[MTBFilters]

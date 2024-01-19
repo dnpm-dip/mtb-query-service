@@ -17,6 +17,10 @@ trait MTBQueryService extends QueryService[
   MTBConfig,
   String
 ]
+//with KaplanMeierOps[
+//  Future,
+//  Monad[Future]
+//]
 
 
 trait MTBQueryServiceProvider extends SPI[MTBQueryService]

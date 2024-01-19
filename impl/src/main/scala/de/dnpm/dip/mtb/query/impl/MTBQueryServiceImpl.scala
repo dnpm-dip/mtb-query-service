@@ -29,6 +29,7 @@ import de.dnpm.dip.service.query.{
   Filters,
   Data,
   Query,
+  Querier,
   QueryCache,
   BaseQueryCache,
   PatientFilter,
@@ -155,6 +156,9 @@ with Completers
 
     MTBFilters(
       PatientFilter.on(records),
+//      DiagnosisFilter(
+//        Some(records.flatMap(_.diagnoses.map(_.code).toList).toSet)
+//      )
     )
   }
 
@@ -190,6 +194,7 @@ with Completers
   //TODO: Complete codings, etc
   override val preprocess: MTBPatientRecord => MTBPatientRecord =
     _.complete
+
 
 
 }
