@@ -1,7 +1,10 @@
 package de.dnpm.dip.mtb.query.api
 
 
-import de.dnpm.dip.model.UnitOfTime
+import de.dnpm.dip.model.{
+  UnitOfTime,
+  Interval
+}
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.service.query.{
@@ -11,87 +14,77 @@ import de.dnpm.dip.service.query.{
 }
 import play.api.libs.json.{
   Json,
+  Format,
   OWrites,
   Writes,
   JsString
 }
 
+
 object KaplanMeier
 {
 
-  sealed trait SurvivalType
+  object SurvivalType extends Enumeration
   {
-    type Grouping
+    val OS, PFS = Value
+
+    implicit val format: Format[Value] =
+      Json.formatEnum(this)
   }
 
-  final case object OS extends SurvivalType
+  object Grouping extends Enumeration
   {
-    type Grouping = Coding[ICD10GM]
+    val ByTherapy     = Value
+    val ByTumorEntity = Value
+    val Ungrouped     = Value
+
+    implicit val format: Format[Value] =
+      Json.formatEnum(this)
   }
 
-  final case object PFS extends SurvivalType
-  {
-    type Grouping = Set[String]
-  }
 
- 
-  implicit val writesOS: Writes[OS.type] =
-    Writes { os => JsString("OS")}
-
-  implicit val writesPFS: Writes[PFS.type] =
-    Writes { pfs => JsString("PFS")}
-
-  implicit val writesSurvivalType: Writes[SurvivalType] =
-    Writes { 
-      case OS  => Json.toJson(OS)
-      case PFS => Json.toJson(PFS)
-    }
-
-/*
-  implicit val writesSurvivalType: Writes[SurvivalType] =
-    Writes { 
-      case OS  => JsString("OS")
-      case PFS => JsString("PFS")
-    }
-*/
-
-
-  final case class CohortData
+  final case class DataPoint
   (
-    survivalRates: Seq[(Long,Double)],
+    time: Long,
+    survRate: Double,
+    censored: Boolean,
+    confRange95: Interval[Double]
+  )
+
+
+  final case class CohortResult
+  (
+    survivalRates: Seq[DataPoint],
     medianSurvivalTime: Long
   )
 
-
-//  final case class SurvivalStatistics[T <: SurvivalType]
-//    `type`: T,
-//    timeUnit: UnitOfTime,
-//    cohorts: Seq[Entry[Grouping,CohortData]]
-//  )
-
-  final case class SurvivalStatistics[Grouping]
+  final case class SurvivalStatistics
   (
+    survivalType: SurvivalType.Value,
+    grouping: Grouping.Value,
     timeUnit: UnitOfTime,
-    cohorts: Seq[Entry[Grouping,CohortData]]
+    data: Seq[Entry[String,CohortResult]]
   )
 
 
-  final case class CombinedSurvivalStatistics
+  final case class SurvivalReport
   (
-    os: SurvivalStatistics[OS.Grouping],
-    pfs: SurvivalStatistics[PFS.Grouping]
+    survivalData: Seq[SurvivalStatistics]
   )
 
-  implicit val writesCohortData: OWrites[CohortData] =
-    Json.writes[CohortData]
 
 
-  implicit def writesSurvivalStatistics[Grouping: Writes]: OWrites[SurvivalStatistics[Grouping]] =
-    Json.writes[SurvivalStatistics[Grouping]]
+  implicit val writesDataPoint: OWrites[DataPoint] =
+    Json.writes[DataPoint]
 
-  implicit def writesCombinedStatistics: OWrites[CombinedSurvivalStatistics] =
-    Json.writes[CombinedSurvivalStatistics]
+  implicit val writesCohortResult: OWrites[CohortResult] =
+    Json.writes[CohortResult]
 
+  implicit val writesSurvivalStatistics: OWrites[SurvivalStatistics] =
+    Json.writes[SurvivalStatistics]
+
+  implicit def writesStatisticsReport: OWrites[SurvivalReport] =
+    Json.writes[SurvivalReport]
 
 }
 
@@ -100,13 +93,13 @@ object KaplanMeier
 trait KaplanMeierOps[F[_],Env]
 {
 
-  def combinedSurvivalStatistics(
+  def survivalReport(
     query: Query.Id,
   )(
     implicit
     env: Env,
     user: Querier
-  ): F[Option[KaplanMeier.CombinedSurvivalStatistics]]
+  ): F[Option[KaplanMeier.SurvivalReport]]
 
 /*
   def survivalStatistics[T <: KaplanMeier.SurvivalType](
