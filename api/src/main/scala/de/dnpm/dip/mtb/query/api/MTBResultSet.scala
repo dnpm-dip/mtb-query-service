@@ -17,8 +17,8 @@ import de.dnpm.dip.service.query.{
   PatientFilter,
   Query,
   ResultSet,
-  ConceptCount,
-  Entry
+  Entry,
+  Distribution
 }
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
@@ -43,9 +43,9 @@ object MTBResultSet
 
   final case class TumorDiagnostics
   (
-    tumorEntityDistribution: Seq[ConceptCount[Coding[ICD10GM]]],
-    tumorEntityDistributionByVariant: Seq[Entry[String,Seq[ConceptCount[Coding[ICD10GM]]]]],
-    tumorMorphologyDistribution: Seq[ConceptCount[Coding[ICDO3.M]]],
+    tumorEntityDistribution: Distribution[Coding[ICD10GM]],
+    tumorEntityDistributionByVariant: Seq[Entry[String,Distribution[Coding[ICD10GM]]]],
+    tumorMorphologyDistribution: Distribution[Coding[ICDO3.M]],
   )
 
 
@@ -59,15 +59,15 @@ object MTBResultSet
 
     final case class Recommendations
     (
-      overallDistribution: Seq[ConceptCount[Set[String]]],
-      distributionBySupportingVariant: Seq[Entry[String,Seq[ConceptCount[Set[String]]]]]
+      overallDistribution: Distribution[Set[String]],
+      distributionBySupportingVariant: Seq[Entry[String,Distribution[Set[String]]]]
     )
 
     final case class Therapies
     (
-      overallDistribution: Seq[ConceptCount[Set[String]]],
+      overallDistribution: Distribution[Set[String]],
       meanDurations: Seq[Entry[Set[String],Double]],
-      responseDistributionByTherapy: Seq[Entry[Set[String],Seq[ConceptCount[Coding[RECIST.Value]]]]]
+      responseDistributionByTherapy: Seq[Entry[Set[String],Distribution[Coding[RECIST.Value]]]]
     )
 
 
@@ -91,7 +91,6 @@ object MTBResultSet
     demographics: ResultSet.Demographics,
     diagnostics: TumorDiagnostics,
     medication: Medication,
-//    survivalStatistics: KaplanMeier.CombinedSurvivalStatistics
   )
   extends ResultSet.Summary
 

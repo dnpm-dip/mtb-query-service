@@ -17,12 +17,12 @@ import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.model.Snapshot
 import de.dnpm.dip.service.query.{
+  Distribution,
   Entry,
   PatientFilter,
   PatientMatch,
   Query,
   ResultSet,
-  BaseResultSet,
   ReportingOps
 }
 import de.dnpm.dip.mtb.model.MTBPatientRecord
@@ -30,7 +30,6 @@ import de.dnpm.dip.mtb.query.api.{
   MTBQueryCriteria,
   MTBResultSet,
 }
-import de.dnpm.dip.mtb.query.api.KaplanMeier._
 
 
 class MTBResultSetImpl
@@ -43,7 +42,6 @@ class MTBResultSetImpl
   atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
 )  
 extends MTBResultSet
-with BaseResultSet[MTBPatientRecord,MTBQueryCriteria]
 with MTBReportingOps
 {
 
@@ -53,6 +51,10 @@ with MTBReportingOps
     TumorDiagnostics,
     Medication
   }
+
+  private lazy val records =
+    results.collect { case (Snapshot(record,_),_) => record }
+
 
   override def summary(
     f: MTBPatientRecord => Boolean
@@ -64,27 +66,27 @@ with MTBReportingOps
 
         val recs = snps.map(_.data)
 
-        val (therapyCounts,meanTherapyDurations) =  
-          therapyCountsWithMeanDuration(recs)
+        val (therapyDistribution,meanTherapyDurations) =  
+          therapyDistributionAndMeanDurations(recs)
 
         Summary(
           id,
           recs.size,
           ResultSet.Demographics.on(recs.map(_.patient)),
           TumorDiagnostics(
-            distribution(
+            Distribution.of(
               recs.flatMap(_.diagnoses.toList)
                 .map(_.code)
             ),
             tumorEntitiesByVariant(records),
-            distribution(
+            Distribution.of(
               recs.flatMap(_.getHistologyReports)
                 .flatMap(_.results.tumorMorphology.map(_.value))
             )
           ),
           Medication(
             Medication.Recommendations(
-              distributionBy(
+              Distribution.by(
                 recs
                   .flatMap(
                     _.getCarePlans.flatMap(_.medicationRecommendations)
@@ -96,7 +98,7 @@ with MTBReportingOps
               recommendationsBySupportingVariant(records)
             ),
             Medication.Therapies(
-              therapyCounts,
+              therapyDistribution,
               meanTherapyDurations,
               responsesByTherapy(records)  
             )
@@ -144,19 +146,19 @@ with MTBReportingOps
           recs.size,
           ResultSet.Demographics.on(recs.map(_.patient)),
           TumorDiagnostics(
-            distribution(
+            Distribution.of(
               recs.flatMap(_.diagnoses.toList)
                 .map(_.code)
             ),
             tumorEntitiesByVariant(records),
-            distribution(
+            Distribution.of(
               recs.flatMap(_.getHistologyReports)
                 .flatMap(_.results.tumorMorphology.map(_.value))
             )
           ),
           Medication(
             Medication.Recommendations(
-              distributionBy(
+              Distribution.ofBy(
                 recs
                   .flatMap(
                     _.getCarePlans.flatMap(_.medicationRecommendations)

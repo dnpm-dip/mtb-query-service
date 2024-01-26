@@ -5,7 +5,11 @@ import de.dnpm.dip.model.{
   UnitOfTime,
   Interval
 }
-import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.{
+  Coding,
+  CodedEnum,
+  DefaultCodeSystem
+}
 import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.service.query.{
   Entry,
@@ -24,6 +28,7 @@ import play.api.libs.json.{
 object KaplanMeier
 {
 
+/*
   object SurvivalType extends Enumeration
   {
     val OS, PFS = Value
@@ -41,6 +46,43 @@ object KaplanMeier
     implicit val format: Format[Value] =
       Json.formatEnum(this)
   }
+*/
+
+  object SurvivalType
+  extends CodedEnum("dnpm-dip/kaplan-meier/survival-type")
+  with DefaultCodeSystem
+  {
+    val OS, PFS = Value
+
+    override val display =
+      Map(
+        OS  -> "Overall Survival",
+        PFS -> "Progression-free Survival"
+      )
+
+    implicit val format: Format[Value] =
+      Json.formatEnum(this)
+  }
+
+  object Grouping
+  extends CodedEnum("")
+  with DefaultCodeSystem
+  {
+    val ByTherapy     = Value
+    val ByTumorEntity = Value
+    val Ungrouped     = Value
+
+    override val display =
+      Map(
+        ByTherapy     -> "Nach Therapie",
+        ByTumorEntity -> "Nach Tumor-Entität",
+        Ungrouped     -> "Keine"
+      )
+
+    implicit val format: Format[Value] =
+      Json.formatEnum(this)
+  }
+
 
 
   final case class DataPoint

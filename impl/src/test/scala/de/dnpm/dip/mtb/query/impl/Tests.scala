@@ -129,7 +129,7 @@ class Tests extends AsyncFlatSpec
 
       _ = summary.patientCount must equal (dataSets.size) 
 
-      _ = summary.diagnostics.tumorEntityDistribution must not be empty
+      _ = summary.diagnostics.tumorEntityDistribution.elements must not be empty
 
       _ = summary.medication.recommendations.distributionBySupportingVariant must not be empty
 

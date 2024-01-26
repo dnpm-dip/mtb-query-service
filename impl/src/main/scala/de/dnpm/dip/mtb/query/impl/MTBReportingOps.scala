@@ -14,7 +14,9 @@ import de.dnpm.dip.model.{
 }
 import de.dnpm.dip.model.UnitOfTime.Weeks
 import de.dnpm.dip.service.query.{
+  Count,
   ConceptCount,
+  Distribution,
   Entry,
   ReportingOps
 }
@@ -31,25 +33,32 @@ trait MTBReportingOps extends ReportingOps
   import scala.util.chaining._
 
 
-  def therapyCountsWithMeanDuration(
+  def therapyDistributionAndMeanDurations(
     records: Seq[MTBPatientRecord]
-  ): (Seq[Entry[Set[String],Int]],Seq[Entry[Set[String],Double]]) = {
+  ): (Distribution[Set[String]],Seq[Entry[Set[String],Double]]) = {
 
-    records
-      .flatMap(_.getMedicationTherapies)
-      .flatMap(_.history.maxByOption(_.recordedOn))
-      .filter(_.medication.isDefined)
+    val therapies =
+      records
+        .flatMap(_.getMedicationTherapies)
+        .flatMap(_.history.maxByOption(_.recordedOn))
+        .filter(_.medication.isDefined)
+
+    val counter =
+      Count.total(therapies.size)
+
+    
+    therapies
       .groupBy(_.medication.get.flatMap(_.display))
       .map {
-        case (meds,therapies) =>
+        case (meds,ths) =>
           (
-            Entry(
+            ConceptCount(
               meds,
-              therapies.size
+              counter(ths.size)
             ),
             Entry(
               meds,
-              therapies
+              ths
                 .flatMap(_.period.flatMap(_.duration(Weeks)))
                 .map(_.value)
                 .pipe(mean(_))
@@ -58,43 +67,20 @@ trait MTBReportingOps extends ReportingOps
       }
       .toSeq
       .unzip
-  }
-
-
-/*  
-  def therapiesWithMeanDuration(
-    records: Seq[MTBPatientRecord]
-  ): Seq[Entry[Set[String],CountWithMeanDuration]] = {
-
-    records
-      .flatMap(_.getMedicationTherapies)
-      .flatMap(_.history.maxByOption(_.recordedOn))
-      .filter(_.medication.isDefined)
-      .groupBy(_.medication.get.flatMap(_.display))
-      .map {
-        case (meds,therapies) =>
-          Entry(
-            meds,
-            CountWithMeanDuration(
-              therapies.size,
-              therapies
-                .flatMap(_.period.flatMap(_.duration(Weeks)))
-                .map(_.value)
-                .pipe(mean(_))
-                .pipe(Duration(_,Weeks))
-            )
-          )
+      .pipe {
+        case (counts,meanDurations) =>
+          Distribution(therapies.size,counts) -> meanDurations
       }
-      .toSeq
+    
   }
-*/
+
 
   def tumorEntitiesByVariant(
     records: Seq[MTBPatientRecord]
   )(
     implicit hgnc: CodeSystem[HGNC]
-  ): Seq[Entry[String,Seq[ConceptCount[Coding[ICD10GM]]]]] =
-    distributionsOn(
+  ): Seq[Entry[String,Distribution[Coding[ICD10GM]]]] =
+    Distribution.associatedOn(
       records
     )(
       _.getNgsReports
@@ -110,7 +96,7 @@ trait MTBReportingOps extends ReportingOps
     records: Seq[MTBPatientRecord]
   )(
     implicit hgnc: CodeSystem[HGNC]
-  ): Seq[Entry[String,Seq[ConceptCount[Set[String]]]]] =
+  ): Seq[Entry[String,Distribution[Set[String]]]] =
     records.foldLeft(
       Map.empty[String,Seq[Set[String]]]
     ){
@@ -153,7 +139,7 @@ trait MTBReportingOps extends ReportingOps
       case (variant,meds) =>
         Entry(
           variant,
-          distribution(meds)
+          Distribution.of(meds)
         )
     }
     .toSeq
@@ -161,7 +147,7 @@ trait MTBReportingOps extends ReportingOps
 
   def responsesByTherapy(
     records: Seq[MTBPatientRecord]
-  ): Seq[Entry[Set[String],Seq[ConceptCount[Coding[RECIST.Value]]]]] =
+  ): Seq[Entry[Set[String],Distribution[Coding[RECIST.Value]]]] =
     records.foldLeft(
       Map.empty[Set[String],Seq[Coding[RECIST.Value]]]
     ){
@@ -203,7 +189,7 @@ trait MTBReportingOps extends ReportingOps
       case (meds,recists) =>
         Entry(
           meds,
-          distribution(recists)
+          Distribution.of(recists)
         )
     }
     .toSeq
