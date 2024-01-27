@@ -29,6 +29,7 @@ import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.mtb.query.api.{
   MTBQueryCriteria,
   MTBResultSet,
+  KaplanMeier
 }
 
 
@@ -39,7 +40,9 @@ class MTBResultSetImpl
 )(
   implicit
   hgnc: CodeSystem[HGNC],
-  atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
+  atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
+  kmEstimator: KaplanMeierEstimator[Id],
+  kmModule: KaplanMeierModule[Id]
 )  
 extends MTBResultSet
 with MTBReportingOps
@@ -52,9 +55,6 @@ with MTBReportingOps
     Medication
   }
 
-  private lazy val records =
-    results.collect { case (Snapshot(record,_),_) => record }
-
 
   override def summary(
     f: MTBPatientRecord => Boolean
@@ -64,30 +64,31 @@ with MTBReportingOps
       .pipe {
         snps =>
 
-        val recs = snps.map(_.data)
+        val records =
+          snps.map(_.data)
 
         val (therapyDistribution,meanTherapyDurations) =  
-          therapyDistributionAndMeanDurations(recs)
+          therapyDistributionAndMeanDurations(records)
 
         Summary(
           id,
-          recs.size,
-          ResultSet.Demographics.on(recs.map(_.patient)),
+          records.size,
+          ResultSet.Demographics.on(records.map(_.patient)),
           TumorDiagnostics(
             Distribution.of(
-              recs.flatMap(_.diagnoses.toList)
+              records.flatMap(_.diagnoses.toList)
                 .map(_.code)
             ),
             tumorEntitiesByVariant(records),
             Distribution.of(
-              recs.flatMap(_.getHistologyReports)
+              records.flatMap(_.getHistologyReports)
                 .flatMap(_.results.tumorMorphology.map(_.value))
             )
           ),
           Medication(
             Medication.Recommendations(
               Distribution.by(
-                recs
+                records
                   .flatMap(
                     _.getCarePlans.flatMap(_.medicationRecommendations)
                   )
@@ -103,80 +104,16 @@ with MTBReportingOps
               responsesByTherapy(records)  
             )
           ),
-/*        
-          CombinedSurvivalStatistics(
-            KaplanMeierOps.overallSurvival(
-              snps,
-              DAYS
-            )
-            .map { case (group,cohortData) => Entry(group,cohortData) }
-            .toSeq
-            .pipe(
-              SurvivalStatistics(UnitOfTime.of(DAYS),_)
-            ),
-            KaplanMeierOps.progressionFreeSurvival(
-              snps,
-              DAYS
-            )
-            .map { case (group,cohortData) => Entry(group,cohortData) }
-            .toSeq
-            .pipe(
-              SurvivalStatistics(UnitOfTime.of(DAYS),_)
-            )
-          )
-*/        
+          kmModule.survivalReport(snps)
         )
 
     }
 
-/*    
-  override def summary(
-    f: MTBPatientRecord => Boolean
-  ): Summary =
-    records
-      .filter(f)
-      .pipe {
-        recs =>
-
-        val (therapyCounts,meanTherapyDurations) =  
-          therapyCountsWithMeanDuration(recs)
-
-        Summary(
-          id,
-          recs.size,
-          ResultSet.Demographics.on(recs.map(_.patient)),
-          TumorDiagnostics(
-            Distribution.of(
-              recs.flatMap(_.diagnoses.toList)
-                .map(_.code)
-            ),
-            tumorEntitiesByVariant(records),
-            Distribution.of(
-              recs.flatMap(_.getHistologyReports)
-                .flatMap(_.results.tumorMorphology.map(_.value))
-            )
-          ),
-          Medication(
-            Medication.Recommendations(
-              Distribution.ofBy(
-                recs
-                  .flatMap(
-                    _.getCarePlans.flatMap(_.medicationRecommendations)
-                  )
-                  .map(_.medication)
-              )(
-                _.flatMap(_.display)
-              ),
-              recommendationsBySupportingVariant(records)
-            ),
-            Medication.Therapies(
-              therapyCounts,
-              meanTherapyDurations,
-              responsesByTherapy(records)  
-            )
-          )
-        )
-
-    }
+/*
+  override lazy val survivalReport: KaplanMeier.SurvivalReport =
+    kmModule.survivalReport(
+      results.map { case (snp,_) => snp }
+    )
 */
+
 }

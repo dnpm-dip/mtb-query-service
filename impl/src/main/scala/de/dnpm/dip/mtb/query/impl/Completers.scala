@@ -35,7 +35,7 @@ trait Completers
 
   import scala.util.chaining._
   import Completer.syntax._
-  import MTBMedicationTherapy.statusReasonCodeSystem
+  import MTBMedicationTherapy.StatusReason.codeSystem
 
 
   val localSite: Coding[Site]
@@ -307,7 +307,7 @@ trait Completers
   implicit protected val criteriaCompleter: Completer[MTBQueryCriteria] = {
 
     implicit val snvCriteriaCompleter: Completer[SNVCriteria] = {
-/*
+
       val proteinChangeCompleter: Completer[Coding[HGVS]] =
         Completer.of {
           coding =>
@@ -317,13 +317,13 @@ trait Completers
               display = coding.display.orElse(Some(threeLetterCode))
             )
         }
-*/
+
       Completer.of(
         snv => snv.copy(
           gene          = snv.gene.complete,
           dnaChange     = snv.dnaChange.complete,
-          proteinChange = snv.proteinChange.complete
-//          proteinChange = snv.proteinChange.map(proteinChangeCompleter)
+//          proteinChange = snv.proteinChange.complete
+          proteinChange = snv.proteinChange.map(proteinChangeCompleter)
         )
       )
     }

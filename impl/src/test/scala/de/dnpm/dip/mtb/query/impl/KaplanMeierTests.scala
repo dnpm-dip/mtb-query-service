@@ -4,11 +4,24 @@ package de.dnpm.dip.mtb.query.impl
 import java.time.Instant
 import java.util.UUID.randomUUID
 import java.time.temporal.ChronoUnit.DAYS
+import scala.util.Random
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers._
 import org.scalatest.Inspectors._
-import de.dnpm.dip.model.ClosedInterval
-import de.dnpm.dip.mtb.query.api.KaplanMeier.DataPoint
+import de.dnpm.dip.model.{
+  ClosedInterval,
+  Snapshot,
+  UnitOfTime
+}
+import de.dnpm.dip.mtb.model.MTBPatientRecord
+import de.dnpm.dip.mtb.query.api.KaplanMeier.{
+  DataPoint,
+  SurvivalType,
+  Grouping
+}
+import de.ekut.tbi.generators.Gen
+import de.dnpm.dip.mtb.gens.Generators._
+
 
 
 class KaplanMeierTests extends AnyFlatSpec
@@ -16,7 +29,8 @@ class KaplanMeierTests extends AnyFlatSpec
 
   import scala.util.chaining._
 
-//  implicit val rnd = new scala.util.Random(42)
+  implicit val rnd: Random =
+    new Random(42)
 
   // Ref. data from Julia Grafs bachelor thesis (p. 9)
   val refData0 =
@@ -188,6 +202,7 @@ class KaplanMeierTests extends AnyFlatSpec
 
     val data =
       DefaultKaplanMeierEstimator(refData0)
+//        .tapEach(println)
 
     forAll(data zip refResults0){
       case (point,refPoint) =>
@@ -221,38 +236,41 @@ class KaplanMeierTests extends AnyFlatSpec
 
   }
 
-
-/*  
+  
   it must "have returned correct results for MTBFile cohort" in {
 
-    val mtbfiles =
-      List.fill(100)(Gen.of[MTBFile].next)
-        .map(
-          Snapshot(
-            Snapshot.Id(randomUUID.toString),
-            Instant.now,
-            _
-          )
-        )
+    val records =
+      LazyList.fill(200)(Gen.of[MTBPatientRecord].next)
+        .map(Snapshot(_))
 
-    KaplanMeierModule.Projector
-      .overallSurvival(mtbfiles,DAYS)
-      .map {
-        case (grp,data) =>
-          grp -> KaplanMeierModule.Estimator(data).map(_._2)
-      }
-      .foreach {
-        case (_,st) =>
+    implicit val estimator: KaplanMeierEstimator[cats.Id] =
+      DefaultKaplanMeierEstimator
 
-          // Check that all values are in interval [0.0,1.0]
-          forAll(st){ _ must be (0.5 +- 0.5) }
+    forAll(
+      DefaultKaplanMeierModule
+        .survivalReport(records)
+        .survivalData
+        .flatMap(_.data.map(_.value))
+        .map(_.survivalRates)
+    ){
+      dataPoints =>
 
-          // Check that value series is monotonically falling
-          forAll(st.sliding(2).toSeq){
-            l => l.last must be <= l.head
-          }
+        // Check that all values are in interval [0.0,1.0]
+        forAll(dataPoints){_.survRate must be (0.5 +- 0.5) }
+
+        // Check that value series is monotonically falling
+        forAll(dataPoints.map(_.survRate).sliding(2).toSeq){
+          l => l.last must be <= l.head
+        }
+
+        forAll(dataPoints){_.time must be >= 0L }
+
+        forAll(dataPoints.map(_.confInterval)){_.min must be (0.5 +- 1.0) }
+
+        forAll(dataPoints.map(_.confInterval)){_.max must be (0.5 +- 1.0) }
+
       }
   }
-*/
+
 
 }

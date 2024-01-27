@@ -142,6 +142,12 @@ with Completers
   import Completer.syntax._    
 
 
+  private implicit val kmEstimator: KaplanMeierEstimator[Id] =
+    DefaultKaplanMeierEstimator
+
+  private implicit val kmModule: KaplanMeierModule[Id] =
+    DefaultKaplanMeierModule
+
 
   override val ResultSetFrom =
     new MTBResultSetImpl(_,_)

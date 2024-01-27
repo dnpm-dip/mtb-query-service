@@ -35,6 +35,10 @@ trait MTBResultSet
 extends ResultSet[MTBPatientRecord,MTBQueryCriteria]
 {
   type SummaryType = MTBResultSet.Summary
+
+
+//  def survivalReport: KaplanMeier.SurvivalReport
+
 }
 
 
@@ -91,6 +95,7 @@ object MTBResultSet
     demographics: ResultSet.Demographics,
     diagnostics: TumorDiagnostics,
     medication: Medication,
+    survivalReport: KaplanMeier.SurvivalReport
   )
   extends ResultSet.Summary
 

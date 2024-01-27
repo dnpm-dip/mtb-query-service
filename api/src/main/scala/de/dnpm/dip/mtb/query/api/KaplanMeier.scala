@@ -3,7 +3,7 @@ package de.dnpm.dip.mtb.query.api
 
 import de.dnpm.dip.model.{
   UnitOfTime,
-  Interval
+  ClosedInterval
 }
 import de.dnpm.dip.coding.{
   Coding,
@@ -49,7 +49,7 @@ object KaplanMeier
 */
 
   object SurvivalType
-  extends CodedEnum("dnpm-dip/kaplan-meier/survival-type")
+  extends CodedEnum("dnpm-dip/kaplan-meier-analysis/survival-type")
   with DefaultCodeSystem
   {
     val OS, PFS = Value
@@ -65,7 +65,7 @@ object KaplanMeier
   }
 
   object Grouping
-  extends CodedEnum("")
+  extends CodedEnum("dnpm-dip/kaplan-meier-analysis/grouping")
   with DefaultCodeSystem
   {
     val ByTherapy     = Value
@@ -90,7 +90,7 @@ object KaplanMeier
     time: Long,
     survRate: Double,
     censored: Boolean,
-    confRange95: Interval[Double]
+    confInterval: ClosedInterval[Double]
   )
 
 
@@ -102,8 +102,8 @@ object KaplanMeier
 
   final case class SurvivalStatistics
   (
-    survivalType: SurvivalType.Value,
-    grouping: Grouping.Value,
+    survivalType: Coding[SurvivalType.Value],
+    grouping: Coding[Grouping.Value],
     timeUnit: UnitOfTime,
     data: Seq[Entry[String,CohortResult]]
   )
@@ -142,14 +142,5 @@ trait KaplanMeierOps[F[_],Env]
     env: Env,
     user: Querier
   ): F[Option[KaplanMeier.SurvivalReport]]
-
-/*
-  def survivalStatistics[T <: KaplanMeier.SurvivalType](
-    query: Query.Id,
-    typ: T
-  )(
-    implicit env: Env
-  ): F[Option[KaplanMeier.SurvivalStatistics[T]]]
-*/
 
 }
