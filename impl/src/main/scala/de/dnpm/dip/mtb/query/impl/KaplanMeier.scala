@@ -11,12 +11,15 @@ import java.time.temporal.ChronoUnit
 import cats.{
   Applicative,
   Monad,
-  Id
+//  Id
 }
 import de.dnpm.dip.model.{
   Snapshot,
   IdReference,
+  Id,
   ClosedInterval,
+  Patient,
+  Reference,
   UnitOfTime
 }
 import de.dnpm.dip.coding.{
@@ -29,6 +32,7 @@ import de.dnpm.dip.service.query.Entry
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
   MTBMedicationTherapy,
+  Response,
   RECIST
 }
 import de.dnpm.dip.mtb.query.api.KaplanMeier.{
@@ -64,7 +68,7 @@ trait KaplanMeierEstimator[F[_]]
     import cats.syntax.functor._
     import cats.syntax.flatMap._
 
-    // Compute median survival time defined as: min{ t | Surv(t) <= 0.5 }
+    // Median survival time defined as: min{ t | Surv(t) <= 0.5 }
     def medianSt(ts: Seq[DataPoint]): Long =
       ts.collectFirst { case DataPoint(t,surv,_,_) if surv <= 0.5 => t }
         .getOrElse(0L)
@@ -94,7 +98,6 @@ trait KaplanMeierModule[F[_]]
   )(
     implicit estimator: KaplanMeierEstimator[F]
   ): F[SurvivalStatistics]
-
 
 
   def survivalReport(
@@ -127,7 +130,6 @@ trait KaplanMeierModule[F[_]]
           cohort
       )
     }
-    .map(SurvivalReport(_))
 
   }
 
@@ -136,7 +138,7 @@ trait KaplanMeierModule[F[_]]
 
 
 
-object DefaultKaplanMeierModule extends KaplanMeierModule[Id]
+object DefaultKaplanMeierModule extends KaplanMeierModule[cats.Id]
 {
 
   import ATC.extensions._
@@ -149,10 +151,11 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[Id]
     cohort: Seq[Snapshot[MTBPatientRecord]]
   )(
     implicit
-    estimator: KaplanMeierEstimator[Id]
+    estimator: KaplanMeierEstimator[cats.Id]
   ): SurvivalStatistics = {
 
-    val chronoUnit = UnitOfTime.chronoUnit(timeUnit)
+    val chronoUnit =
+      UnitOfTime.chronoUnit(timeUnit)
 
     cohort
       .flatMap(projectors(survivalType -> grouping))
@@ -177,46 +180,11 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[Id]
       )
 
   }
-/*
-  override def survivalStatistics(
-    survivalType: SurvivalType.Value,
-    grouping: Grouping.Value,
-    timeUnit: UnitOfTime,
-    cohort: Seq[Snapshot[MTBPatientRecord]]
-  )(
-    implicit
-    estimator: KaplanMeierEstimator[Id]
-  ): SurvivalStatistics = {
-    projectData(
-      survivalType,
-      grouping,
-      UnitOfTime.chronoUnit(timeUnit),
-      cohort
-    )
-    .map {
-      case (group,data) =>
-        Entry(
-          group,
-          estimator.cohortResult(data)
-        )
-    }
-    .toSeq
-    .pipe(
-      SurvivalStatistics(
-        Coding(survivalType),
-        Coding(grouping),
-        timeUnit,
-        _
-      )
-    )
-
-  }
-*/
 
 
-  implicit val atc: CodeSystemProvider[ATC,Id,Applicative[Id]] =
+  implicit val atc: CodeSystemProvider[ATC,cats.Id,Applicative[cats.Id]] =
     ATC.Catalogs
-      .getInstance[Id]
+      .getInstance[cats.Id]
       .get
 
 
@@ -249,6 +217,38 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[Id]
   }
 
 
+  private def progressionOrCensoringDate(
+    therapy: MTBMedicationTherapy,
+    patient: Patient
+  )(
+    implicit lastResponses: Map[Id[MTBMedicationTherapy],Response]
+  ): (LocalDate,Boolean) =
+    lastResponses
+      .get(therapy.id)
+      // 1. Look for date of latest response with recorded progression
+      .collect {
+        case response if progressionRecist contains response.value =>
+          response.effectiveDate
+      }
+      // 2. Check whether therapy was stopped due to progression and take the end or recording date
+      .orElse(
+        therapy
+          .statusReason
+          .collect { 
+            case c if c.code.value == MTBMedicationTherapy.StatusReason.Progression =>
+              therapy.period
+                .flatMap(_.endOption)
+                .getOrElse(therapy.recordedOn)
+          }
+      )
+      // 3. Use patient date of death as "progression" date
+      .orElse(patient.dateOfDeath)
+      .map(_ -> true)
+      // 4. Censoring: therapy recording date
+      .getOrElse(therapy.recordedOn -> false)
+  
+
+
   private val projectors: Map[
     (SurvivalType.Value,Grouping.Value),
     Snapshot[MTBPatientRecord] => Iterable[(String,LocalDate,LocalDate,Boolean)]
@@ -256,8 +256,7 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[Id]
     Map(
       (OS,ByTumorEntity) -> {
         snp =>
-
-          val (refDate,status) = dateOfDeathOrCensoring(snp)
+          val (observationDate,status) = dateOfDeathOrCensoring(snp)
         
           snp.data
             .diagnoses
@@ -271,7 +270,7 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[Id]
                       (
                         diagnosis.code.code.value,
                         diagDate,
-                        refDate,
+                        observationDate,
                         status
                       )
                   )
@@ -279,7 +278,7 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[Id]
       },
       (OS,Ungrouped) -> {
         snp =>
-          val (refDate,status) = dateOfDeathOrCensoring(snp)
+          val (observationDate,status) = dateOfDeathOrCensoring(snp)
 
           snp.data
             .diagnoses
@@ -289,9 +288,9 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[Id]
             .map(
               date =>
                 (
-                  "-",
+                  "Alle",
                   date,
-                  refDate,
+                  observationDate,
                   status
                 )
             )
@@ -299,12 +298,13 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[Id]
       (PFS,ByTherapy) -> { 
         case Snapshot(record,_) =>
         
-          val lastResponses =
+          implicit val lastResponses =
             record
               .getResponses
               .groupBy(_.therapy)
               .collect {
-                case (IdReference(therapyId,_),responses) => therapyId -> responses.maxBy(_.effectiveDate)
+                case (IdReference(therapyId,_),responses) =>
+                  therapyId -> responses.maxBy(_.effectiveDate)
               }
           
           record
@@ -313,31 +313,9 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[Id]
             .flatMap {
               therapy =>
           
-                val (refDate,status) =
-                  lastResponses
-                    .get(therapy.id)
-                    // 1. Look for date of latest response with recorded progression
-                    .collect {
-                      case response if progressionRecist contains response.value =>
-                        response.effectiveDate
-                    }
-                    // 2. Check whether therapy was stopped due to progression and take the end or recording date
-                    .orElse(
-                      therapy
-                        .statusReason
-                        .collect { 
-                          case c if c.code.value == MTBMedicationTherapy.StatusReason.Progression =>
-                            therapy.period
-                              .flatMap(_.endOption)
-                              .getOrElse(therapy.recordedOn)
-                        }
-                    )
-                    // 3. Use patient date of death as "progression" date
-                    .orElse(record.patient.dateOfDeath)
-                    .map(_ -> true)
-                    // 4. Censoring: therapy recording date
-                    .getOrElse(therapy.recordedOn -> false)
-          
+                val (observationDate,status) =
+                  progressionOrCensoringDate(therapy,record.patient)
+
                 for { 
                   start <-
                     therapy.period.map(_.start) 
@@ -350,169 +328,54 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[Id]
                 } yield (
                   medClasses.mkString(" + "),
                   start,
-                  refDate,
+                  observationDate,
                   status
                 )
           
             }
-          }
-    )
+      },
+      (PFS,Ungrouped) -> { 
+        case Snapshot(record,_) =>
+        
+          implicit val lastResponses =
+            record
+              .getResponses
+              .groupBy(_.therapy)
+              .collect {
+                case (IdReference(therapyId,_),responses) =>
+                  therapyId -> responses.maxBy(_.effectiveDate)
+              }
+          
+          record
+            .getMedicationTherapies
+            .flatMap(_.history.maxByOption(_.recordedOn))
+            .flatMap {
+              therapy =>
+          
+                val (observationDate,status) =
+                  progressionOrCensoringDate(therapy,record.patient)
 
-/*
-  private def projectData(
-    survivalType: SurvivalType.Value,
-    grouping: Grouping.Value,
-    timeUnit: ChronoUnit,
-    snapshots: Seq[Snapshot[MTBPatientRecord]]
-  ): Map[String,Seq[(Long,Boolean)]] =
-    (survivalType,grouping) match {
-
-      case (OS,ByTumorEntity) =>
-        project(
-          snapshots,
-          timeUnit,
-          {
-            snp =>
-            
-              val (refDate,status) = dateOfDeathOrCensoring(snp)
-            
-              snp.data
-                .diagnoses
-                .toList
-                .flatMap(
-                  diagnosis =>
-                    diagnosis
-                      .recordedOn
-                      .map(
-                        diagDate =>
-                          (
-                            diagnosis.code.code.value,
-                            diagDate,
-                            refDate,
-                            status
-                          )
-                      )
-                )
-          }
-        )
-
-      case (OS,_) => 
-        project(
-          snapshots,
-          timeUnit,
-          {
-            snp =>
-            
-              val (refDate,status) = dateOfDeathOrCensoring(snp)
-
-              snp.data
-                .diagnoses
-                .toList
-                .flatMap(_.recordedOn)
-                .minOption
-                .map(
-                  date =>
+                therapy.period
+                  .map(_.start) 
+                  .map(date =>
                     (
-                      "-",
+                      "Alle",
                       date,
-                      refDate,
+                      observationDate,
                       status
                     )
-                )
+                  )
+                     
           }
-        )
-
-      case (PFS,ByTherapy) =>
-        project(
-          snapshots,
-          timeUnit,
-          { 
-            case Snapshot(record,_) =>
-           
-              val lastResponses =
-                record
-                  .getResponses
-                  .groupBy(_.therapy)
-                  .collect {
-                    case (IdReference(therapyId,_),responses) =>
-                      therapyId -> responses.maxBy(_.effectiveDate)
-                  }
-              
-              record
-                .getMedicationTherapies
-                .flatMap(_.history.maxByOption(_.recordedOn))
-                .flatMap {
-                  therapy =>
-              
-                    val (refDate,status) =
-                      lastResponses
-                        .get(therapy.id)
-                        // 1. Look for date of latest response with recorded progression
-                        .collect {
-                          case response if progressionRecist contains response.value =>
-                            response.effectiveDate
-                        }
-                        // 2. Check whether therapy was stopped due to progression and take the end or recording date
-                        .orElse(
-                          therapy
-                            .statusReason
-                            .collect { 
-                              case c if c.code.value == MTBMedicationTherapy.Progression =>
-                                therapy.period
-                                  .flatMap(_.endOption)
-                                  .getOrElse(therapy.recordedOn)
-                            }
-                        )
-                        // 3. Use patient date of death as "progression" date
-                        .orElse(
-                          record.patient.dateOfDeath
-                        )
-                        .map(_ -> true)
-                        // 4. Censoring: therapy recording date
-                        .getOrElse(therapy.recordedOn -> false)
-              
-                    for { 
-                      start <-
-                        therapy.period.map(_.start) 
-              
-                      medClasses <-
-                        therapy
-                          .medication
-                          .map(_.flatMap(_.currentGroup))
-                          .map(_.flatMap(_.display))
-                    } yield (
-                      medClasses.mkString(" + "),
-                      start,
-                      refDate,
-                      status
-                    )
-              
-                }
-          }
-        )
-
-      case (PFS,_) => ???
-
-    }
-
-
-  private def project(
-    snapshots: Seq[Snapshot[MTBPatientRecord]],
-    timeUnit: ChronoUnit,
-    projector: Snapshot[MTBPatientRecord] => Iterable[(String,LocalDate,LocalDate,Boolean)],
-  ): Map[String,Seq[(Long,Boolean)]] =
-    snapshots
-      .flatMap(projector)
-      .groupMap(_._1){
-        case (_,startDate,endDate,status) => timeUnit.between(startDate,endDate) -> status
       }
-*/
+
+    )
 
 }
 
 
 
-object DefaultKaplanMeierEstimator extends KaplanMeierEstimator[Id] //,Monad[Id]]
+object DefaultKaplanMeierEstimator extends KaplanMeierEstimator[cats.Id]
 {
 
   import scala.math.sqrt
@@ -525,7 +388,7 @@ object DefaultKaplanMeierEstimator extends KaplanMeierEstimator[Id] //,Monad[Id]
   override def apply(
     input: Seq[(Long,Boolean)]
   )(
-    implicit F: Monad[Id]
+    implicit F: Monad[cats.Id]
   ): Seq[DataPoint] = {
 
     val statusByTime =

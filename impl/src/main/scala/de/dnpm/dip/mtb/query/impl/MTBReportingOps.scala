@@ -7,7 +7,10 @@ import de.dnpm.dip.coding.{
   CodeSystem
 }
 import de.dnpm.dip.coding.hgnc.HGNC
-import de.dnpm.dip.coding.icd.ICD10GM
+import de.dnpm.dip.coding.icd.{
+  ICD10GM,
+  ICDO3
+}
 import de.dnpm.dip.model.{
   Duration,
   Therapy
@@ -25,6 +28,7 @@ import de.dnpm.dip.mtb.model.{
   RECIST,
   Variant
 }
+import de.dnpm.dip.mtb.query.api.MTBResultSet.TumorDiagnostics
 
 
 trait MTBReportingOps extends ReportingOps
@@ -69,12 +73,11 @@ trait MTBReportingOps extends ReportingOps
       .unzip
       .pipe {
         case (counts,meanDurations) =>
-          Distribution(therapies.size,counts) -> meanDurations
+          Distribution(therapies.size,counts.sortBy(_.value.count)) -> meanDurations
       }
-    
   }
 
-
+/*
   def tumorEntitiesByVariant(
     records: Seq[MTBPatientRecord]
   )(
@@ -90,6 +93,63 @@ trait MTBReportingOps extends ReportingOps
        .toList
        .map(_.code) 
     )
+*/
+
+  def distributionsByVariant(
+    records: Seq[MTBPatientRecord]
+  )(
+    implicit hgnc: CodeSystem[HGNC]
+  ): Seq[Entry[String,TumorDiagnostics.Distributions]] = {
+    records.foldLeft(
+      Map.empty[String,(Seq[Coding[ICD10GM]],Seq[Coding[ICDO3.M]])]
+    ){
+      (acc,record) =>
+
+      val variants =
+        record
+          .getNgsReports
+          .flatMap(_.results.simpleVariants)
+          .map(Variant.display)
+
+      val entities =
+        record.diagnoses
+          .toList
+          .map(_.code)
+
+      //TODO: Find a way to resolve morphologies in the same specimen the variant occurs in
+      val morphologies =
+        record.getHistologyReports
+          .flatMap(_.results.tumorMorphology)
+          .map(_.value)
+
+
+      variants.foldLeft(acc){
+        case (accPr,variant) =>
+          accPr.updatedWith(variant)(
+            _.map {
+               case (icd10s,icdo3ms) => (entities :++ icd10s, morphologies :++ icdo3ms)
+            }
+            .orElse(
+              Some(entities -> morphologies)
+            )
+          )
+      }
+
+    }
+    .map {
+      case (variant,(icd10s,icdo3ms)) =>
+        Entry(
+          variant,
+          TumorDiagnostics.Distributions(
+            Distribution.of(icd10s),
+            Distribution.of(icdo3ms)
+          )
+        )
+    }
+    .toSeq
+    .sortBy(_.key)
+
+  }
 
 
   def recommendationsBySupportingVariant(
@@ -143,6 +203,7 @@ trait MTBReportingOps extends ReportingOps
         )
     }
     .toSeq
+    .sortBy(_.key)
 
 
   def responsesByTherapy(

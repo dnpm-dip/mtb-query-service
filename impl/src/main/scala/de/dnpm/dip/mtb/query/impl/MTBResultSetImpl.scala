@@ -75,6 +75,20 @@ with MTBReportingOps
           records.size,
           ResultSet.Demographics.on(records.map(_.patient)),
           TumorDiagnostics(
+            TumorDiagnostics.Distributions(
+              Distribution.of(
+                records.flatMap(_.diagnoses.toList)
+                  .map(_.code)
+              ),
+              Distribution.of(
+                records.flatMap(_.getHistologyReports)
+                  .flatMap(_.results.tumorMorphology.map(_.value))
+              ),
+            ),
+            distributionsByVariant(records)
+          ),
+/*            
+          TumorDiagnostics(
             Distribution.of(
               records.flatMap(_.diagnoses.toList)
                 .map(_.code)
@@ -85,6 +99,7 @@ with MTBReportingOps
                 .flatMap(_.results.tumorMorphology.map(_.value))
             )
           ),
+*/        
           Medication(
             Medication.Recommendations(
               Distribution.by(
@@ -109,11 +124,5 @@ with MTBReportingOps
 
     }
 
-/*
-  override lazy val survivalReport: KaplanMeier.SurvivalReport =
-    kmModule.survivalReport(
-      results.map { case (snp,_) => snp }
-    )
-*/
 
 }

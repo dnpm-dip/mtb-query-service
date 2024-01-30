@@ -12,6 +12,7 @@ import de.dnpm.dip.coding.{
 }
 import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.service.query.{
+  Count,
   Entry,
   Query,
   Querier
@@ -25,28 +26,34 @@ import play.api.libs.json.{
 }
 
 
-object KaplanMeier
+object PFSRatio
 {
 
-/*
-  object SurvivalType extends Enumeration
-  {
-    val OS, PFS = Value
+  final case class DataPoint
+  (
+    patientIdx: Int,
+    pfs1: Long,
+    pfs2: Long,
+    pfsr: Double
+  )
 
-    implicit val format: Format[Value] =
-      Json.formatEnum(this)
-  }
+  final case class CohortResult
+  (
+    timeUnit: UnitOfTime,
+    data: Seq[DataPoint],
+    medianRatio: Double,
+    subset: Count
+  )
 
-  object Grouping extends Enumeration
-  {
-    val ByTherapy     = Value
-    val ByTumorEntity = Value
-    val Ungrouped     = Value
+  type Report = Seq[Entry[String,CohortResult]] 
 
-    implicit val format: Format[Value] =
-      Json.formatEnum(this)
-  }
-*/
+}
+
+
+
+
+object KaplanMeier
+{
 
   object SurvivalType
   extends CodedEnum("dnpm-dip/kaplan-meier-analysis/survival-type")
@@ -76,6 +83,7 @@ object KaplanMeier
       Map(
         ByTherapy     -> "Nach Therapie",
         ByTumorEntity -> "Nach Tumor-Entität",
+//        ByGender      -> "Nach Geschlecht",
         Ungrouped     -> "Keine"
       )
 
@@ -109,11 +117,13 @@ object KaplanMeier
   )
 
 
+  type SurvivalReport = Seq[SurvivalStatistics]
+/*
   final case class SurvivalReport
   (
     survivalData: Seq[SurvivalStatistics]
   )
-
+*/
 
 
   implicit val writesDataPoint: OWrites[DataPoint] =
@@ -124,9 +134,6 @@ object KaplanMeier
 
   implicit val writesSurvivalStatistics: OWrites[SurvivalStatistics] =
     Json.writes[SurvivalStatistics]
-
-  implicit def writesStatisticsReport: OWrites[SurvivalReport] =
-    Json.writes[SurvivalReport]
 
 }
 

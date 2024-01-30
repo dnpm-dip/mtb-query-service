@@ -249,7 +249,6 @@ class KaplanMeierTests extends AnyFlatSpec
     forAll(
       DefaultKaplanMeierModule
         .survivalReport(records)
-        .survivalData
         .flatMap(_.data.map(_.value))
         .map(_.survivalRates)
     ){

@@ -45,11 +45,33 @@ extends ResultSet[MTBPatientRecord,MTBQueryCriteria]
 object MTBResultSet
 {
 
+/*
   final case class TumorDiagnostics
   (
     tumorEntityDistribution: Distribution[Coding[ICD10GM]],
     tumorEntityDistributionByVariant: Seq[Entry[String,Distribution[Coding[ICD10GM]]]],
     tumorMorphologyDistribution: Distribution[Coding[ICDO3.M]],
+  )
+*/
+
+  object TumorDiagnostics
+  { 
+
+    final case class Distributions
+    (
+      tumorEntities: Distribution[Coding[ICD10GM]],
+      tumorMorphologies: Distribution[Coding[ICDO3.M]]
+    )
+
+    implicit val writesDistributions: OWrites[Distributions] =
+      Json.writes[Distributions]
+
+  }
+
+  final case class TumorDiagnostics
+  (
+    overallDistributions: TumorDiagnostics.Distributions,
+    distributionsByVariant: Seq[Entry[String,TumorDiagnostics.Distributions]]
   )
 
 

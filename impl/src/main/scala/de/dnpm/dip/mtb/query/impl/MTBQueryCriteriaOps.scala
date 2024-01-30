@@ -3,8 +3,15 @@ package de.dnpm.dip.mtb.query.impl
 
 import scala.util.chaining._
 import cats.data.Ior
-import cats.data.Ior.{Left,Right,Both}
-import de.dnpm.dip.coding.Coding
+import cats.data.Ior.{
+  Left,
+  Right,
+  Both
+}
+import de.dnpm.dip.coding.{
+  Code,
+  Coding
+}
 import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
@@ -102,11 +109,21 @@ private trait MTBQueryCriteriaOps
       .getOrElse(true)
 
 
-
   private def snvsMatch(
     criteria: Option[Set[SNVCriteria]],
     snvs: => Seq[SNV]
-  ): (Option[Set[SNVCriteria]],Boolean) =
+  ): (Option[Set[SNVCriteria]],Boolean) = {
+
+    def matchesByCodePattern[T](
+      criterion: Option[Coding[T]],
+      value: Option[Coding[T]]
+    ): Boolean =
+      criterion
+        .map(_.code.value.toLowerCase)
+        .map(c => value.exists(_.code.value.toLowerCase contains c))
+        .getOrElse(true)
+
+
     criteria match {
       case Some(set) if set.nonEmpty =>
         set.filter {
@@ -115,8 +132,8 @@ private trait MTBQueryCriteriaOps
               snv =>
                 checkMatches(
                   matches(gene,snv.gene),
-                  matches(dnaChange,snv.dnaChange),
-                  matches(proteinChange,snv.proteinChange)
+                  matchesByCodePattern(dnaChange,snv.dnaChange),       
+                  matchesByCodePattern(proteinChange,snv.proteinChange)
                 )(
                   true
                 ) 
@@ -133,6 +150,7 @@ private trait MTBQueryCriteriaOps
       case _ => None -> true
     }
 
+  }
 
   private def cnvsMatch(
     criteria: Option[Set[CNVCriteria]],
@@ -255,19 +273,16 @@ private trait MTBQueryCriteriaOps
             val (snvMatches, snvsFulfilled) =
               snvsMatch(
                 criteria.simpleVariants,
-                record.getNgsReports
-                  .flatMap(
-                    _.results.simpleVariants
-                  )
+                record
+                  .getNgsReports
+                  .flatMap(_.results.simpleVariants)
               )
 
             val (cnvMatches, cnvsFulfilled) =
               cnvsMatch(
                 criteria.copyNumberVariants,
                 record.getNgsReports
-                  .flatMap(
-                    _.results.copyNumberVariants
-                  )
+                  .flatMap(_.results.copyNumberVariants)
               )
 
             val (medicationMatches, medicationFulfilled) =
@@ -291,8 +306,6 @@ private trait MTBQueryCriteriaOps
                   .map(_.value)
                   .toSet
               )
-
-
 
           if (
             checkMatches(

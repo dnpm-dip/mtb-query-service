@@ -14,6 +14,7 @@ import de.dnpm.dip.coding.{
   CodeSystem,
   Coding
 }
+import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.mtb.query.api._
 import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.service.query.{
@@ -67,12 +68,36 @@ class Tests extends AsyncFlatSpec
     for {
       patRec <- Gen.oneOf(dataSets)
 
-      icd10 = patRec.diagnoses.head.code
-      
+      icd10 =
+        patRec.diagnoses
+          .head
+          .code
+
+      snv =
+        patRec
+          .getNgsReports.head
+          .results
+          .simpleVariants
+          .head
+
+      snvCriteria =
+        SNVCriteria(
+          snv.gene,
+          None,
+          snv.proteinChange
+            // Change the protein change to just a substring of the occurring one
+            // to test that matches are also returned by substring match of the protein (or DNA) change
+            .map(
+              pch => pch.copy( 
+                code = Code[HGVS](pch.code.value.substring(2,pch.code.value.size-1))
+              )
+            )
+        )
+
     } yield MTBQueryCriteria(
       Some(Set(icd10)),
       None,
-      None,
+      Some(Set(snvCriteria)),
       None,
       None,
       None,
@@ -129,7 +154,7 @@ class Tests extends AsyncFlatSpec
 
       _ = summary.patientCount must equal (dataSets.size) 
 
-      _ = summary.diagnostics.tumorEntityDistribution.elements must not be empty
+      _ = summary.diagnostics.overallDistributions.tumorEntities.elements must not be empty
 
       _ = summary.medication.recommendations.distributionBySupportingVariant must not be empty
 
