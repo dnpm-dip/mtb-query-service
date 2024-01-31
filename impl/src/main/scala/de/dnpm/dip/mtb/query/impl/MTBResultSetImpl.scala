@@ -87,19 +87,6 @@ with MTBReportingOps
             ),
             distributionsByVariant(records)
           ),
-/*            
-          TumorDiagnostics(
-            Distribution.of(
-              records.flatMap(_.diagnoses.toList)
-                .map(_.code)
-            ),
-            tumorEntitiesByVariant(records),
-            Distribution.of(
-              records.flatMap(_.getHistologyReports)
-                .flatMap(_.results.tumorMorphology.map(_.value))
-            )
-          ),
-*/        
           Medication(
             Medication.Recommendations(
               Distribution.by(

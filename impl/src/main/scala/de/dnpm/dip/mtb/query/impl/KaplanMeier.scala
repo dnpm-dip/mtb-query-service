@@ -11,7 +11,6 @@ import java.time.temporal.ChronoUnit
 import cats.{
   Applicative,
   Monad,
-//  Id
 }
 import de.dnpm.dip.model.{
   Snapshot,
@@ -28,13 +27,19 @@ import de.dnpm.dip.coding.{
 }
 import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.coding.icd.ICD10GM
-import de.dnpm.dip.service.query.Entry
+import de.dnpm.dip.service.query.{
+  Count,
+  Entry,
+  ReportingOps
+}
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
   MTBMedicationTherapy,
   Response,
   RECIST
 }
+import MTBMedicationTherapy.StatusReason.Progression
+import de.dnpm.dip.mtb.query.api.PFSRatio
 import de.dnpm.dip.mtb.query.api.KaplanMeier.{
   SurvivalType,
   Grouping,
@@ -133,6 +138,12 @@ trait KaplanMeierModule[F[_]]
 
   }
 
+  def pfsRatioReport(
+    cohort: Seq[Snapshot[MTBPatientRecord]],
+    timeUnit: UnitOfTime = UnitOfTime.Weeks
+  )(
+    implicit F: Monad[F]
+  ): F[PFSRatio.Report]
 
 }
 
@@ -235,7 +246,7 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[cats.Id]
         therapy
           .statusReason
           .collect { 
-            case c if c.code.value == MTBMedicationTherapy.StatusReason.Progression =>
+            case c if c.code.value == Progression =>
               therapy.period
                 .flatMap(_.endOption)
                 .getOrElse(therapy.recordedOn)
@@ -371,6 +382,98 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[cats.Id]
 
     )
 
+  override def pfsRatioReport(
+    cohort: Seq[Snapshot[MTBPatientRecord]],
+    timeUnit: UnitOfTime = UnitOfTime.Weeks
+  )(
+    implicit 
+    F: Monad[cats.Id]
+  ): PFSRatio.Report = 
+    Seq(
+      Entry(
+        "Alle",
+        cohort
+          .flatMap(snp =>
+            pfsRatio(
+              snp.data,
+              UnitOfTime.chronoUnit(timeUnit)
+            )
+          )
+          .pipe(_.sortBy(_.pfsr))
+          .pipe {
+            dataPoints =>
+
+              PFSRatio.CohortResult(
+                timeUnit,
+                dataPoints.zipWithIndex
+                  .map {
+                    case (d,idx) => d.copy(patient = s"Patient $idx")
+                  },
+                ReportingOps.median[Double].apply(dataPoints.map(_.pfsr)),
+                Count.of(
+                  n     = dataPoints.count(_.pfsr >= 1.3),
+                  total = dataPoints.size
+                )
+              )
+
+          }
+      )
+    )
+
+
+  private def pfsRatio(
+    record: MTBPatientRecord,
+    chronoUnit: ChronoUnit
+  ): Option[PFSRatio.DataPoint] = {
+
+    def progressionTime(
+      therapy: MTBMedicationTherapy,
+      patient: Patient
+    )(
+      implicit lastResponses: Map[Id[MTBMedicationTherapy],Response]
+    ): Option[Long] = {
+      val (observationDate,status) =
+        progressionOrCensoringDate(therapy,record.patient)
+
+      status match {
+        case true  => therapy.period.map(p => chronoUnit.between(p.start,observationDate))
+        case false => None
+      }
+    }
+
+
+    implicit val lastResponses =
+      record
+        .getResponses
+        .groupBy(_.therapy)
+        .collect {
+          case (IdReference(therapyId,_),responses) =>
+            therapyId -> responses.maxBy(_.effectiveDate)
+        }
+   
+    for {
+      pfs1 <-
+        record
+          .getGuidelineMedicationTherapies
+          .maxByOption(_.recordedOn)
+          .flatMap(progressionTime(_,record.patient))
+
+      pfs2 <-
+        record
+          .getMedicationTherapies
+          .flatMap(_.history.maxByOption(_.recordedOn)) // Take latest entry of therapy history...
+          .maxByOption(_.recordedOn)         // ... then take latest recorded therapy
+          .flatMap(progressionTime(_,record.patient))
+
+    } yield PFSRatio.DataPoint(
+      patient = record.patient.id.value,  // TODO: 
+      pfs1 = pfs1,
+      pfs2 = pfs2,
+      pfsr = (pfs2.toDouble/pfs1)
+    )
+          
+  }
+
 }
 
 
@@ -415,7 +518,7 @@ object DefaultKaplanMeierEstimator extends KaplanMeierEstimator[cats.Id]
 
           // num of events at t
           val d =
-            eventStatus.count(_ == true).toDouble
+            eventStatus.count(_ == true)//.toDouble
 
           // num of "patients at risk" at and after this time
           val n =
@@ -425,14 +528,14 @@ object DefaultKaplanMeierEstimator extends KaplanMeierEstimator[cats.Id]
               .sum 
 
           val st =
-            dataPoints.last.survRate * (1.0 - d/n)
+            dataPoints.last.survRate * (1.0 - d.toDouble/n)
 
           // At the last data point, n = d if no event is censored,
           // which would lead to division by 0 in the sum entering into the variance.
           // But given that the above survival rate st becomes 0 due to d/n = 1, thus also the std error,
           // avoid NaN issues by skipping this uninformative term in the sum
           val varianceSum =
-            if (d != n) varAcc + d/(n*(n - d))
+            if (d != n) varAcc + d.toDouble/(n*(n - d))
             else varAcc 
 
           val stdErr =

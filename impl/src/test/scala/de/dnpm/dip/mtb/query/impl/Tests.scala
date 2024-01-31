@@ -49,15 +49,20 @@ class Tests extends AsyncFlatSpec
   implicit val querier: Querier =
     Querier("Dummy-Querier-ID")
 
-  
+ 
+  val serviceTry =
+    MTBQueryService.getInstance
+
+  lazy val service = serviceTry.get
+/*    
   val service =
     new MTBQueryServiceImpl(
       new InMemPreparedQueryDB[Future,Monad,MTBQueryCriteria],
-      new InMemMTBLocalDB(strict = false),
+      new InMemMTBLocalDB(strict = true),
       FakeConnector[Future],
       new BaseQueryCache[MTBQueryCriteria,MTBFilters,MTBResultSet,MTBPatientRecord]
     )
-
+*/
   val dataSets =
     LazyList.fill(50)(Gen.of[MTBPatientRecord].next)
 
@@ -94,6 +99,13 @@ class Tests extends AsyncFlatSpec
             )
         )
 
+      medication =
+        patRec
+          .getMedicationTherapies.head
+          .history.head
+          .medication
+          .get
+
     } yield MTBQueryCriteria(
       Some(Set(icd10)),
       None,
@@ -101,7 +113,13 @@ class Tests extends AsyncFlatSpec
       None,
       None,
       None,
-      None,
+      Some(
+        MedicationCriteria(
+          None,
+          medication,
+          Set(Coding(MedicationUsage.Used))
+        )
+      ),
       None,
     )
 
@@ -116,7 +134,8 @@ class Tests extends AsyncFlatSpec
 
   "SPI" must "have worked" in {
 
-     MTBQueryService.getInstance.isSuccess mustBe true
+    serviceTry.isSuccess mustBe true
+//     MTBQueryService.getInstance.isSuccess mustBe true
   }
 
 
@@ -190,6 +209,8 @@ class Tests extends AsyncFlatSpec
       _ = all (query.criteria.diagnoses.value.map(_.version)) must be (defined)  
 
       _ = patientMatches must not be empty
+
+      _ = patientMatches.size must be < (dataSets.size) 
 
     } yield forAll(
         patientMatches.map(_.matchingCriteria)

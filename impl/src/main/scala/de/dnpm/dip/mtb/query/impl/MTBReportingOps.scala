@@ -73,7 +73,7 @@ trait MTBReportingOps extends ReportingOps
       .unzip
       .pipe {
         case (counts,meanDurations) =>
-          Distribution(therapies.size,counts.sortBy(_.value.count)) -> meanDurations
+          Distribution(therapies.size,counts.sorted) -> meanDurations
       }
   }
 

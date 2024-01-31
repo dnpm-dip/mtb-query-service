@@ -36,23 +36,11 @@ extends ResultSet[MTBPatientRecord,MTBQueryCriteria]
 {
   type SummaryType = MTBResultSet.Summary
 
-
-//  def survivalReport: KaplanMeier.SurvivalReport
-
 }
 
 
 object MTBResultSet
 {
-
-/*
-  final case class TumorDiagnostics
-  (
-    tumorEntityDistribution: Distribution[Coding[ICD10GM]],
-    tumorEntityDistributionByVariant: Seq[Entry[String,Distribution[Coding[ICD10GM]]]],
-    tumorMorphologyDistribution: Distribution[Coding[ICDO3.M]],
-  )
-*/
 
   object TumorDiagnostics
   { 

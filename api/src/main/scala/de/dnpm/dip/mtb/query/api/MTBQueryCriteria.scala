@@ -128,7 +128,8 @@ final case class MTBQueryCriteria
   def getCopyNumberVariants = copyNumberVariants.getOrElse(Set.empty)
   def getDnaFusions         = dnaFusions.getOrElse(Set.empty) 
   def getRnaFusions         = rnaFusions.getOrElse(Set.empty)        
-  def geResponses           = responses.getOrElse(Set.empty)        
+  def getResponses          = responses.getOrElse(Set.empty)        
+  def getDrugs              = medication.map(_.drugs).getOrElse(Set.empty)        
 }
 
 

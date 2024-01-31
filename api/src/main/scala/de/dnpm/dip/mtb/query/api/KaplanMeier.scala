@@ -31,7 +31,7 @@ object PFSRatio
 
   final case class DataPoint
   (
-    patientIdx: Int,
+    patient: String,
     pfs1: Long,
     pfs2: Long,
     pfsr: Double
@@ -41,8 +41,8 @@ object PFSRatio
   (
     timeUnit: UnitOfTime,
     data: Seq[DataPoint],
-    medianRatio: Double,
-    subset: Count
+    medianPfsr: Double,
+    upperSubset: Count
   )
 
   type Report = Seq[Entry[String,CohortResult]] 
@@ -118,12 +118,6 @@ object KaplanMeier
 
 
   type SurvivalReport = Seq[SurvivalStatistics]
-/*
-  final case class SurvivalReport
-  (
-    survivalData: Seq[SurvivalStatistics]
-  )
-*/
 
 
   implicit val writesDataPoint: OWrites[DataPoint] =

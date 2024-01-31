@@ -23,6 +23,7 @@ import de.dnpm.dip.mtb.query.api._
 
 
 private trait MTBQueryCriteriaOps
+extends de.dnpm.dip.util.Logging
 {
 
   private[impl] implicit class Extensions(criteria: MTBQueryCriteria){
@@ -35,10 +36,10 @@ private trait MTBQueryCriteriaOps
         criteria.getCopyNumberVariants ++
         criteria.getDnaFusions         ++
         criteria.getRnaFusions         ++
-        criteria.geResponses
+        criteria.getResponses          ++
+        criteria.getDrugs
       )
-      .isEmpty &&
-      criteria.medication.exists(_.drugs.nonEmpty)
+      .isEmpty
 
     def nonEmpty = !criteria.isEmpty
 
@@ -62,7 +63,7 @@ private trait MTBQueryCriteriaOps
                 med
             }
         ),
-        criteria.responses.map(_ intersect other.geResponses),
+        criteria.responses.map(_ intersect other.getResponses),
       )
 
     def &(other: MTBQueryCriteria) = criteria intersect other
@@ -107,6 +108,7 @@ private trait MTBQueryCriteriaOps
     criterion
       .map(c => value.exists(_ == c))
       .getOrElse(true)
+
 
 
   private def snvsMatch(
@@ -189,11 +191,12 @@ private trait MTBQueryCriteriaOps
   ): (Option[MedicationCriteria],Boolean) = {
 
     import MedicationUsage._
+    import LogicalOperator.{And,Or}
 
     criteria match {
       case Some(MedicationCriteria(op,selectedDrugs,usage)) if selectedDrugs.nonEmpty => 
         usage
-          .map(c => MedicationUsage withName c.code.value)
+          .collect { case MedicationUsage(value) => value }
           .pipe {
             case s if s.contains(Recommended) && s.contains(Used) => recommendedDrugs & usedDrugs
             case s if s.contains(Recommended)                     => usedDrugs
@@ -205,7 +208,6 @@ private trait MTBQueryCriteriaOps
           }
           .pipe {
             drugNames =>
-              import LogicalOperator.{And,Or}
 
               op.getOrElse(Or) match {
 
@@ -314,6 +316,7 @@ private trait MTBQueryCriteriaOps
               snvsFulfilled,
               cnvsFulfilled,
               //TODO: DNA-/RNA-Fusions
+              medicationFulfilled,
               responseFulfilled
             )(
               strict
@@ -325,9 +328,9 @@ private trait MTBQueryCriteriaOps
                 morphologyMatches,
                 snvMatches,
                 cnvMatches,
-                None,
-                None,
-                None,
+                None, //TODO: DNA-Fusions
+                None, //TODO: RNA-Fusions
+                medicationMatches,
                 responseMatches,
               )
             )
