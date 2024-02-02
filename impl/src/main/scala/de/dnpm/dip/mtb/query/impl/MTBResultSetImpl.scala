@@ -15,6 +15,10 @@ import de.dnpm.dip.coding.{
 }
 import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.coding.hgnc.HGNC
+import de.dnpm.dip.coding.icd.{
+  ICD10GM,
+  ICDO3
+}
 import de.dnpm.dip.model.Snapshot
 import de.dnpm.dip.service.query.{
   Distribution,
@@ -41,6 +45,8 @@ class MTBResultSetImpl
   implicit
   hgnc: CodeSystem[HGNC],
   atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
+  icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]],
+  icdo3: CodeSystemProvider[ICDO3,Id,Applicative[Id]],
   kmEstimator: KaplanMeierEstimator[Id],
   kmModule: KaplanMeierModule[Id]
 )  
@@ -64,6 +70,8 @@ with MTBReportingOps
       .pipe {
         snps =>
 
+  import ATC.extensions._
+
         val records =
           snps.map(_.data)
 
@@ -75,29 +83,12 @@ with MTBReportingOps
           records.size,
           ResultSet.Demographics.on(records.map(_.patient)),
           TumorDiagnostics(
-            TumorDiagnostics.Distributions(
-              Distribution.of(
-                records.flatMap(_.diagnoses.toList)
-                  .map(_.code)
-              ),
-              Distribution.of(
-                records.flatMap(_.getHistologyReports)
-                  .flatMap(_.results.tumorMorphology.map(_.value))
-              ),
-            ),
-            distributionsByVariant(records)
+            overallDiagnosticDistributions(records),
+            diagnosticDistributionsByVariant(records)
           ),
           Medication(
             Medication.Recommendations(
-              Distribution.by(
-                records
-                  .flatMap(
-                    _.getCarePlans.flatMap(_.medicationRecommendations)
-                  )
-                  .map(_.medication)
-              )(
-                _.flatMap(_.display)
-              ),
+              recommendationDistribution(records),
               recommendationsBySupportingVariant(records)
             ),
             Medication.Therapies(

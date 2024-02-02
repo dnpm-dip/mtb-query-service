@@ -48,7 +48,8 @@ object MTBResultSet
     final case class Distributions
     (
       tumorEntities: Distribution[Coding[ICD10GM]],
-      tumorMorphologies: Distribution[Coding[ICDO3.M]]
+      tumorMorphologies: Distribution[Coding[ICDO3]]
+//      tumorMorphologies: Distribution[Coding[ICDO3.M]]
     )
 
     implicit val writesDistributions: OWrites[Distributions] =

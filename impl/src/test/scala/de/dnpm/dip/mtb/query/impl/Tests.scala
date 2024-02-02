@@ -54,15 +54,8 @@ class Tests extends AsyncFlatSpec
     MTBQueryService.getInstance
 
   lazy val service = serviceTry.get
-/*    
-  val service =
-    new MTBQueryServiceImpl(
-      new InMemPreparedQueryDB[Future,Monad,MTBQueryCriteria],
-      new InMemMTBLocalDB(strict = true),
-      FakeConnector[Future],
-      new BaseQueryCache[MTBQueryCriteria,MTBFilters,MTBResultSet,MTBPatientRecord]
-    )
-*/
+
+
   val dataSets =
     LazyList.fill(50)(Gen.of[MTBPatientRecord].next)
 
@@ -124,18 +117,9 @@ class Tests extends AsyncFlatSpec
     )
 
 
-/*
-  private def printJson[T: Writes](t: T) =
-    t.pipe(Json.toJson(_))
-     .pipe(Json.prettyPrint)
-     .tap(println)
-*/
-
-
   "SPI" must "have worked" in {
 
     serviceTry.isSuccess mustBe true
-//     MTBQueryService.getInstance.isSuccess mustBe true
   }
 
 

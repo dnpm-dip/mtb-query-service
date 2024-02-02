@@ -8,13 +8,16 @@ import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.model.{
   Age,
+  Duration,
   Gender,
   Interval,
   Period
 }
 import de.dnpm.dip.service.query.{
   ConceptCount,
-  Entry
+  Distribution,
+  Entry,
+  ResultSet
 }
 import play.api.libs.json.{
   Json,
@@ -31,25 +34,32 @@ final class MTBReportingCriteria
 object MTBReporting
 {
 
+  final case class Durations
+  (
+    mean: Duration,
+    median: Duration
+  )
+
   final case class AgeData
   (
-    distribution: Seq[ConceptCount[Interval[Int]]],
+    distribution: Distribution[Interval[Int]],
     mean: Age,
     median: Age
   )
 
   final case class MedicationData
   (
-    recommendations: Seq[ConceptCount[Set[String]]],
-    recommendationsBySupportingVariant: Seq[Entry[String,Seq[ConceptCount[Set[String]]]]],
-    therapies: Seq[ConceptCount[Set[String]]],
+    recommendations: Distribution[Set[String]],
+    recommendationsBySupportingVariant: Seq[Entry[String,Distribution[Set[String]]]],
+    therapies: Distribution[Set[String]],
   )
 
 
-  final case class Data
+  final case class Report
   (
-    age: AgeData,
-    tumorEntities: Seq[ConceptCount[Coding[ICD10GM]]],
+    ageData: AgeData,
+    demographics: ResultSet.Demographics,
+    tumorEntities: Distribution[Coding[ICD10GM]],
     medication: MedicationData
   )
 
@@ -61,8 +71,8 @@ object MTBReporting
   implicit val formatMedicationData: OWrites[MedicationData] =
     Json.writes[MedicationData]
 
-  implicit val format: OWrites[Data] =
-    Json.writes[Data]
+  implicit val formatReport: OWrites[Report] =
+    Json.writes[Report]
 
 }
 
@@ -72,6 +82,6 @@ trait MTBReporting[F[_],Env]
 
   def ?(criteria: MTBReportingCriteria)(
     implicit env: Env
-  ): F[String IorNel MTBReporting.Data]
+  ): F[String IorNel MTBReporting.Report]
 
 }

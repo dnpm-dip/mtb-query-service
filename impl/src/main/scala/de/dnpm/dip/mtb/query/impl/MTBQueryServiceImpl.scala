@@ -48,10 +48,15 @@ import de.dnpm.dip.coding.icd.{
   ICDO3
 }
 import de.dnpm.dip.coding.hgnc.HGNC
-import de.dnpm.dip.mtb.model.MTBPatientRecord
+import de.dnpm.dip.mtb.model.{
+  MTBDiagnosis,
+  MTBPatientRecord
+}
 import de.dnpm.dip.mtb.query.api._
-import de.dnpm.dip.connector.peer2peer.PeerToPeerConnector
-import de.dnpm.dip.connector.fake.FakeConnector
+import de.dnpm.dip.connector.{
+  FakeConnector,
+  HttpConnector
+}
 
 
 
@@ -72,9 +77,10 @@ object MTBQueryServiceImpl extends Logging
 
 
   private lazy val connector =
-    System.getProperty("dnpm.dip.connector.type") match {
-      case "peer2peer" =>
-        PeerToPeerConnector(
+    System.getProperty("dnpm.dip.connector.type","peer2peer") match {
+      case HttpConnector.Type(typ) =>
+        HttpConnector(
+          typ,
           "/api/mtb/peer2peer/",
           PartialFunction.empty
         )
@@ -149,10 +155,6 @@ with Completers
     DefaultKaplanMeierModule
 
 
-  override val ResultSetFrom =
-    new MTBResultSetImpl(_,_)
-
-
   override def DefaultFilter(
     results: Seq[Snapshot[MTBPatientRecord]]
   ): MTBFilters = {
@@ -162,10 +164,25 @@ with Completers
 
     MTBFilters(
       PatientFilter.on(records),
-//      DiagnosisFilter(
-//        Some(records.flatMap(_.diagnoses.map(_.code).toList).toSet)
-//      )
+      DiagnosisFilter(
+        Some(records.flatMap(_.diagnoses.map(_.code).toList).toSet)
+      )
     )
+  }
+
+
+  import scala.language.implicitConversions
+
+  override implicit def toPredicate(filter: MTBFilters): MTBPatientRecord => Boolean = {
+    record =>
+
+      implicit def diagnosisFilterPredicate(f: DiagnosisFilter): MTBDiagnosis => Boolean =
+        diag => f.code.exists(_.exists(_.code == diag.code.code))
+
+
+      filter.patientFilter(record.patient) &&
+      record.diagnoses.exists(filter.diagnosisFilter)
+
   }
 
 
@@ -190,10 +207,13 @@ with Completers
       .getInstance[cats.Id]
       .get
 
-  override val icdo3: ICDO3.Catalogs[Id,Applicative[Id]] =
+  override implicit val icdo3: ICDO3.Catalogs[Id,Applicative[Id]] =
     ICDO3.Catalogs  
       .getInstance[cats.Id]
       .get
+
+  override val ResultSetFrom =
+    new MTBResultSetImpl(_,_)
 
 
 

@@ -1,16 +1,24 @@
 package de.dnpm.dip.mtb.query.impl
 
 
-
+import cats.{
+  Applicative,
+  Id
+}
 import de.dnpm.dip.coding.{
   Coding,
-  CodeSystem
+  CodeSystem,
+  CodeSystemProvider
 }
+import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.icd.{
+  ClassKinds,
+  ICD,
   ICD10GM,
   ICDO3
 }
+import ClassKinds._
 import de.dnpm.dip.model.{
   Duration,
   Therapy
@@ -35,8 +43,49 @@ trait MTBReportingOps extends ReportingOps
 {
 
   import scala.util.chaining._
+  import ATC.extensions._
+  import ICD.extensions._
 
 
+  def therapyDistributionAndMeanDurations(
+    records: Seq[MTBPatientRecord]
+  )(
+    implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
+  ): (Distribution[Set[String]],Seq[Entry[Set[String],Double]]) = {
+
+    val therapies =
+      records
+        .flatMap(_.getMedicationTherapies)
+        .flatMap(_.history.maxByOption(_.recordedOn))
+        .filter(_.medication.isDefined)
+
+    val therapyDistribution =
+      Distribution.byParentAndBy(
+        therapies.flatMap(_.medication)
+      )(
+        _.map(coding => coding.currentGroup.getOrElse(coding)),
+        _.flatMap(_.display)
+      )
+
+    val meanDurations =
+      therapies
+        .groupBy(_.medication.get.flatMap(_.display))
+        .map {
+          case (meds,ths) =>
+            Entry(
+              meds,
+              ths.flatMap(_.period.flatMap(_.duration(Weeks)))
+                .map(_.value)
+                .pipe(mean(_))
+            )
+        }
+        .toSeq
+
+    therapyDistribution -> meanDurations
+
+  }
+
+/*  
   def therapyDistributionAndMeanDurations(
     records: Seq[MTBPatientRecord]
   ): (Distribution[Set[String]],Seq[Entry[Set[String],Double]]) = {
@@ -50,7 +99,6 @@ trait MTBReportingOps extends ReportingOps
     val counter =
       Count.total(therapies.size)
 
-    
     therapies
       .groupBy(_.medication.get.flatMap(_.display))
       .map {
@@ -76,29 +124,50 @@ trait MTBReportingOps extends ReportingOps
           Distribution(therapies.size,counts.sorted) -> meanDurations
       }
   }
+*/
 
-/*
-  def tumorEntitiesByVariant(
+
+  def overallDiagnosticDistributions(
     records: Seq[MTBPatientRecord]
   )(
-    implicit hgnc: CodeSystem[HGNC]
-  ): Seq[Entry[String,Distribution[Coding[ICD10GM]]]] =
-    Distribution.associatedOn(
-      records
-    )(
-      _.getNgsReports
-       .flatMap(_.variants)
-       .map(Variant.display),
-      _.diagnoses
-       .toList
-       .map(_.code) 
+    implicit
+    icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]],
+    icdo3: CodeSystemProvider[ICDO3,Id,Applicative[Id]]
+  ): TumorDiagnostics.Distributions = 
+    TumorDiagnostics.Distributions(
+      Distribution.byParent(
+        records.flatMap(_.diagnoses.toList)
+          .map(_.code),
+        coding => coding.parentOfKind(Category).getOrElse(coding)
+      ),
+      Distribution.byParent(
+        records.flatMap(_.getHistologyReports)
+          .flatMap(_.results.tumorMorphology.map(_.value)),
+        coding => coding.parentOfKind(Block).getOrElse(coding)
+      )
+    )
+/*
+    TumorDiagnostics.Distributions(
+      Distribution.of(
+        records.flatMap(_.diagnoses.toList)
+          .map(_.code)
+      ),
+      Distribution.of(
+        records.flatMap(_.getHistologyReports)
+          .flatMap(_.results.tumorMorphology.map(_.value))
+      ),
     )
 */
 
-  def distributionsByVariant(
+
+
+  def diagnosticDistributionsByVariant(
     records: Seq[MTBPatientRecord]
   )(
-    implicit hgnc: CodeSystem[HGNC]
+    implicit
+    hgnc: CodeSystem[HGNC],
+    icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]],
+    icdo3: CodeSystemProvider[ICDO3,Id,Applicative[Id]]
   ): Seq[Entry[String,TumorDiagnostics.Distributions]] = {
     records.foldLeft(
       Map.empty[String,(Seq[Coding[ICD10GM]],Seq[Coding[ICDO3.M]])]
@@ -141,8 +210,16 @@ trait MTBReportingOps extends ReportingOps
         Entry(
           variant,
           TumorDiagnostics.Distributions(
-            Distribution.of(icd10s),
-            Distribution.of(icdo3ms)
+            Distribution.byParent(
+              icd10s,
+              coding => coding.parentOfKind(Category).getOrElse(coding)
+            ),
+            Distribution.byParent(
+              icdo3ms,
+              coding => coding.parentOfKind(Block).getOrElse(coding)
+            )
+//            Distribution.of(icd10s),
+//            Distribution.of(icdo3ms)
           )
         )
     }
@@ -152,13 +229,45 @@ trait MTBReportingOps extends ReportingOps
   }
 
 
+  def recommendationDistribution(
+    records: Seq[MTBPatientRecord]
+  )(
+    implicit
+    atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
+  ): Distribution[Set[String]] =
+    Distribution.byParentAndBy(
+      records
+        .flatMap(_.getCarePlans.flatMap(_.medicationRecommendations))
+        .map(_.medication)
+    )(
+      _.map(coding => coding.currentGroup.getOrElse(coding)),
+      _.flatMap(_.display)
+    )
+/*
+    Distribution.by(
+      records
+        .flatMap(
+          _.getCarePlans.flatMap(_.medicationRecommendations)
+        )
+        .map(_.medication)
+    )(
+      _.flatMap(_.display)
+    ),
+*/
+
+
+
+
   def recommendationsBySupportingVariant(
     records: Seq[MTBPatientRecord]
   )(
-    implicit hgnc: CodeSystem[HGNC]
+    implicit
+    atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
+    hgnc: CodeSystem[HGNC]
   ): Seq[Entry[String,Distribution[Set[String]]]] =
     records.foldLeft(
-      Map.empty[String,Seq[Set[String]]]
+      Map.empty[String,Seq[Set[Coding[ATC]]]]
+//      Map.empty[String,Seq[Set[String]]]
     ){
       (acc,record) =>
 
@@ -174,7 +283,7 @@ trait MTBReportingOps extends ReportingOps
             recommendation =>
               recommendation
                 .medication
-                .flatMap(_.display)
+//                .flatMap(_.display)
                 .pipe { 
                   meds =>
                     recommendation
@@ -199,11 +308,18 @@ trait MTBReportingOps extends ReportingOps
       case (variant,meds) =>
         Entry(
           variant,
-          Distribution.of(meds)
+          Distribution.byParentAndBy(
+            meds
+          )(
+            _.map(coding => coding.currentGroup.getOrElse(coding)),
+            _.flatMap(_.display)
+          )
+//          Distribution.of(meds)
         )
     }
     .toSeq
     .sortBy(_.key)
+
 
 
   def responsesByTherapy(
