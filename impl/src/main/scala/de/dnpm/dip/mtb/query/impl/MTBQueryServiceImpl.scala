@@ -177,7 +177,11 @@ with Completers
     record =>
 
       implicit def diagnosisFilterPredicate(f: DiagnosisFilter): MTBDiagnosis => Boolean =
-        diag => f.code.exists(_.exists(_.code == diag.code.code))
+        diag =>
+          f.code match {
+            case Some(icd10s) if icd10s.nonEmpty => icd10s.exists(_.code == diag.code.code)
+            case _                               => true
+          }
 
 
       filter.patientFilter(record.patient) &&
