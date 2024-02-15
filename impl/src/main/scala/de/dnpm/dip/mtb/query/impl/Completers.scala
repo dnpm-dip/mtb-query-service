@@ -247,9 +247,9 @@ trait Completers
     ): Completer[MTBCarePlan] =
       Completer.of(
         carePlan => carePlan.copy(
-          statusReason                     = carePlan.statusReason.complete,
-          medicationRecommendations        = carePlan.medicationRecommendations.complete,
-          geneticCounselingRecommendations = carePlan.geneticCounselingRecommendations.map(
+          statusReason                    = carePlan.statusReason.complete,
+          medicationRecommendations       = carePlan.medicationRecommendations.complete,
+          geneticCounselingRecommendation = carePlan.geneticCounselingRecommendation.map(
             rec => rec.copy(reason = rec.reason.complete)
           )
         )

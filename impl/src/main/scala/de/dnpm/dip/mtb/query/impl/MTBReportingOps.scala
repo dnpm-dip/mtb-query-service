@@ -85,47 +85,6 @@ trait MTBReportingOps extends ReportingOps
 
   }
 
-/*  
-  def therapyDistributionAndMeanDurations(
-    records: Seq[MTBPatientRecord]
-  ): (Distribution[Set[String]],Seq[Entry[Set[String],Double]]) = {
-
-    val therapies =
-      records
-        .flatMap(_.getMedicationTherapies)
-        .flatMap(_.history.maxByOption(_.recordedOn))
-        .filter(_.medication.isDefined)
-
-    val counter =
-      Count.total(therapies.size)
-
-    therapies
-      .groupBy(_.medication.get.flatMap(_.display))
-      .map {
-        case (meds,ths) =>
-          (
-            ConceptCount(
-              meds,
-              counter(ths.size)
-            ),
-            Entry(
-              meds,
-              ths
-                .flatMap(_.period.flatMap(_.duration(Weeks)))
-                .map(_.value)
-                .pipe(mean(_))
-            )
-          )
-      }
-      .toSeq
-      .unzip
-      .pipe {
-        case (counts,meanDurations) =>
-          Distribution(therapies.size,counts.sorted) -> meanDurations
-      }
-  }
-*/
-
 
   def overallDiagnosticDistributions(
     records: Seq[MTBPatientRecord]
@@ -136,7 +95,7 @@ trait MTBReportingOps extends ReportingOps
   ): TumorDiagnostics.Distributions = 
     TumorDiagnostics.Distributions(
       Distribution.byParent(
-        records.flatMap(_.diagnoses.toList)
+        records.flatMap(_.getDiagnoses)
           .map(_.code),
         coding => coding.parentOfKind(Category).getOrElse(coding)
       ),
@@ -146,18 +105,6 @@ trait MTBReportingOps extends ReportingOps
         coding => coding.parentOfKind(Block).getOrElse(coding)
       )
     )
-/*
-    TumorDiagnostics.Distributions(
-      Distribution.of(
-        records.flatMap(_.diagnoses.toList)
-          .map(_.code)
-      ),
-      Distribution.of(
-        records.flatMap(_.getHistologyReports)
-          .flatMap(_.results.tumorMorphology.map(_.value))
-      ),
-    )
-*/
 
 
 
@@ -181,8 +128,7 @@ trait MTBReportingOps extends ReportingOps
           .map(Variant.display)
 
       val entities =
-        record.diagnoses
-          .toList
+        record.getDiagnoses
           .map(_.code)
 
       //TODO: Find a way to resolve morphologies in the same specimen the variant occurs in
@@ -267,7 +213,6 @@ trait MTBReportingOps extends ReportingOps
   ): Seq[Entry[String,Distribution[Set[String]]]] =
     records.foldLeft(
       Map.empty[String,Seq[Set[Coding[ATC]]]]
-//      Map.empty[String,Seq[Set[String]]]
     ){
       (acc,record) =>
 
@@ -283,7 +228,6 @@ trait MTBReportingOps extends ReportingOps
             recommendation =>
               recommendation
                 .medication
-//                .flatMap(_.display)
                 .pipe { 
                   meds =>
                     recommendation
@@ -314,7 +258,6 @@ trait MTBReportingOps extends ReportingOps
             _.map(coding => coding.currentGroup.getOrElse(coding)),
             _.flatMap(_.display)
           )
-//          Distribution.of(meds)
         )
     }
     .toSeq

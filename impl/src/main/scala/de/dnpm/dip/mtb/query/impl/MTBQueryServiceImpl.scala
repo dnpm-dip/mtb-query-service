@@ -165,7 +165,7 @@ with Completers
     MTBFilters(
       PatientFilter.on(records),
       DiagnosisFilter(
-        Some(records.flatMap(_.diagnoses.map(_.code).toList).toSet)
+        Some(records.flatMap(_.getDiagnoses.map(_.code)).toSet)
       )
     )
   }
@@ -185,7 +185,7 @@ with Completers
 
 
       filter.patientFilter(record.patient) &&
-      record.diagnoses.exists(filter.diagnosisFilter)
+      record.getDiagnoses.exists(filter.diagnosisFilter)
 
   }
 

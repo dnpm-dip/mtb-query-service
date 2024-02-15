@@ -259,7 +259,6 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[cats.Id]
       .getOrElse(therapy.recordedOn -> false)
   
 
-
   private val projectors: Map[
     (SurvivalType.Value,Grouping.Value),
     Snapshot[MTBPatientRecord] => Iterable[(String,LocalDate,LocalDate,Boolean)]
@@ -270,8 +269,7 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[cats.Id]
           val (observationDate,status) = dateOfDeathOrCensoring(snp)
         
           snp.data
-            .diagnoses
-            .toList
+            .getDiagnoses
             .flatMap(
               diagnosis =>
                 diagnosis
@@ -292,8 +290,7 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[cats.Id]
           val (observationDate,status) = dateOfDeathOrCensoring(snp)
 
           snp.data
-            .diagnoses
-            .toList
+            .getDiagnoses
             .flatMap(_.recordedOn)
             .minOption
             .map(

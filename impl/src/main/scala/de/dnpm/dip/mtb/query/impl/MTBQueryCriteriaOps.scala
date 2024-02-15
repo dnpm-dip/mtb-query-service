@@ -257,8 +257,7 @@ extends de.dnpm.dip.util.Logging
             val (diagnosisMatches, diagnosesFulfilled) =
               matches(
                 criteria.diagnoses,
-                record.diagnoses
-                  .toList
+                record.getDiagnoses
                   .map(_.code)
                   .toSet
               )
