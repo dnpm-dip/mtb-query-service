@@ -26,7 +26,11 @@ import de.dnpm.dip.coding.{
   CodeSystemProvider
 }
 import de.dnpm.dip.coding.atc.ATC
-import de.dnpm.dip.coding.icd.ICD10GM
+import de.dnpm.dip.coding.icd.{
+  ICD,
+  ICD10GM
+}
+import de.dnpm.dip.coding.icd.ClassKinds.Category
 import de.dnpm.dip.service.query.{
   Count,
   Entry,
@@ -153,6 +157,7 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[cats.Id]
 {
 
   import ATC.extensions._
+  import ICD.extensions._
 
 
   override def survivalStatistics(
@@ -195,6 +200,11 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[cats.Id]
 
   implicit val atc: CodeSystemProvider[ATC,cats.Id,Applicative[cats.Id]] =
     ATC.Catalogs
+      .getInstance[cats.Id]
+      .get
+
+  implicit val icd10gm: CodeSystemProvider[ICD10GM,cats.Id,Applicative[cats.Id]] =
+    ICD10GM.Catalogs
       .getInstance[cats.Id]
       .get
 
@@ -277,13 +287,17 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[cats.Id]
                   .map(
                     diagDate =>
                       (
-                        diagnosis.code.code.value,
+                        diagnosis.code
+                          .parentOfKind(Category)
+                          .getOrElse(diagnosis.code)
+                          .code.value,
                         diagDate,
                         observationDate,
                         status
                       )
-                  )
+                    )
             )
+
       },
       (OS,Ungrouped) -> {
         snp =>
