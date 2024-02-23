@@ -5,6 +5,10 @@ import java.time.Instant
 import java.util.UUID.randomUUID
 import java.time.temporal.ChronoUnit.DAYS
 import scala.util.Random
+import cats.{
+  Id,
+  Applicative
+}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers._
 import org.scalatest.Inspectors._
@@ -13,6 +17,9 @@ import de.dnpm.dip.model.{
   Snapshot,
   UnitOfTime
 }
+import de.dnpm.dip.coding.CodeSystemProvider
+import de.dnpm.dip.coding.atc.ATC
+import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.mtb.query.api.KaplanMeier.{
   DataPoint,
@@ -31,6 +38,17 @@ class KaplanMeierTests extends AnyFlatSpec
 
   implicit val rnd: Random =
     new Random(42)
+
+  implicit val atc: CodeSystemProvider[ATC,Id,Applicative[Id]] =
+    ATC.Catalogs
+      .getInstance[cats.Id]
+      .get
+
+  implicit val icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]] =
+    ICD10GM.Catalogs
+      .getInstance[cats.Id]
+      .get
+
 
   // Ref. data from Julia Grafs bachelor thesis (p. 9)
   val refData0 =
@@ -202,7 +220,6 @@ class KaplanMeierTests extends AnyFlatSpec
 
     val data =
       DefaultKaplanMeierEstimator(refData0)
-//        .tapEach(println)
 
     forAll(data zip refResults0){
       case (point,refPoint) =>
@@ -246,8 +263,11 @@ class KaplanMeierTests extends AnyFlatSpec
     implicit val estimator: KaplanMeierEstimator[cats.Id] =
       DefaultKaplanMeierEstimator
 
+    val kmModule =
+      new DefaultKaplanMeierModule
+
     forAll(
-      DefaultKaplanMeierModule
+      kmModule
         .survivalReport(records)
         .flatMap(_.data.map(_.value))
         .map(_.survivalRates)

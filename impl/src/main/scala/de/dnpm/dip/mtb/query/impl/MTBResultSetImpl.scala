@@ -70,8 +70,6 @@ with MTBReportingOps
       .pipe {
         snps =>
 
-  import ATC.extensions._
-
         val records =
           snps.map(_.data)
 
@@ -101,6 +99,5 @@ with MTBReportingOps
         )
 
     }
-
 
 }

@@ -148,13 +148,6 @@ with Completers
   import Completer.syntax._    
 
 
-  private implicit val kmEstimator: KaplanMeierEstimator[Id] =
-    DefaultKaplanMeierEstimator
-
-  private implicit val kmModule: KaplanMeierModule[Id] =
-    DefaultKaplanMeierModule
-
-
   override def DefaultFilter(
     results: Seq[Snapshot[MTBPatientRecord]]
   ): MTBFilters = {
@@ -216,15 +209,21 @@ with Completers
       .getInstance[cats.Id]
       .get
 
+
+  private implicit val kmEstimator: KaplanMeierEstimator[Id] =
+    DefaultKaplanMeierEstimator
+
+  private implicit val kmModule: KaplanMeierModule[Id] =
+    new DefaultKaplanMeierModule
+//    DefaultKaplanMeierModule
+
+
   override val ResultSetFrom =
     new MTBResultSetImpl(_,_)
-
-
 
   //TODO: Complete codings, etc
   override val preprocess: MTBPatientRecord => MTBPatientRecord =
     _.complete
-
 
 
 }

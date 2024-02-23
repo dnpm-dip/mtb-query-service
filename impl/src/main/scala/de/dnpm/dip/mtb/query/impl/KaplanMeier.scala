@@ -99,13 +99,19 @@ trait KaplanMeierModule[F[_]]
 {
   self =>
 
+  implicit val atc: CodeSystemProvider[ATC,cats.Id,Applicative[cats.Id]]
+
+  implicit val icd10gm: CodeSystemProvider[ICD10GM,cats.Id,Applicative[cats.Id]]
+
+
   def survivalStatistics(
     survivalType: SurvivalType.Value,
     grouping: Grouping.Value,
     timeUnit: UnitOfTime,
     cohort: Seq[Snapshot[MTBPatientRecord]]
   )(
-    implicit estimator: KaplanMeierEstimator[F]
+    implicit
+    estimator: KaplanMeierEstimator[F],
   ): F[SurvivalStatistics]
 
 
@@ -153,7 +159,11 @@ trait KaplanMeierModule[F[_]]
 
 
 
-object DefaultKaplanMeierModule extends KaplanMeierModule[cats.Id]
+class DefaultKaplanMeierModule(
+  override implicit val atc: CodeSystemProvider[ATC,cats.Id,Applicative[cats.Id]],
+  override implicit val icd10gm: CodeSystemProvider[ICD10GM,cats.Id,Applicative[cats.Id]]
+)
+extends KaplanMeierModule[cats.Id]
 {
 
   import ATC.extensions._
@@ -186,6 +196,7 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[cats.Id]
           )
       }
       .toSeq
+      .sortBy(_.key)
       .pipe(
         SurvivalStatistics(
           Coding(survivalType),
@@ -196,17 +207,6 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[cats.Id]
       )
 
   }
-
-
-  implicit val atc: CodeSystemProvider[ATC,cats.Id,Applicative[cats.Id]] =
-    ATC.Catalogs
-      .getInstance[cats.Id]
-      .get
-
-  implicit val icd10gm: CodeSystemProvider[ICD10GM,cats.Id,Applicative[cats.Id]] =
-    ICD10GM.Catalogs
-      .getInstance[cats.Id]
-      .get
 
 
   private val progressionRecist =
@@ -447,11 +447,12 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[cats.Id]
         progressionOrCensoringDate(therapy,record.patient)
 
       status match {
-        case true  => therapy.period.map(p => chronoUnit.between(p.start,observationDate))
+        case true  =>
+          therapy.period
+            .map(p => chronoUnit.between(p.start,observationDate))
         case false => None
       }
     }
-
 
     implicit val lastResponses =
       record
@@ -473,14 +474,14 @@ object DefaultKaplanMeierModule extends KaplanMeierModule[cats.Id]
         record
           .getMedicationTherapies
           .flatMap(_.history.maxByOption(_.recordedOn)) // Take latest entry of therapy history...
-          .maxByOption(_.recordedOn)         // ... then take latest recorded therapy
+          .maxByOption(_.recordedOn)                    // ... then take latest recorded therapy
           .flatMap(progressionTime(_,record.patient))
 
     } yield PFSRatio.DataPoint(
-      patient = record.patient.id.value,  // TODO: 
-      pfs1 = pfs1,
-      pfs2 = pfs2,
-      pfsr = (pfs2.toDouble/pfs1)
+      record.patient.id.value,  // TODO: 
+      pfs1,
+      pfs2,
+      (pfs2.toDouble/pfs1)
     )
           
   }
@@ -529,7 +530,7 @@ object DefaultKaplanMeierEstimator extends KaplanMeierEstimator[cats.Id]
 
           // num of events at t
           val d =
-            eventStatus.count(_ == true)//.toDouble
+            eventStatus.count(_ == true)
 
           // num of "patients at risk" at and after this time
           val n =
