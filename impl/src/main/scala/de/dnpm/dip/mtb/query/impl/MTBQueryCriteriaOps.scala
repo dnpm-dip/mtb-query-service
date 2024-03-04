@@ -290,7 +290,7 @@ extends de.dnpm.dip.util.Logging
               medicationsMatch(
                 criteria.medication,
                 record.getCarePlans
-                  .flatMap(_.medicationRecommendations)
+                  .flatMap(_.medicationRecommendations.getOrElse(List.empty))
                   .flatMap(_.medication)
                   .toSet[Coding[ATC]],
                 record.getMedicationTherapies

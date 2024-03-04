@@ -213,15 +213,21 @@ with Completers
   private implicit val kmEstimator: KaplanMeierEstimator[Id] =
     DefaultKaplanMeierEstimator
 
-  private implicit val kmModule: KaplanMeierModule[Id] =
+  private val kmModule: KaplanMeierModule[Id] =
     new DefaultKaplanMeierModule
-//    DefaultKaplanMeierModule
 
 
+//  override val ResultSetFrom =
+//    new MTBResultSetImpl(_,_)
   override val ResultSetFrom =
-    new MTBResultSetImpl(_,_)
+    (id,results) =>
+      new MTBResultSetImpl(
+        id,
+        results,
+        kmModule.survivalReport(results.map(_._1))
+      )
 
-  //TODO: Complete codings, etc
+
   override val preprocess: MTBPatientRecord => MTBPatientRecord =
     _.complete
 

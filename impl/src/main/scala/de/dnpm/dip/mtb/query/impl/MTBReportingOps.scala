@@ -5,6 +5,7 @@ import cats.{
   Applicative,
   Id
 }
+import de.dnpm.dip.util.DisplayLabel
 import de.dnpm.dip.coding.{
   Coding,
   CodeSystem,
@@ -115,17 +116,17 @@ trait MTBReportingOps extends ReportingOps
     hgnc: CodeSystem[HGNC],
     icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]],
     icdo3: CodeSystemProvider[ICDO3,Id,Applicative[Id]]
-  ): Seq[Entry[String,TumorDiagnostics.Distributions]] = {
+  ): Seq[Entry[DisplayLabel[Variant],TumorDiagnostics.Distributions]] = {
     records.foldLeft(
-      Map.empty[String,(Seq[Coding[ICD10GM]],Seq[Coding[ICDO3.M]])]
+      Map.empty[DisplayLabel[Variant],(Seq[Coding[ICD10GM]],Seq[Coding[ICDO3.M]])]
     ){
       (acc,record) =>
 
       val variants =
         record
           .getNgsReports
-          .flatMap(_.results.simpleVariants)
-          .map(Variant.display)
+          .flatMap(_.variants)
+          .map(DisplayLabel.of(_))
 
       val entities =
         record.getDiagnoses
@@ -183,7 +184,7 @@ trait MTBReportingOps extends ReportingOps
   ): Distribution[Set[String]] =
     Distribution.byParentAndBy(
       records
-        .flatMap(_.getCarePlans.flatMap(_.medicationRecommendations))
+        .flatMap(_.getCarePlans.flatMap(_.medicationRecommendations.getOrElse(List.empty)))
         .map(_.medication)
     )(
       _.map(coding => coding.currentGroup.getOrElse(coding)),
@@ -210,9 +211,9 @@ trait MTBReportingOps extends ReportingOps
     implicit
     atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
     hgnc: CodeSystem[HGNC]
-  ): Seq[Entry[String,Distribution[Set[String]]]] =
+  ): Seq[Entry[DisplayLabel[Variant],Distribution[Set[String]]]] =
     records.foldLeft(
-      Map.empty[String,Seq[Set[Coding[ATC]]]]
+      Map.empty[DisplayLabel[Variant],Seq[Set[Coding[ATC]]]]
     ){
       (acc,record) =>
 
@@ -223,7 +224,7 @@ trait MTBReportingOps extends ReportingOps
 
         record
           .getCarePlans
-          .flatMap(_.medicationRecommendations)
+          .flatMap(_.medicationRecommendations.getOrElse(List.empty))
           .flatMap {
             recommendation =>
               recommendation
@@ -234,7 +235,7 @@ trait MTBReportingOps extends ReportingOps
                       .supportingEvidence
                       .flatMap(
                         _.resolveOn(variants)
-                         .map(Variant.display)
+                         .map(DisplayLabel.of(_))
                       )
                       .map(_ -> meds)
                 }

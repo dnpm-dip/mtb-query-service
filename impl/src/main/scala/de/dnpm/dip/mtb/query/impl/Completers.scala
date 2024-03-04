@@ -1,11 +1,15 @@
 package de.dnpm.dip.mtb.query.impl
 
 
+import java.time.LocalDate
 import cats.{
   Applicative,
   Id
 }
-import de.dnpm.dip.util.Completer
+import de.dnpm.dip.util.{
+  Completer,
+  DisplayLabel
+}
 import de.dnpm.dip.coding.{
   Code,
   Coding,
@@ -84,7 +88,7 @@ trait Completers
     implicit val diagnosisCompleter: Completer[MTBDiagnosis] =
       Completer.of(
         diagnosis => diagnosis.copy(
-          code = diagnosis.code.complete, 
+          code                     = diagnosis.code.complete, 
           whoGrading               = diagnosis.whoGrading.complete, 
           stageHistory             = diagnosis.stageHistory.map(st => st.copy(stage = st.stage.complete)), 
           guidelineTreatmentStatus = diagnosis.guidelineTreatmentStatus.complete,
@@ -99,23 +103,45 @@ trait Completers
         )
       )
 
-    implicit val therapyCompleter: Completer[MTBMedicationTherapy] =
+
+    implicit def indicationCompleter(
+      implicit diagnoses: Seq[MTBDiagnosis]
+    ): Completer[Reference[MTBDiagnosis]] =
       Completer.of(
-        therapy => therapy.copy(
-          status       = therapy.status.complete,
-          statusReason = therapy.statusReason.complete,
-          medication   = therapy.medication.complete
+        ref => ref.copy(
+          display =
+            ref.resolveOn(diagnoses)
+              .map(_.code)
+              .map(DisplayLabel.of(_).value)
         )
       )
 
-    implicit val procedureCompleter: Completer[OncoProcedure] =
-      Completer.of(
-        procedure => procedure.copy(
-          code         = procedure.code.complete,
-          status       = procedure.status.complete,
-          statusReason = procedure.statusReason.complete
+
+    implicit def therapyCompleter(
+      implicit diagnoses: Seq[MTBDiagnosis]
+    ): Completer[MTBMedicationTherapy] =
+      Completer.of {
+        therapy =>
+          therapy.copy(
+            indication   = therapy.indication.complete,
+            status       = therapy.status.complete,
+            statusReason = therapy.statusReason.complete,
+            medication   = therapy.medication.complete
+          )
+      }
+
+    implicit def procedureCompleter(
+      implicit diagnoses: Seq[MTBDiagnosis]
+    ): Completer[OncoProcedure] =
+      Completer.of {
+        procedure => 
+          procedure.copy(
+            indication   = procedure.indication.complete,
+            code         = procedure.code.complete,
+            status       = procedure.status.complete,
+            statusReason = procedure.statusReason.complete
         )
-      )
+      }
 
     implicit val ecogCompleter: Completer[PerformanceStatus] =
       Completer.of(
@@ -219,34 +245,44 @@ trait Completers
       )
 
     implicit def medicationRecommendationCompleter(
-      implicit variants: List[Variant]
-    ): Completer[MTBMedicationRecommendation] = {
-
+      implicit
+      diagnoses: Seq[MTBDiagnosis],
+      variants: List[Variant]
+    ): Completer[MTBMedicationRecommendation] =
       Completer.of(
-        recommendation => recommendation.copy(
-          levelOfEvidence = recommendation.levelOfEvidence.map(
-            loe => loe.copy(
-              grading   = loe.grading.complete,
-              addendums = loe.addendums.complete
-            )
-          ),
-          priority        = recommendation.priority.complete,
-          medication      = recommendation.medication.complete,
-          supportingEvidence =
-            recommendation.supportingEvidence
-              .flatMap {
-                _.resolveOn(variants)
-                 .map(variant => Reference(variant.id,Some(Variant.display(variant))))
-            }
-        )
+        recommendation =>
+          recommendation.copy(
+            indication      = recommendation.indication.complete,
+            levelOfEvidence = recommendation.levelOfEvidence.map(
+              loe => loe.copy(
+                grading   = loe.grading.complete,
+                addendums = loe.addendums.complete
+              )
+            ),
+            priority        = recommendation.priority.complete,
+            medication      = recommendation.medication.complete,
+            supportingEvidence =
+              recommendation.supportingEvidence
+                .flatMap {
+                  _.resolveOn(variants)
+                   .map(
+                     variant =>
+                       Reference.to(variant)
+                         .copy(display = Some(DisplayLabel.of(variant).value))
+                   )
+              }
+          )
       )
-    }
+
 
     implicit def carePlanCompleter(
-      implicit variants: List[Variant]
+      implicit
+      diagnoses: Seq[MTBDiagnosis],
+      variants: List[Variant]
     ): Completer[MTBCarePlan] =
       Completer.of(
         carePlan => carePlan.copy(
+          indication                      = carePlan.indication.complete,
           statusReason                    = carePlan.statusReason.complete,
           medicationRecommendations       = carePlan.medicationRecommendations.complete,
           geneticCounselingRecommendation = carePlan.geneticCounselingRecommendation.map(
@@ -262,16 +298,22 @@ trait Completers
         )
       )
 
+
     Completer.of {
       record => 
 
         implicit val variants =
           record.getNgsReports.flatMap(_.variants)
+  
+        implicit val completedDiagnoses =
+          record.diagnoses.complete.getOrElse(List.empty)
+
 
         record.copy(
         patient = record.patient.complete,
         episodes = record.episodes.complete,
-        diagnoses = record.diagnoses.complete,
+//        diagnoses = record.diagnoses.complete,
+        diagnoses = Option(completedDiagnoses),
         guidelineMedicationTherapies = record.guidelineMedicationTherapies.complete,
         guidelineProcedures = record.guidelineProcedures.complete,
         performanceStatus = record.performanceStatus.complete,
@@ -280,13 +322,12 @@ trait Completers
         ihcReports = record.ihcReports.complete,
         ngsReports = record.ngsReports.complete,
         carePlans = record.carePlans.complete, 
-        medicationTherapies = record.medicationTherapies.map(
-          _.map(
-            th => th.copy(
-              history = th.history.complete
+        medicationTherapies =
+          record.medicationTherapies.map(
+            _.map(
+              th => th.copy(history = th.history.complete.sortBy(_.recordedOn)(Ordering[LocalDate].reverse))
             )
-          )
-        ),
+          ),
         responses = record.responses.complete, 
       )
 
@@ -322,7 +363,6 @@ trait Completers
         snv => snv.copy(
           gene          = snv.gene.complete,
           dnaChange     = snv.dnaChange.complete,
-//          proteinChange = snv.proteinChange.complete
           proteinChange = snv.proteinChange.map(proteinChangeCompleter)
         )
       )

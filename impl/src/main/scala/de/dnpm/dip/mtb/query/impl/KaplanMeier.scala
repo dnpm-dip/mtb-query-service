@@ -14,7 +14,6 @@ import cats.{
 }
 import de.dnpm.dip.model.{
   Snapshot,
-  IdReference,
   Id,
   ClosedInterval,
   Patient,
@@ -325,7 +324,7 @@ extends KaplanMeierModule[cats.Id]
               .getResponses
               .groupBy(_.therapy)
               .collect {
-                case (IdReference(therapyId,_),responses) =>
+                case (Reference(Some(therapyId),_,_,_),responses) =>
                   therapyId -> responses.maxBy(_.effectiveDate)
               }
           
@@ -364,7 +363,7 @@ extends KaplanMeierModule[cats.Id]
               .getResponses
               .groupBy(_.therapy)
               .collect {
-                case (IdReference(therapyId,_),responses) =>
+                case (Reference(Some(therapyId),_,_,_),responses) =>
                   therapyId -> responses.maxBy(_.effectiveDate)
               }
           
@@ -418,7 +417,7 @@ extends KaplanMeierModule[cats.Id]
                 timeUnit,
                 dataPoints.zipWithIndex
                   .map {
-                    case (d,idx) => d.copy(patient = s"Patient $idx")
+                    case (dp,idx) => dp.copy(patient = s"Patient $idx")
                   },
                 ReportingOps.median[Double].apply(dataPoints.map(_.pfsr)),
                 Count.of(
@@ -459,7 +458,7 @@ extends KaplanMeierModule[cats.Id]
         .getResponses
         .groupBy(_.therapy)
         .collect {
-          case (IdReference(therapyId,_),responses) =>
+          case (Reference(Some(therapyId),_,_,_),responses) =>
             therapyId -> responses.maxBy(_.effectiveDate)
         }
    

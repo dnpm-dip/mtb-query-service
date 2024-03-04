@@ -1,6 +1,8 @@
 package de.dnpm.dip.mtb.query.api
 
 
+
+import de.dnpm.dip.util.DisplayLabel
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.coding.icd.ICD10GM
@@ -59,7 +61,7 @@ object MTBResultSet
   final case class TumorDiagnostics
   (
     overallDistributions: TumorDiagnostics.Distributions,
-    distributionsByVariant: Seq[Entry[String,TumorDiagnostics.Distributions]]
+    distributionsByVariant: Seq[Entry[DisplayLabel[Variant],TumorDiagnostics.Distributions]]
   )
 
 
@@ -74,7 +76,7 @@ object MTBResultSet
     final case class Recommendations
     (
       overallDistribution: Distribution[Set[String]],
-      distributionBySupportingVariant: Seq[Entry[String,Distribution[Set[String]]]]
+      distributionBySupportingVariant: Seq[Entry[DisplayLabel[Variant],Distribution[Set[String]]]]
     )
 
     final case class Therapies
@@ -82,6 +84,7 @@ object MTBResultSet
       overallDistribution: Distribution[Set[String]],
       meanDurations: Seq[Entry[Set[String],Double]],
       responseDistributionByTherapy: Seq[Entry[Set[String],Distribution[Coding[RECIST.Value]]]]
+//      responseDistributionByTherapy: Seq[Entry[DisplayLabel[Set[Coding[ATC]]],Distribution[Coding[RECIST.Value]]]]
     )
 
 
