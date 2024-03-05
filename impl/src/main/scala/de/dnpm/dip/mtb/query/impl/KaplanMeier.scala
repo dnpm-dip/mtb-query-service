@@ -330,7 +330,7 @@ extends KaplanMeierModule[cats.Id]
           
           record
             .getMedicationTherapies
-            .flatMap(_.history.maxByOption(_.recordedOn))
+            .flatMap(_.latest)
             .flatMap {
               therapy =>
           
@@ -369,7 +369,7 @@ extends KaplanMeierModule[cats.Id]
           
           record
             .getMedicationTherapies
-            .flatMap(_.history.maxByOption(_.recordedOn))
+            .flatMap(_.latest)
             .flatMap {
               therapy =>
           
@@ -472,8 +472,8 @@ extends KaplanMeierModule[cats.Id]
       pfs2 <-
         record
           .getMedicationTherapies
-          .flatMap(_.history.maxByOption(_.recordedOn)) // Take latest entry of therapy history...
-          .maxByOption(_.recordedOn)                    // ... then take latest recorded therapy
+          .flatMap(_.latest)         // Take latest entry of each therapy history...
+          .maxByOption(_.recordedOn) // ... then take the latest recorded therapy of all
           .flatMap(progressionTime(_,record.patient))
 
     } yield PFSRatio.DataPoint(

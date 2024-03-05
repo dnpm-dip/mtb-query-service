@@ -277,7 +277,7 @@ trait MTBReportingOps extends ReportingOps
         val therapies =
           record
             .getMedicationTherapies
-            .flatMap(_.history.maxByOption(_.recordedOn))
+            .flatMap(_.latest)
 
         record
           .getResponses

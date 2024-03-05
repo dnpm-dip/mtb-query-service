@@ -294,7 +294,7 @@ extends de.dnpm.dip.util.Logging
                   .flatMap(_.medication)
                   .toSet[Coding[ATC]],
                 record.getMedicationTherapies
-                  .flatMap(_.history.maxByOption(_.recordedOn))
+                  .flatMap(_.latest)
                   .flatMap(_.medication.getOrElse(Set.empty))
                   .toSet[Coding[ATC]]
               )
