@@ -41,6 +41,7 @@ class Tests extends AsyncFlatSpec
   import de.dnpm.dip.mtb.gens.Generators._
 
   System.setProperty("dnpm.dip.connector.type","fake")
+  System.setProperty(MTBLocalDB.dataGenProp,"0")
 
 
   implicit val rnd: Random =
@@ -118,7 +119,6 @@ class Tests extends AsyncFlatSpec
 
 
   "SPI" must "have worked" in {
-
     serviceTry.isSuccess mustBe true
   }
 
@@ -128,7 +128,7 @@ class Tests extends AsyncFlatSpec
     for {
       outcomes <-
         Future.traverse(dataSets)(service ! Data.Save(_))
-    } yield forAll(outcomes){ _.isRight mustBe true }
+    } yield all (outcomes.map(_.isRight)) mustBe true 
     
   }
 

@@ -33,6 +33,8 @@ import de.dnpm.dip.service.query.{
   QueryCache,
   BaseQueryCache,
   PatientFilter,
+  LocalDB,
+  FSBackedLocalDB,
   InMemLocalDB,
   PreparedQueryDB,
   InMemPreparedQueryDB,
@@ -77,7 +79,7 @@ object MTBQueryServiceImpl extends Logging
 
 
   private lazy val connector =
-    System.getProperty("dnpm.dip.connector.type","peer2peer") match {
+    System.getProperty("dnpm.dip.connector.type","broker") match {
       case HttpConnector.Type(typ) =>
         HttpConnector(
           typ,
@@ -91,26 +93,18 @@ object MTBQueryServiceImpl extends Logging
         FakeConnector[Future]
     }
 
-
-  private val db =
-    new InMemLocalDB[Future,Monad,MTBQueryCriteria,MTBPatientRecord](
-      MTBQueryCriteriaOps.criteriaMatcher(strict = true)
-    )
-    with MTBLocalDB
-
-
   private[impl] lazy val instance =
     new MTBQueryServiceImpl(
-      new InMemPreparedQueryDB[Future,Monad,MTBQueryCriteria],
-      db,
+      new InMemPreparedQueryDB[Future,Monad,MTBQueryCriteria],  //TODO: change to persistent Prepared Query store
+      MTBLocalDB.instance,
       connector,
       cache
     )
 
+  // Random data generation
   Try(
-    Option(System.getProperty("dnpm.dip.mtb.query.data.generate")).get
+    System.getProperty(MTBLocalDB.dataGenProp).toInt
   )
-  .map(_.toInt)
   .foreach {
     n =>
 
@@ -133,7 +127,7 @@ object MTBQueryServiceImpl extends Logging
 class MTBQueryServiceImpl
 (
   val preparedQueryDB: PreparedQueryDB[Future,Monad[Future],MTBQueryCriteria,String],
-  val db: MTBLocalDB,
+  val db: LocalDB[Future,Monad[Future],MTBQueryCriteria,MTBPatientRecord],
   val connector: Connector[Future,Monad[Future]],
   val cache: QueryCache[MTBQueryCriteria,MTBFilters,MTBResultSet,MTBPatientRecord]
 )
@@ -217,8 +211,6 @@ with Completers
     new DefaultKaplanMeierModule
 
 
-//  override val ResultSetFrom =
-//    new MTBResultSetImpl(_,_)
   override val ResultSetFrom =
     (id,results) =>
       new MTBResultSetImpl(
