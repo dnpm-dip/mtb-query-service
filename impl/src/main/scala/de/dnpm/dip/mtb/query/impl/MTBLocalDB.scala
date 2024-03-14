@@ -65,7 +65,7 @@ object MTBLocalDB extends SPILoader[MTBLocalDBSPI]
         .getOrElse(
           Option(System.getProperty(mtbDataDirProp))
             .orElse(
-              Option(System.getProperty(dataDirProp)).map(dir => s"$dir/MTB")
+              Option(System.getProperty(dataDirProp)).map(dir => s"$dir/mtb_data")
             ) match {
     
             case Some(dir) =>
