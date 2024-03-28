@@ -12,14 +12,6 @@ import cats.{
   Applicative,
   Monad,
 }
-import de.dnpm.dip.model.{
-  Snapshot,
-  Id,
-  ClosedInterval,
-  Patient,
-  Reference,
-  UnitOfTime
-}
 import de.dnpm.dip.coding.{
   Coding,
   CodeSystemProvider
@@ -35,13 +27,21 @@ import de.dnpm.dip.service.query.{
   Entry,
   ReportingOps
 }
+import de.dnpm.dip.model.{
+  Snapshot,
+  Id,
+  ClosedInterval,
+  Patient,
+  Reference,
+  UnitOfTime
+}
+import de.dnpm.dip.model.Therapy.StatusReason.Progression
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
   MTBMedicationTherapy,
   Response,
   RECIST
 }
-import MTBMedicationTherapy.StatusReason.Progression
 import de.dnpm.dip.mtb.query.api.PFSRatio
 import de.dnpm.dip.mtb.query.api.KaplanMeier.{
   SurvivalType,

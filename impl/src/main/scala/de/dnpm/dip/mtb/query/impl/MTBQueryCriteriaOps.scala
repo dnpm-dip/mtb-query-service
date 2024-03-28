@@ -23,7 +23,6 @@ import de.dnpm.dip.mtb.query.api._
 
 
 private trait MTBQueryCriteriaOps
-extends de.dnpm.dip.util.Logging
 {
 
   private[impl] implicit class Extensions(criteria: MTBQueryCriteria){

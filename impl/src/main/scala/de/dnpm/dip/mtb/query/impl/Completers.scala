@@ -39,7 +39,7 @@ trait Completers
 
   import scala.util.chaining._
   import Completer.syntax._
-  import MTBMedicationTherapy.StatusReason.codeSystem
+//  import MTBMedicationTherapy.StatusReason.codeSystem
 
 
   val localSite: Coding[Site]

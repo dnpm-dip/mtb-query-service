@@ -23,9 +23,13 @@ import de.dnpm.dip.model.{
   Snapshot,
   Patient
 }
+import de.dnpm.dip.service.Connector
+import de.dnpm.dip.connector.{
+  FakeConnector,
+  HttpConnector
+}
 import de.dnpm.dip.service.query.{
   BaseQueryService,
-  Connector,
   Filters,
   Data,
   Query,
@@ -55,10 +59,6 @@ import de.dnpm.dip.mtb.model.{
   MTBPatientRecord
 }
 import de.dnpm.dip.mtb.query.api._
-import de.dnpm.dip.connector.{
-  FakeConnector,
-  HttpConnector
-}
 
 
 
@@ -212,9 +212,10 @@ with Completers
 
 
   override val ResultSetFrom =
-    (id,results) =>
+    (id,criteria,results) =>
       new MTBResultSetImpl(
         id,
+        criteria,
         results,
         kmModule.survivalReport(results.map(_._1))
       )

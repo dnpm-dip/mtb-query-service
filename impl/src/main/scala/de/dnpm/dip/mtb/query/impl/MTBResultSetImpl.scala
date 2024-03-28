@@ -40,6 +40,7 @@ import de.dnpm.dip.mtb.query.api.{
 class MTBResultSetImpl
 (
   val id: Query.Id,
+  val criteria: MTBQueryCriteria,
   val results: Seq[(Snapshot[MTBPatientRecord],MTBQueryCriteria)],
   val survivalReport: KaplanMeier.SurvivalReport 
 )(
@@ -48,8 +49,6 @@ class MTBResultSetImpl
   atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
   icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]],
   icdo3: CodeSystemProvider[ICDO3,Id,Applicative[Id]],
-//  kmEstimator: KaplanMeierEstimator[Id],
-//  kmModule: KaplanMeierModule[Id]
 )  
 extends MTBResultSet
 with MTBReportingOps

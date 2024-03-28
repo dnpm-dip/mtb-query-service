@@ -58,14 +58,12 @@ object LogicalOperator
 }
 
 
-
 final case class SNVCriteria
 (
   gene: Option[Coding[HGNC]],
   dnaChange: Option[Coding[HGVS]],
   proteinChange: Option[Coding[HGVS]],
 )
-
 
 final case class CNVCriteria
 (
@@ -129,7 +127,7 @@ final case class MTBQueryCriteria
   def getDnaFusions         = dnaFusions.getOrElse(Set.empty) 
   def getRnaFusions         = rnaFusions.getOrElse(Set.empty)        
   def getResponses          = responses.getOrElse(Set.empty)        
-  def getDrugs              = medication.map(_.drugs).getOrElse(Set.empty)        
+  def getDrugs              = medication.map(_.drugs).getOrElse(Set.empty)
 }
 
 
