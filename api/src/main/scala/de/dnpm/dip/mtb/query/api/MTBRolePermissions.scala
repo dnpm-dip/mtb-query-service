@@ -2,14 +2,7 @@ package de.dnpm.dip.mtb.query.api
 
 
 
-import de.dnpm.dip.service.auth.{
-  Permission,
-  Permissions,
-  PermissionsSPI,
-  Role,
-  Roles,
-  RolesSPI
-}
+import de.dnpm.dip.service.auth._
 import de.dnpm.dip.service.query.QueryPermissions
 
 
@@ -22,7 +15,6 @@ class MTBPermissionsSPI extends PermissionsSPI
   override def getInstance: Permissions =
     MTBPermissions
 }
-
 
 
 

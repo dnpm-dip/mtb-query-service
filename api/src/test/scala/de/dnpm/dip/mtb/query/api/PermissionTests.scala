@@ -28,7 +28,7 @@ class PermissionTests extends AnyFlatSpec
   }
 
 
-  "Pattern matching of submission names" must "have been successful" in {
+  "Pattern matching of permission names" must "have been successful" in {
 
     MTBPermissions
       .permissions

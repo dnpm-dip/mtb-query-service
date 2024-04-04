@@ -79,7 +79,7 @@ object MTBQueryServiceImpl extends Logging
 
 
   private lazy val connector =
-    System.getProperty("dnpm.dip.connector.type","broker") match {
+    System.getProperty(HttpConnector.Type.property,"broker") match {
       case HttpConnector.Type(typ) =>
         HttpConnector(
           typ,
@@ -176,10 +176,6 @@ with Completers
 
   }
 
-
-  override val localSite: Coding[Site] =
-    connector.localSite
-      
     
   override implicit val hgnc: CodeSystem[HGNC] =
     HGNC.GeneSet

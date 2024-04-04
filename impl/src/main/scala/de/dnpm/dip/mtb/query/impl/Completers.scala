@@ -39,10 +39,7 @@ trait Completers
 
   import scala.util.chaining._
   import Completer.syntax._
-//  import MTBMedicationTherapy.StatusReason.codeSystem
 
-
-  val localSite: Coding[Site]
 
   implicit val hgnc: CodeSystem[HGNC]
 
@@ -62,7 +59,7 @@ trait Completers
       pat =>
         pat.copy(
           gender       = pat.gender.complete,
-          managingSite = Some(localSite)
+          managingSite = Some(Site.local)
         )
     )
 
