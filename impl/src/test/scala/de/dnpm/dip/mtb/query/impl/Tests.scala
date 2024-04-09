@@ -98,12 +98,18 @@ class Tests extends AsyncFlatSpec
             )
         )
 
-      medication =
+      medicationCriteria =
         patRec
-          .getMedicationTherapies.head
-          .history.head
-          .medication
-          .get
+          .getMedicationTherapies
+          .flatMap(_.history)
+          .collectFirst {
+            case th if th.medication.isDefined =>
+              MedicationCriteria(
+                None,
+                th.medication.get,
+                Set(Coding(MedicationUsage.Used))
+             )
+          }
 
     } yield MTBQueryCriteria(
       Some(Set(icd10)),
@@ -112,13 +118,7 @@ class Tests extends AsyncFlatSpec
       None,
       None,
       None,
-      Some(
-        MedicationCriteria(
-          None,
-          medication,
-          Set(Coding(MedicationUsage.Used))
-        )
-      ),
+      medicationCriteria,
       None,
     )
 

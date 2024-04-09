@@ -72,6 +72,42 @@ trait Completers
     )
 
 
+  private implicit val icdo3tCompleter: Completer[Coding[ICDO3.T]] =
+    Completer.of {
+      coding =>
+        coding.version
+          .flatMap(icdo3.topography(_))
+          .getOrElse(icdo3.topography)
+          .concept(coding.code)
+          .map(
+            concept =>
+              coding.copy(
+                display = Some(concept.display),
+                version = concept.version
+              )
+          )
+          .getOrElse(coding)
+    }
+
+  private implicit val icdo3mCompleter: Completer[Coding[ICDO3.M]] =
+    Completer.of {
+      coding =>
+        coding.version
+          .flatMap(icdo3.morphology(_))
+          .getOrElse(icdo3.morphology)
+          .concept(coding.code)
+          .map(
+            concept =>
+              coding.copy(
+                display = Some(concept.display),
+                version = concept.version
+              )
+          )
+          .getOrElse(coding)
+    }
+
+
+
 
   implicit val mtbPatientRecordCompleter: Completer[MTBPatientRecord] = {
 
@@ -89,14 +125,7 @@ trait Completers
           whoGrading               = diagnosis.whoGrading.complete, 
           stageHistory             = diagnosis.stageHistory.map(st => st.copy(stage = st.stage.complete)), 
           guidelineTreatmentStatus = diagnosis.guidelineTreatmentStatus.complete,
-          topography =
-            diagnosis.topography.map {
-              coding =>
-                implicit val cs =
-                  icdo3.topography(coding.version.getOrElse(icdo3.latestVersion)).get
-                coding.complete
-            }
-      
+          topography               = diagnosis.topography.complete
         )
       )
 
@@ -170,14 +199,7 @@ trait Completers
         report => report.copy(
           results = report.results.copy(
             tumorCellContent = report.results.tumorCellContent.complete,
-            tumorMorphology =
-              report.results.tumorMorphology.map {
-                obs =>
-                  implicit val cs =
-                    icdo3.morphology(obs.value.version.getOrElse(icdo3.latestVersion)).get
-
-                  obs.copy(value = obs.value.complete)
-              }
+            tumorMorphology  = report.results.tumorMorphology.map { obs => obs.copy(value = obs.value.complete) }
           )
         )
       )
@@ -309,7 +331,6 @@ trait Completers
         record.copy(
         patient = record.patient.complete,
         episodes = record.episodes.complete,
-//        diagnoses = record.diagnoses.complete,
         diagnoses = Option(completedDiagnoses),
         guidelineMedicationTherapies = record.guidelineMedicationTherapies.complete,
         guidelineProcedures = record.guidelineProcedures.complete,
@@ -384,14 +405,7 @@ trait Completers
     Completer.of(
       criteria => criteria.copy(
         diagnoses         = criteria.diagnoses.complete,
-        tumorMorphologies = criteria.tumorMorphologies.map(
-          _.map {
-            coding =>
-              implicit val cs =
-                icdo3.morphology(coding.version.getOrElse(icdo3.latestVersion)).get
-              coding.complete
-          }
-        ),
+        tumorMorphologies = criteria.tumorMorphologies.complete,
         simpleVariants     = criteria.simpleVariants.complete,
         copyNumberVariants = criteria.copyNumberVariants.complete,
         dnaFusions         = criteria.dnaFusions.complete,
@@ -404,53 +418,47 @@ trait Completers
   }
 
 
+
+  // By-name csp value (i.e. "lazy" as only evaluated upon being referenced) 
+  // is required because the trait value is not yet initialized at this point,
+  // resulting in weird null pointer exception
+  def descendantExpander[T: Coding.System](
+    implicit csp: => CodeSystemProvider[T,Id,Applicative[Id]]
+  ): Completer[Set[Coding[T]]] =
+    Completer.of(
+      _.flatMap {
+        coding =>
+          val cs =
+            coding.version
+              .flatMap(csp.get)
+              .getOrElse(csp.latest)
+
+          (cs.concept(coding.code).toSet ++ cs.descendantsOf(coding.code))
+            .map(_.toCoding)
+      }
+    )
+
+
   val CriteriaExpander: Completer[MTBQueryCriteria] = {
 
     implicit val icd10Expander: Completer[Set[Coding[ICD10GM]]] =
-      Completer.of(
-        _.flatMap(
-          coding =>
-            Set(coding.complete) ++
-            CodeSystemProvider[ICD10GM]
-              .pipe(
-                csp =>
-                  csp.get(coding.version.getOrElse(csp.latestVersion))
-                   .get
-                   .descendantsOf(coding.code)
-                   .map(_.toCoding)
-            )
-        )
-      )
+      descendantExpander[ICD10GM]
 
     implicit val atcExpander: Completer[Set[Coding[ATC]]] =
-      Completer.of(
-        _.flatMap(
-          coding =>
-            Set(coding.complete) ++
-            CodeSystemProvider[ATC]
-              .pipe(
-                csp =>
-                  csp.get(coding.version.getOrElse(csp.latestVersion))
-                   .get
-                   .descendantsOf(coding.code)
-                   .map(_.toCoding)
-            )
-        )
-    )
+      descendantExpander[ATC]
 
     implicit val icdO3MExpander: Completer[Set[Coding[ICDO3.M]]] =
       Completer.of(
-        _.flatMap {
+        _.flatMap(
           coding =>
-            implicit val cs =
-              icdo3.morphology(coding.version.getOrElse(icdo3.latestVersion)).get
-
             Set(coding.complete) ++
-              CodeSystem[ICDO3.M]
-                .descendantsOf(coding.code)
-                .map(_.toCoding)
-        }
-      )
+            coding.version
+              .flatMap(icdo3.morphology(_))
+              .getOrElse(icdo3.morphology)
+              .descendantsOf(coding.code)
+              .map(_.toCoding)
+       )
+     )
 
 
     Completer.of(
@@ -460,7 +468,6 @@ trait Completers
         medication        = criteria.medication.complete,
       )
     )
-
 
   }
 

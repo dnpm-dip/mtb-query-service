@@ -164,7 +164,7 @@ private trait MTBQueryCriteriaOps
             cnvs.exists(
               cnv =>
                 checkMatches(
-                  genes.map(_.exists(cnv.reportedAffectedGenes contains _)).getOrElse(true),
+                  genes.map(gs => (gs & cnv.reportedAffectedGenes.getOrElse(Set.empty)).nonEmpty).getOrElse(true),
                   typ == cnv.`type`
                 )(
                   true
