@@ -44,7 +44,7 @@ object MTBLocalDB extends SPILoader[MTBLocalDBSPI]
     "dnpm.dip.mtb.query.data.dir"
 
   private[impl] val dataDirProp =
-    "dnpm.dip.query.data.dir"
+    "dnpm.dip.data.dir"
 
 
   lazy val instance: LocalDB[Future,Monad[Future],MTBQueryCriteria,MTBPatientRecord] =
