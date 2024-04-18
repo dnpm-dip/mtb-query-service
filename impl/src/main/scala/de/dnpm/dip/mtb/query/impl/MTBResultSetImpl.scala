@@ -45,7 +45,6 @@ class MTBResultSetImpl
   val survivalReport: KaplanMeier.SurvivalReport 
 )(
   implicit
-  hgnc: CodeSystem[HGNC],
   atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
   icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]],
   icdo3: CodeSystemProvider[ICDO3,Id,Applicative[Id]],

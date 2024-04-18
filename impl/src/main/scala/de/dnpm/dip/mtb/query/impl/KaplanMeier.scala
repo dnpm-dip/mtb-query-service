@@ -324,6 +324,8 @@ extends KaplanMeierModule[cats.Id]
               .getResponses
               .groupBy(_.therapy)
               .collect {
+//                case (ref,responses) if ref.id.isDefined =>
+//                  ref.id.get -> responses.maxBy(_.effectiveDate)
                 case (Reference(Some(therapyId),_,_,_),responses) =>
                   therapyId -> responses.maxBy(_.effectiveDate)
               }

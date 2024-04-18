@@ -24,6 +24,7 @@ import de.dnpm.dip.model.{
   Patient
 }
 import de.dnpm.dip.service.Connector
+import de.dnpm.dip.service.Data.Save
 import de.dnpm.dip.connector.{
   FakeConnector,
   HttpConnector
@@ -31,7 +32,6 @@ import de.dnpm.dip.connector.{
 import de.dnpm.dip.service.query.{
   BaseQueryService,
   Filters,
-  Data,
   Query,
   Querier,
   QueryCache,
@@ -100,27 +100,6 @@ object MTBQueryServiceImpl extends Logging
       connector,
       cache
     )
-
-  // Random data generation
-  Try(
-    System.getProperty(MTBLocalDB.dataGenProp).toInt
-  )
-  .foreach {
-    n =>
-
-      import de.ekut.tbi.generators.Gen
-      import de.dnpm.dip.mtb.gens.Generators._
-      import scala.util.Random
-      import scala.concurrent.ExecutionContext.Implicits.global
-
-      implicit val rnd: Random =
-        new Random
-
-      for (i <- 0 until n){
-        instance ! Data.Save(Gen.of[MTBPatientRecord].next)
-      }
-  }
-    
 }
 
 
@@ -131,15 +110,11 @@ class MTBQueryServiceImpl
   val connector: Connector[Future,Monad[Future]],
   val cache: QueryCache[MTBQueryCriteria,MTBFilters,MTBResultSet,MTBPatientRecord]
 )
-extends BaseQueryService[
-  Future,
-  MTBConfig
-]
+extends BaseQueryService[Future,MTBConfig]
 with MTBQueryService
 with Completers
 {
 
-  import Completer.syntax._    
 
 
   override def DefaultFilter(
@@ -177,11 +152,12 @@ with Completers
   }
 
     
-  override implicit val hgnc: CodeSystem[HGNC] =
+//  override implicit val hgnc: CodeSystem[HGNC] =
+  override implicit val hgnc: CodeSystemProvider[HGNC,Id,Applicative[Id]] =
     HGNC.GeneSet
       .getInstance[cats.Id]
       .get
-      .latest
+//      .latest
 
   override implicit val atc: CodeSystemProvider[ATC,Id,Applicative[Id]] =
     ATC.Catalogs
@@ -215,10 +191,6 @@ with Completers
         results,
         kmModule.survivalReport(results.map(_._1))
       )
-
-
-  override val preprocess: MTBPatientRecord => MTBPatientRecord =
-    _.complete
 
 
 }

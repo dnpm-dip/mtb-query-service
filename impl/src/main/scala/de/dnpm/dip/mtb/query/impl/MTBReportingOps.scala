@@ -12,7 +12,6 @@ import de.dnpm.dip.coding.{
   CodeSystemProvider
 }
 import de.dnpm.dip.coding.atc.ATC
-import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.icd.{
   ClassKinds,
   ICD,
@@ -113,7 +112,6 @@ trait MTBReportingOps extends ReportingOps
     records: Seq[MTBPatientRecord]
   )(
     implicit
-    hgnc: CodeSystem[HGNC],
     icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]],
     icdo3: CodeSystemProvider[ICDO3,Id,Applicative[Id]]
   ): Seq[Entry[DisplayLabel[Variant],TumorDiagnostics.Distributions]] = {
@@ -165,8 +163,6 @@ trait MTBReportingOps extends ReportingOps
               icdo3ms,
               coding => coding.parentOfKind(Block).getOrElse(coding)
             )
-//            Distribution.of(icd10s),
-//            Distribution.of(icdo3ms)
           )
         )
     }
@@ -190,18 +186,6 @@ trait MTBReportingOps extends ReportingOps
       _.map(coding => coding.currentGroup.getOrElse(coding)),
       _.flatMap(_.display)
     )
-/*
-    Distribution.by(
-      records
-        .flatMap(
-          _.getCarePlans.flatMap(_.medicationRecommendations)
-        )
-        .map(_.medication)
-    )(
-      _.flatMap(_.display)
-    ),
-*/
-
 
 
 
@@ -210,7 +194,6 @@ trait MTBReportingOps extends ReportingOps
   )(
     implicit
     atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
-    hgnc: CodeSystem[HGNC]
   ): Seq[Entry[DisplayLabel[Variant],Distribution[Set[String]]]] =
     records.foldLeft(
       Map.empty[DisplayLabel[Variant],Seq[Set[Coding[ATC]]]]
@@ -232,11 +215,8 @@ trait MTBReportingOps extends ReportingOps
                 .pipe { 
                   meds =>
                     recommendation
-                      .supportingEvidence
-                      .flatMap(
-                        _.resolveOn(variants)
-                         .map(DisplayLabel.of(_))
-                      )
+                      .supportingEvidence.getOrElse(List.empty)
+                      .flatMap(_.resolveOn(variants).map(DisplayLabel.of(_)))
                       .map(_ -> meds)
                 }
           }

@@ -18,9 +18,10 @@ import de.dnpm.dip.coding.{
 import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.mtb.query.api._
 import de.dnpm.dip.mtb.model.MTBPatientRecord
+import de.dnpm.dip.mtb.model.Completers._
+import de.dnpm.dip.service.Data.Save
 import de.dnpm.dip.service.query.{
   BaseQueryCache,
-  Data,
   Query,
   Querier,
   PreparedQuery,
@@ -42,6 +43,7 @@ class Tests extends AsyncFlatSpec
 {
 
   import scala.util.chaining._
+  import de.dnpm.dip.util.Completer.syntax._
   import de.dnpm.dip.mtb.gens.Generators._
 
   System.setProperty(Site.property,"UKx:Musterlingen")
@@ -64,6 +66,7 @@ class Tests extends AsyncFlatSpec
 
   val dataSets =
     LazyList.fill(50)(Gen.of[MTBPatientRecord].next)
+      .map(_.complete)
 
 
   // Generator for non-empty Query Criteria based on features occurring in a given dataset,
@@ -132,7 +135,7 @@ class Tests extends AsyncFlatSpec
 
     for {
       outcomes <-
-        Future.traverse(dataSets)(service ! Data.Save(_))
+        Future.traverse(dataSets)(service ! Save(_))
     } yield all (outcomes.map(_.isRight)) mustBe true 
     
   }
