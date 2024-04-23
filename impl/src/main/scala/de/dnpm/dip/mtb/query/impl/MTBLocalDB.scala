@@ -45,9 +45,6 @@ object MTBLocalDB extends SPILoader[MTBLocalDBSPI]
   private[impl] val dataGenProp =
     "dnpm.dip.mtb.query.data.generate"
 
-  private[impl] val mtbDataDirProp =
-    "dnpm.dip.mtb.query.data.dir"
-
   private[impl] val dataDirProp =
     "dnpm.dip.data.dir"
 
@@ -79,11 +76,8 @@ object MTBLocalDB extends SPILoader[MTBLocalDBSPI]
                 }
               }
         }
-        .getOrElse(
-          Option(System.getProperty(mtbDataDirProp))
-            .orElse(
-              Option(System.getProperty(dataDirProp)).map(dir => s"$dir/mtb_data")
-            ) match {
+        .getOrElse(        
+          Option(System.getProperty(dataDirProp)).map(dir => s"$dir/mtb_data/query") match {
     
             case Some(dir) =>
               new FSBackedLocalDB[Future,Monad,MTBQueryCriteria,MTBPatientRecord](
@@ -93,7 +87,7 @@ object MTBLocalDB extends SPILoader[MTBLocalDBSPI]
     
             case None =>
               val msg =
-                s"System property $dataDirProp or $mtbDataDirProp for the data storage directory is undefined, but random data generation is also not activated!"
+                s"System property $dataDirProp for the data storage directory is undefined, but random data generation is also not activated!"
                  .tap(log.error) 
               throw new IllegalStateException(msg)
           }

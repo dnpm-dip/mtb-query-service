@@ -80,10 +80,12 @@ class Tests extends AsyncFlatSpec
           .head
           .code
 
-      snv =
+      ngs = 
         patRec
           .getNgsReports.head
-          .results
+
+      snv =
+        ngs.results
           .simpleVariants
           .head
 
@@ -99,6 +101,17 @@ class Tests extends AsyncFlatSpec
                 code = Code[HGVS](pch.code.value.substring(2,pch.code.value.size-1))
               )
             )
+        )
+
+      cnv = 
+        ngs.results
+          .copyNumberVariants
+          .head
+
+      cnvCriteria =
+        CNVCriteria(
+          Some(cnv.reportedAffectedGenes.getOrElse(Set.empty).take(1)),
+          Some(cnv.`type`)
         )
 
       medicationCriteria =
@@ -118,12 +131,13 @@ class Tests extends AsyncFlatSpec
       Some(Set(icd10)),
       None,
       Some(Set(snvCriteria)),
-      None,
+      Some(Set(cnvCriteria)),
       None,
       None,
       medicationCriteria,
       None,
     )
+
 
 
   "SPI" must "have worked" in {

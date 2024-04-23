@@ -160,12 +160,15 @@ private trait MTBQueryCriteriaOps
     criteria match {
       case Some(set) if set.nonEmpty =>
         set.filter {
-          case CNVCriteria(genes,typ) =>
+          case CNVCriteria(affectedGenes,typ) =>
             cnvs.exists(
               cnv =>
                 checkMatches(
-                  genes.map(gs => (gs & cnv.reportedAffectedGenes.getOrElse(Set.empty)).nonEmpty).getOrElse(true),
-                  typ == cnv.`type`
+                  affectedGenes match {
+                    case Some(genes) if genes.nonEmpty => cnv.reportedAffectedGenes.exists(_.intersect(genes).nonEmpty)
+                    case _ => true
+                  },
+                  typ.map(_ == cnv.`type`).getOrElse(true)
                 )(
                   true
                 ) 
