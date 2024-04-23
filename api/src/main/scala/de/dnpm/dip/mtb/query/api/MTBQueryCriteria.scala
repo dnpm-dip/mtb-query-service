@@ -61,8 +61,8 @@ object LogicalOperator
 final case class SNVCriteria
 (
   gene: Option[Coding[HGNC]],
-  dnaChange: Option[Coding[HGVS]],
-  proteinChange: Option[Coding[HGVS]],
+  dnaChange: Option[Coding[HGVS.DNA]],
+  proteinChange: Option[Coding[HGVS.Protein]],
 )
 
 final case class CNVCriteria

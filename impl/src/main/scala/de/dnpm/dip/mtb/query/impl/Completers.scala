@@ -86,12 +86,12 @@ trait Completers
 
     implicit val snvCriteriaCompleter: Completer[SNVCriteria] = {
 
-      val proteinChangeCompleter: Completer[Coding[HGVS]] =
+      val proteinChangeCompleter: Completer[Coding[HGVS.Protein]] =
         Completer.of {
           coding =>
             val threeLetterCode = HGVS.Protein.to3LetterCode(coding.code.value)
             coding.copy(
-              code = Code[HGVS](threeLetterCode),
+              code = Code[HGVS.Protein](threeLetterCode),
               display = coding.display.orElse(Some(threeLetterCode))
             )
         }

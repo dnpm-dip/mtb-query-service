@@ -13,6 +13,7 @@ import de.dnpm.dip.coding.{
   Coding
 }
 import de.dnpm.dip.coding.atc.ATC
+import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
   SNV,
@@ -114,7 +115,7 @@ private trait MTBQueryCriteriaOps
     criteria: Option[Set[SNVCriteria]],
     snvs: => Seq[SNV]
   ): (Option[Set[SNVCriteria]],Boolean) = {
-
+/*
     def matchesByCodePattern[T](
       criterion: Option[Coding[T]],
       value: Option[Coding[T]]
@@ -123,7 +124,8 @@ private trait MTBQueryCriteriaOps
         .map(_.code.value.toLowerCase)
         .map(c => value.exists(_.code.value.toLowerCase contains c))
         .getOrElse(true)
-
+*/
+    import HGVS.extensions._
 
     criteria match {
       case Some(set) if set.nonEmpty =>
@@ -133,8 +135,10 @@ private trait MTBQueryCriteriaOps
               snv =>
                 checkMatches(
                   matches(gene,snv.gene),
-                  matchesByCodePattern(dnaChange,snv.dnaChange),       
-                  matchesByCodePattern(proteinChange,snv.proteinChange)
+                  dnaChange.map(g => snv.dnaChange.exists(_ matches g)).getOrElse(true),
+                  proteinChange.map(g => snv.proteinChange.exists(_ matches g)).getOrElse(true)
+//                  matchesByCodePattern(dnaChange,snv.dnaChange),       
+//                  matchesByCodePattern(proteinChange,snv.proteinChange)
                 )(
                   true
                 ) 

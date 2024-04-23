@@ -98,7 +98,7 @@ class Tests extends AsyncFlatSpec
             // to test that matches are also returned by substring match of the protein (or DNA) change
             .map(
               pch => pch.copy( 
-                code = Code[HGVS](pch.code.value.substring(2,pch.code.value.size-1))
+                code = Code[HGVS.Protein](pch.code.value.substring(2,pch.code.value.size-1))
               )
             )
         )
