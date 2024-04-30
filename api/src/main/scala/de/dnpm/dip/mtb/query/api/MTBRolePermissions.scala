@@ -27,13 +27,15 @@ object MTBRoles extends Roles
   val BasicMTBMember =
     Role(
       "BasicMTBMember",
-      (permissions - ReadPatientRecord)
+      (permissions - ReadPatientRecord),
+      Some("MTB: Basis-Such-Rechte (Ergebnis-Zusammenfassungen)")
     )
 
   val PrivilegedMTBMember =
     Role(
       "PrivilegedMTBMember",
-      permissions
+      permissions,
+      Some("MTB: Privilegierte Such-Rechte (inkl. Einsicht in Patienten-Akten)")
     )
 
   override val roles: Set[Role] =

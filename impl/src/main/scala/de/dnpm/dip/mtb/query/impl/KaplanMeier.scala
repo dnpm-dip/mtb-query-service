@@ -33,9 +33,10 @@ import de.dnpm.dip.model.{
   ClosedInterval,
   Patient,
   Reference,
+  Therapy,
   UnitOfTime
 }
-import de.dnpm.dip.model.Therapy.StatusReason.Progression
+import Therapy.StatusReason.Progression
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
   MTBMedicationTherapy,
@@ -255,7 +256,7 @@ extends KaplanMeierModule[cats.Id]
         therapy
           .statusReason
           .collect { 
-            case c if c.code.value == Progression =>
+            case Therapy.StatusReason(Progression) =>
               therapy.period
                 .flatMap(_.endOption)
                 .getOrElse(therapy.recordedOn)
@@ -348,6 +349,7 @@ extends KaplanMeierModule[cats.Id]
                       .medication
                       .map(_.flatMap(_.currentGroup))
                       .map(_.flatMap(_.display))
+          
                 } yield (
                   medClasses.mkString(" + "),
                   start,
