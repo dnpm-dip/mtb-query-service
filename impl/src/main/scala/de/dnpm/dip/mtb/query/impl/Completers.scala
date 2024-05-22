@@ -29,11 +29,12 @@ import de.dnpm.dip.model.{
   Reference,
   Resolver,
 }
+import de.dnpm.dip.service.BaseCompleters
 import de.dnpm.dip.mtb.query.api._
 
 
 
-trait Completers
+trait Completers extends BaseCompleters
 {
 
   import scala.util.chaining._
@@ -135,27 +136,6 @@ trait Completers
     )
 
   }
-
-
-
-  // By-name csp value (i.e. "lazy" as only evaluated upon being referenced) 
-  // is required because the trait value is not yet initialized at this point,
-  // resulting in weird null pointer exception
-  private def descendantExpander[T: Coding.System](
-    implicit csp: => CodeSystemProvider[T,Id,Applicative[Id]]
-  ): Completer[Set[Coding[T]]] =
-    Completer.of(
-      _.flatMap {
-        coding =>
-          val cs =
-            coding.version
-              .flatMap(csp.get)
-              .getOrElse(csp.latest)
-
-          (cs.concept(coding.code).toSet ++ cs.descendantsOf(coding.code))
-            .map(_.toCoding)
-      }
-    )
 
 
   val CriteriaExpander: Completer[MTBQueryCriteria] = {
