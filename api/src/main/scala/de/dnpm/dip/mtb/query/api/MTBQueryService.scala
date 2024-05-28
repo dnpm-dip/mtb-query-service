@@ -14,8 +14,7 @@ import de.dnpm.dip.service.query.QueryService
 trait MTBQueryService extends QueryService[
   Future,
   Monad[Future],
-  MTBConfig,
-  String
+  MTBConfig
 ]
 //with KaplanMeierOps[
 //  Future,
