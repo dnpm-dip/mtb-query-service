@@ -171,11 +171,7 @@ class Tests extends AsyncFlatSpec
           MTBQueryCriteria(None,None,None,None,None,None,None,None)
         )
 
-      outcome = result.right.value
-
-      _ = outcome mustBe a [Query[_,_]]
-
-      query = outcome.asInstanceOf[Query[MTBQueryCriteria,MTBFilters]]
+      query = result.value
 
       resultSet <-
         service.resultSet(query.id).map(_.value)
@@ -207,11 +203,7 @@ class Tests extends AsyncFlatSpec
           genCriteria.next
         )
 
-      outcome = result.right.value
-
-      _ = outcome mustBe a [Query[_,_]]
-
-      query = outcome.asInstanceOf[Query[MTBQueryCriteria,MTBFilters]]
+      query = result.value
 
       resultSet <-
         service.resultSet(query.id)
