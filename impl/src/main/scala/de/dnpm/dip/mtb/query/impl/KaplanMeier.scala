@@ -45,6 +45,7 @@ import de.dnpm.dip.mtb.model.{
 }
 import de.dnpm.dip.mtb.query.api.PFSRatio
 import de.dnpm.dip.mtb.query.api.KaplanMeier.{
+  Config,
   SurvivalType,
   Grouping,
   DataPoint,
@@ -104,11 +105,16 @@ trait KaplanMeierModule[F[_]]
   implicit val icd10gm: CodeSystemProvider[ICD10GM,cats.Id,Applicative[cats.Id]]
 
 
+  def survivalConfig: Config
+
+
   def survivalStatistics(
-    survivalType: SurvivalType.Value,
-    grouping: Grouping.Value,
-    timeUnit: UnitOfTime,
-    cohort: Seq[Snapshot[MTBPatientRecord]]
+    survivalType: Option[SurvivalType.Value],
+    grouping: Option[Grouping.Value],
+//    survivalType: SurvivalType.Value,
+//    grouping: Grouping.Value,
+    cohort: Seq[Snapshot[MTBPatientRecord]],
+    timeUnit: UnitOfTime = UnitOfTime.Weeks
   )(
     implicit
     estimator: KaplanMeierEstimator[F],
@@ -133,20 +139,23 @@ trait KaplanMeierModule[F[_]]
     import cats.syntax.traverse._
     import cats.syntax.functor._
 
-    val chronoUnit =
-      UnitOfTime.chronoUnit(timeUnit)
+//    val chronoUnit =
+//      UnitOfTime.chronoUnit(timeUnit)
 
     typesAndGroupings.traverse { 
       case (survivalType,grouping) =>
         self.survivalStatistics(
-          survivalType,
-          grouping,
-          timeUnit,
-          cohort
+          Some(survivalType),
+          Some(grouping),
+//          survivalType,
+//          grouping,
+          cohort,
+          timeUnit
       )
     }
 
   }
+
 
   def pfsRatioReport(
     cohort: Seq[Snapshot[MTBPatientRecord]],
@@ -156,7 +165,6 @@ trait KaplanMeierModule[F[_]]
   ): F[PFSRatio.Report]
 
 }
-
 
 
 class DefaultKaplanMeierModule(
@@ -170,11 +178,28 @@ extends KaplanMeierModule[cats.Id]
   import ICD.extensions._
 
 
+  override val survivalConfig: Config =
+    Config(
+      Seq(
+        Entry(
+          Coding(OS),
+          Seq(Ungrouped,ByTumorEntity).map(Coding(_))
+        ),
+        Entry(
+          Coding(PFS),
+          Seq(ByTherapy).map(Coding(_))
+        )
+      )
+    )
+
+
   override def survivalStatistics(
-    survivalType: SurvivalType.Value,
-    grouping: Grouping.Value,
-    timeUnit: UnitOfTime,
-    cohort: Seq[Snapshot[MTBPatientRecord]]
+    survivalType: Option[SurvivalType.Value],
+    grouping: Option[Grouping.Value],
+//    survivalType: SurvivalType.Value,
+//    grouping: Grouping.Value,
+    cohort: Seq[Snapshot[MTBPatientRecord]],
+    timeUnit: UnitOfTime
   )(
     implicit
     estimator: KaplanMeierEstimator[cats.Id]
@@ -183,8 +208,12 @@ extends KaplanMeierModule[cats.Id]
     val chronoUnit =
       UnitOfTime.chronoUnit(timeUnit)
 
+    val survType = survivalType.getOrElse(PFS)
+    val grping   = grouping.getOrElse(ByTherapy)
+
     cohort
-      .flatMap(projectors(survivalType -> grouping))
+      .flatMap(projectors(survType -> grping))
+//      .flatMap(projectors(survivalType -> grouping))
       .groupMap(_._1){
         case (_,startDate,endDate,status) => chronoUnit.between(startDate,endDate) -> status
       }
@@ -199,8 +228,8 @@ extends KaplanMeierModule[cats.Id]
       .sortBy(_.key)
       .pipe(
         SurvivalStatistics(
-          Coding(survivalType),
-          Coding(grouping),
+          Coding(survType),
+          Coding(grping),
           timeUnit,
           _
         )

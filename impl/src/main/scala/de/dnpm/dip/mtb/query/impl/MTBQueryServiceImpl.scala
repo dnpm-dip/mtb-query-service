@@ -31,6 +31,7 @@ import de.dnpm.dip.connector.{
 }
 import de.dnpm.dip.service.query.{
   BaseQueryService,
+  Entry,
   Filters,
   Query,
   Querier,
@@ -152,12 +153,10 @@ with Completers
   }
 
     
-//  override implicit val hgnc: CodeSystem[HGNC] =
   override implicit val hgnc: CodeSystemProvider[HGNC,Id,Applicative[Id]] =
     HGNC.GeneSet
       .getInstance[cats.Id]
       .get
-//      .latest
 
   override implicit val atc: CodeSystemProvider[ATC,Id,Applicative[Id]] =
     ATC.Catalogs
@@ -193,4 +192,34 @@ with Completers
       )
 
 
+  import KaplanMeier._
+  import SurvivalType._
+  import Grouping._
+
+
+  override val survivalConfig: Config =
+    kmModule.survivalConfig
+
+
+  override def survivalStatistics(
+    query: Query.Id,
+    survivalType: Option[SurvivalType.Value],
+    grouping: Option[Grouping.Value]
+  )(
+    implicit
+    F: Monad[Future],
+    user: Querier
+  ): Future[Option[SurvivalStatistics]] =
+    F.pure(
+      cache.getResults(query)
+        .map(
+          rs =>
+            kmModule.survivalStatistics(
+              survivalType,
+              grouping,
+              rs.results.map(_._1)
+            )
+        )
+    )
+       
 }

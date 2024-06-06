@@ -58,7 +58,8 @@ object KaplanMeier
   extends CodedEnum("dnpm-dip/kaplan-meier-analysis/survival-type")
   with DefaultCodeSystem
   {
-    val OS, PFS = Value
+    val OS  = Value("os")
+    val PFS = Value("pfs")
 
     override val display =
       Map(
@@ -74,9 +75,9 @@ object KaplanMeier
   extends CodedEnum("dnpm-dip/kaplan-meier-analysis/grouping")
   with DefaultCodeSystem
   {
-    val ByTherapy     = Value
-    val ByTumorEntity = Value
-    val Ungrouped     = Value
+    val ByTherapy     = Value("by-therapy")
+    val ByTumorEntity = Value("by-tumor-entity")
+    val Ungrouped     = Value("none")
 
     override val display =
       Map(
@@ -90,6 +91,14 @@ object KaplanMeier
       Json.formatEnum(this)
   }
 
+
+  final case class Config
+  (
+    entries: Seq[Entry[Coding[SurvivalType.Value],Seq[Coding[Grouping.Value]]]]
+  )
+
+  implicit val writesConfig: OWrites[Config] =
+    Json.writes[Config]
 
 
   final case class DataPoint
@@ -131,16 +140,21 @@ object KaplanMeier
 }
 
 
+import KaplanMeier._
 
 trait KaplanMeierOps[F[_],Env]
 {
 
-  def survivalReport(
+  def survivalConfig: Config
+
+  def survivalStatistics(
     query: Query.Id,
+    survivalType: Option[SurvivalType.Value] = None,
+    grouping: Option[Grouping.Value] = None
   )(
     implicit
     env: Env,
     user: Querier
-  ): F[Option[KaplanMeier.SurvivalReport]]
+  ): F[Option[SurvivalStatistics]]
 
 }

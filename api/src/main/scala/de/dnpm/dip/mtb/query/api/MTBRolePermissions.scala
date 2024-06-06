@@ -3,21 +3,26 @@ package de.dnpm.dip.mtb.query.api
 
 
 import de.dnpm.dip.service.auth._
-import de.dnpm.dip.service.query.QueryPermissions
-
-
-
-object MTBPermissions extends QueryPermissions("MTB")
-
-
-class MTBPermissionsSPI extends PermissionsSPI
-{
-  override def getInstance: Permissions =
-    MTBPermissions
+import de.dnpm.dip.service.query.{
+  QueryPermissions,
+  QueryRoles
 }
 
 
 
+object MTBQueryPermissions extends QueryPermissions("MTB")
+
+
+class MTBQueryPermissionsSPI extends PermissionsSPI
+{
+  override def getInstance: Permissions =
+    MTBQueryPermissions
+}
+
+
+object MTBQueryRoles extends QueryRoles(MTBQueryPermissions)
+
+/*
 object MTBRoles extends Roles
 {
 
@@ -45,11 +50,11 @@ object MTBRoles extends Roles
     )
 
 }
+*/
 
-
-class MTBRolesSPI extends RolesSPI
+class MTBQueryRolesSPI extends RolesSPI
 {
   override def getInstance: Roles =
-    MTBRoles
+    MTBQueryRoles
 }
 

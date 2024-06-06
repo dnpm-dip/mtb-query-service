@@ -30,11 +30,11 @@ class PermissionTests extends AnyFlatSpec
 
   "Pattern matching of permission names" must "have been successful" in {
 
-    MTBPermissions
+    MTBQueryPermissions
       .permissions
       .map(_.name)
-      .collect { case MTBPermissions(p) => p }
-      .toSet must equal (MTBPermissions.values.toSet)
+      .collect { case MTBQueryPermissions(p) => p }
+      .toSet must equal (MTBQueryPermissions.values.toSet)
 
   }
 
