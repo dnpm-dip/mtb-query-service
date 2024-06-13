@@ -14,10 +14,13 @@ import de.dnpm.dip.coding.{
 }
 import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.coding.hgvs.HGVS
+import de.dnpm.dip.model.Reference
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
+  MTBMedicationRecommendation,
   SNV,
-  CNV
+  CNV,
+  Variant
 }
 import de.dnpm.dip.mtb.query.api._
 
@@ -111,38 +114,40 @@ private trait MTBQueryCriteriaOps
 
 
 
+  import scala.language.implicitConversions
+
+  implicit def optBooleantoBoolean(opt: Option[Boolean]): Boolean =
+    opt.getOrElse(false)
+
+
   private def snvsMatch(
     criteria: Option[Set[SNVCriteria]],
     snvs: => Seq[SNV]
+  )(
+    implicit supportingVariants: Seq[Reference[Variant]]
   ): (Option[Set[SNVCriteria]],Boolean) = {
-/*
-    def matchesByCodePattern[T](
-      criterion: Option[Coding[T]],
-      value: Option[Coding[T]]
-    ): Boolean =
-      criterion
-        .map(_.code.value.toLowerCase)
-        .map(c => value.exists(_.code.value.toLowerCase contains c))
-        .getOrElse(true)
-*/
+
     import HGVS.extensions._
 
     criteria match {
       case Some(set) if set.nonEmpty =>
         set.filter {
-          case SNVCriteria(gene,dnaChange,proteinChange) =>
-            snvs.exists {
+          case SNVCriteria(gene,dnaChange,proteinChange,supporting) =>
+            snvs.find(
               snv =>
                 checkMatches(
                   matches(gene,snv.gene),
                   dnaChange.map(g => snv.dnaChange.exists(_ matches g)).getOrElse(true),
                   proteinChange.map(g => snv.proteinChange.exists(_ matches g)).getOrElse(true)
-//                  matchesByCodePattern(dnaChange,snv.dnaChange),       
-//                  matchesByCodePattern(proteinChange,snv.proteinChange)
                 )(
                   true
                 ) 
+            )
+            .exists { 
+              case snv if supporting => supportingVariants.exists(_.id.exists(_ == snv.id))
+              case _ => true 
             }
+            
         }
         .pipe {
           case matches if matches.nonEmpty =>  
@@ -160,12 +165,14 @@ private trait MTBQueryCriteriaOps
   private def cnvsMatch(
     criteria: Option[Set[CNVCriteria]],
     cnvs: => Seq[CNV]
+  )(
+    implicit supportingVariants: Seq[Reference[Variant]]
   ): (Option[Set[CNVCriteria]],Boolean) =
     criteria match {
       case Some(set) if set.nonEmpty =>
         set.filter {
-          case CNVCriteria(affectedGenes,typ) =>
-            cnvs.exists(
+          case CNVCriteria(affectedGenes,typ,supporting) =>
+            cnvs.find(
               cnv =>
                 checkMatches(
                   affectedGenes match {
@@ -177,6 +184,10 @@ private trait MTBQueryCriteriaOps
                   true
                 ) 
               )
+              .exists { 
+                case snv if supporting => supportingVariants.exists(_.id.exists(_ == snv.id))
+                case _ => true 
+              }
         }
         .pipe {
           case matches if matches.nonEmpty =>  
@@ -259,6 +270,11 @@ private trait MTBQueryCriteriaOps
         case criteria => 
 
           record =>
+
+            implicit lazy val supportingVariants =
+              record.getCarePlans
+                .flatMap(_.medicationRecommendations.getOrElse(List.empty))
+                .flatMap(_.supportingEvidence.getOrElse(List.empty)) 
 
             val (diagnosisMatches, diagnosesFulfilled) =
               matches(

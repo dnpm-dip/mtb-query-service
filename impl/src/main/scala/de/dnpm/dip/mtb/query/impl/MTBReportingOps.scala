@@ -125,6 +125,8 @@ trait MTBReportingOps extends ReportingOps
           .getNgsReports
           .flatMap(_.variants)
           .map(DisplayLabel.of(_))
+          .distinct   // Retain only distinct variants, to avoid duplicate counts of entities/morphologies
+                      // in cases where the patient had multiple NGS reports, thus potentially redundant occurrences of most variants
 
       val entities =
         record.getDiagnoses

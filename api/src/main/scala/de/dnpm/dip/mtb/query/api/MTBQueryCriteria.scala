@@ -57,25 +57,35 @@ object LogicalOperator
     }
 }
 
+sealed trait VariantCriteria
+{
+  val supporting: Option[Boolean]
+}
 
 final case class SNVCriteria
 (
   gene: Option[Coding[HGNC]],
   dnaChange: Option[Coding[HGVS.DNA]],
   proteinChange: Option[Coding[HGVS.Protein]],
+  supporting: Option[Boolean] = None
 )
+extends VariantCriteria
 
 final case class CNVCriteria
 (
   affectedGenes: Option[Set[Coding[HGNC]]],
-  `type`: Option[Coding[CNV.Type.Value]]
+  `type`: Option[Coding[CNV.Type.Value]],
+  supporting: Option[Boolean] = None
 )
+extends VariantCriteria
 
 final case class FusionCriteria
 (
   fusionPartner5pr: Option[Coding[HGNC]],
-  fusionPartner3pr: Option[Coding[HGNC]]
+  fusionPartner3pr: Option[Coding[HGNC]],
+  supporting: Option[Boolean] = None
 )
+extends VariantCriteria
 
 
 object MedicationUsage
