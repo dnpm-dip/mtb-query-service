@@ -177,6 +177,14 @@ extends KaplanMeierModule[cats.Id]
   import ATC.extensions._
   import ICD.extensions._
 
+  private val defaultSurvivalType = PFS
+  private val defaultGrouping = ByTherapy
+
+  private val defaults =
+    Config.Defaults(
+      PFS,
+      ByTherapy
+    )
 
   override val survivalConfig: Config =
     Config(
@@ -189,15 +197,14 @@ extends KaplanMeierModule[cats.Id]
           Coding(PFS),
           Seq(ByTherapy).map(Coding(_))
         )
-      )
+      ),
+      defaults  
     )
 
 
   override def survivalStatistics(
     survivalType: Option[SurvivalType.Value],
     grouping: Option[Grouping.Value],
-//    survivalType: SurvivalType.Value,
-//    grouping: Grouping.Value,
     cohort: Seq[Snapshot[MTBPatientRecord]],
     timeUnit: UnitOfTime
   )(
@@ -208,12 +215,11 @@ extends KaplanMeierModule[cats.Id]
     val chronoUnit =
       UnitOfTime.chronoUnit(timeUnit)
 
-    val survType = survivalType.getOrElse(PFS)
-    val grping   = grouping.getOrElse(ByTherapy)
+    val survType = survivalType.getOrElse(defaults.`type`)
+    val grping   = grouping.getOrElse(defaults.grouping)
 
     cohort
       .flatMap(projectors(survType -> grping))
-//      .flatMap(projectors(survivalType -> grouping))
       .groupMap(_._1){
         case (_,startDate,endDate,status) => chronoUnit.between(startDate,endDate) -> status
       }

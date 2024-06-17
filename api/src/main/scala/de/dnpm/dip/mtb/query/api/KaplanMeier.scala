@@ -94,11 +94,25 @@ object KaplanMeier
 
   final case class Config
   (
-    entries: Seq[Entry[Coding[SurvivalType.Value],Seq[Coding[Grouping.Value]]]]
+    entries: Seq[Entry[Coding[SurvivalType.Value],Seq[Coding[Grouping.Value]]]],
+    defaults: Config.Defaults
   )
 
-  implicit val writesConfig: OWrites[Config] =
-    Json.writes[Config]
+  object Config
+  {
+    final case class Defaults
+    (
+      `type`: SurvivalType.Value,
+      grouping: Grouping.Value
+    )
+
+    implicit val writesDefaults: OWrites[Defaults] =
+      Json.writes[Defaults]
+    
+    implicit val writesConfig: OWrites[Config] =
+      Json.writes[Config]
+
+  }
 
 
   final case class DataPoint
@@ -149,8 +163,8 @@ trait KaplanMeierOps[F[_],Env]
 
   def survivalStatistics(
     query: Query.Id,
-    survivalType: Option[SurvivalType.Value] = None,
-    grouping: Option[Grouping.Value] = None
+    survivalType: Option[SurvivalType.Value],
+    grouping: Option[Grouping.Value]
   )(
     implicit
     env: Env,
