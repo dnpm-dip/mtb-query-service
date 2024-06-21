@@ -274,7 +274,7 @@ private trait MTBQueryCriteriaOps
             implicit lazy val supportingVariants =
               record.getCarePlans
                 .flatMap(_.medicationRecommendations.getOrElse(List.empty))
-                .flatMap(_.supportingEvidence.getOrElse(List.empty)) 
+                .flatMap(_.supportingVariants.getOrElse(List.empty)) 
 
             val (diagnosisMatches, diagnosesFulfilled) =
               matches(
@@ -316,7 +316,7 @@ private trait MTBQueryCriteriaOps
                   .flatMap(_.medication)
                   .toSet[Coding[ATC]],
                 record.getMedicationTherapies
-                  .flatMap(_.latest)
+                  .map(_.latest)
                   .flatMap(_.medication.getOrElse(Set.empty))
                   .toSet[Coding[ATC]]
               )

@@ -264,7 +264,7 @@ extends KaplanMeierModule[cats.Id]
           // 1. Censoring time strategy: fall back to date of last therapy follow-up
           record
             .getMedicationTherapies
-            .flatMap(_.history.map(_.recordedOn))
+            .flatMap(_.history.map(_.recordedOn).toList)
             .maxOption
             // 2. Censoring time strategy: fall back to upload date
             .getOrElse(LocalDate.ofInstant(Instant.ofEpochMilli(t),ZoneId.systemDefault)) -> false
@@ -368,7 +368,7 @@ extends KaplanMeierModule[cats.Id]
           
           record
             .getMedicationTherapies
-            .flatMap(_.latest)
+            .map(_.latest)
             .flatMap {
               therapy =>
           
@@ -408,7 +408,7 @@ extends KaplanMeierModule[cats.Id]
           
           record
             .getMedicationTherapies
-            .flatMap(_.latest)
+            .map(_.latest)
             .flatMap {
               therapy =>
           
@@ -511,7 +511,7 @@ extends KaplanMeierModule[cats.Id]
       pfs2 <-
         record
           .getMedicationTherapies
-          .flatMap(_.latest)         // Take latest entry of each therapy history...
+          .map(_.latest)             // Take latest entry of each therapy history...
           .maxByOption(_.recordedOn) // ... then take the latest recorded therapy of all
           .flatMap(progressionTime(_,record.patient))
 

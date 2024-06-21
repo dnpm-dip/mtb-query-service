@@ -21,6 +21,7 @@ import de.dnpm.dip.model.{
   Gender,
   Interval,
   Period,
+  Study,
   Therapy
 }
 import de.dnpm.dip.service.query.{
@@ -33,7 +34,6 @@ import de.dnpm.dip.service.query.{
 import de.dnpm.dip.mtb.model.{
   ClaimResponse,
   LevelOfEvidence,
-  Study
 }
 
 

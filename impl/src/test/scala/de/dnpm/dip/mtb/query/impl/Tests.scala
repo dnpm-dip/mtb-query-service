@@ -117,7 +117,7 @@ class Tests extends AsyncFlatSpec
       medicationCriteria =
         patRec
           .getMedicationTherapies
-          .flatMap(_.history)
+          .map(_.latest)
           .collectFirst {
             case th if th.medication.isDefined =>
               MedicationCriteria(
