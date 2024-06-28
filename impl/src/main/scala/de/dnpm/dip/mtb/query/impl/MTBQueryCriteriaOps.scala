@@ -203,45 +203,61 @@ private trait MTBQueryCriteriaOps
 
   private def medicationsMatch(
     criteria: Option[MedicationCriteria],
-    recommendedDrugs: => Set[Coding[ATC]],
-    usedDrugs: => Set[Coding[ATC]],
+    recommendedDrugs: => List[Set[Coding[ATC]]],
+    usedDrugs: => List[Set[Coding[ATC]]],
   ): (Option[MedicationCriteria],Boolean) = {
 
     import MedicationUsage._
     import LogicalOperator.{And,Or}
 
+    def drugMatches(
+      queriedDrugs: Set[Coding[ATC]],
+      drugNames: List[Set[String]],
+      op: LogicalOperator
+    ): Set[Coding[ATC]] =
+      op match {
+        case Or =>
+          // for each queried drug, check if any drug name set exists containing the queried drug's name
+          queriedDrugs.filter( 
+            cdng => drugNames exists (_ exists (name => cdng.display.exists(name contains _.toLowerCase)))
+          )
+        case And =>
+          // Check if a drug name set (i.e. combination therapy) exists of which all names occur in the queried drugs
+          if (drugNames exists (_ forall (name => queriedDrugs exists (_.display.exists(name contains _.toLowerCase)))))
+            queriedDrugs
+          else 
+            Set.empty
+      }
+
     criteria match {
-      case Some(MedicationCriteria(op,selectedDrugs,usage)) if selectedDrugs.nonEmpty => 
+      case Some(MedicationCriteria(op,queriedDrugs,usage)) if queriedDrugs.nonEmpty => 
+
+        lazy val recommendedDrugNames =
+          recommendedDrugs.map(_.flatMap(_.display.map(_.toLowerCase)))
+
+        lazy val usedDrugNames =
+          usedDrugs.map(_.flatMap(_.display.map(_.toLowerCase)))
+
+        val operator =
+          op.getOrElse(Or)
+
         usage
+          .getOrElse(Set.empty)
           .collect { case MedicationUsage(value) => value }
           .pipe {
-            case s if s.contains(Recommended) && s.contains(Used) => recommendedDrugs & usedDrugs
-            case s if s.contains(Recommended)                     => usedDrugs
-            case s if s.contains(Used)                            => usedDrugs
-            case s                                                => recommendedDrugs | usedDrugs
-          }
-          .pipe {
-            _.flatMap(_.display).map(_.toLowerCase)
-          }
-          .pipe {
-            drugNames =>
 
-              op.getOrElse(Or) match {
+            case s if s.contains(Recommended) && s.contains(Used) =>
+              drugMatches(queriedDrugs,recommendedDrugNames,operator) & drugMatches(queriedDrugs,usedDrugNames,operator)
 
-                case Or =>
-                  selectedDrugs.filter( 
-                    coding => drugNames.exists(name => coding.display.exists(name contains _.toLowerCase))
-                  )
+            case s if s.contains(Recommended) =>
+              drugMatches(queriedDrugs,recommendedDrugNames,operator)
 
-                case And =>
-                  selectedDrugs.forall( 
-                    coding => drugNames.exists(name => coding.display.exists(name contains _.toLowerCase))
-                  ) match {
-                    case true  => selectedDrugs
-                    case false => Set.empty[Coding[ATC]]
-                  }
- 
-              }
+            case s if s.contains(Used) =>
+              drugMatches(queriedDrugs,usedDrugNames,operator)
+
+            case _ =>
+              drugMatches(queriedDrugs,recommendedDrugNames,operator) | drugMatches(queriedDrugs,usedDrugNames,operator)
+
           }
           .pipe {
             case matches if matches.nonEmpty =>
@@ -313,12 +329,10 @@ private trait MTBQueryCriteriaOps
                 criteria.medication,
                 record.getCarePlans
                   .flatMap(_.medicationRecommendations.getOrElse(List.empty))
-                  .flatMap(_.medication)
-                  .toSet[Coding[ATC]],
-                record.getMedicationTherapies
+                  .map(_.medication),
+                record.getTherapies
                   .map(_.latest)
-                  .flatMap(_.medication.getOrElse(Set.empty))
-                  .toSet[Coding[ATC]]
+                  .flatMap(_.medication)
               )
 
 

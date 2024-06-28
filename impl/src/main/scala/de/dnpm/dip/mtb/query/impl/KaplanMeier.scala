@@ -263,7 +263,7 @@ extends KaplanMeierModule[cats.Id]
         .getOrElse(
           // 1. Censoring time strategy: fall back to date of last therapy follow-up
           record
-            .getMedicationTherapies
+            .getTherapies
             .flatMap(_.history.map(_.recordedOn).toList)
             .maxOption
             // 2. Censoring time strategy: fall back to upload date
@@ -360,14 +360,12 @@ extends KaplanMeierModule[cats.Id]
               .getResponses
               .groupBy(_.therapy)
               .collect {
-//                case (ref,responses) if ref.id.isDefined =>
-//                  ref.id.get -> responses.maxBy(_.effectiveDate)
                 case (Reference(Some(therapyId),_,_,_),responses) =>
                   therapyId -> responses.maxBy(_.effectiveDate)
               }
           
           record
-            .getMedicationTherapies
+            .getTherapies
             .map(_.latest)
             .flatMap {
               therapy =>
@@ -407,7 +405,7 @@ extends KaplanMeierModule[cats.Id]
               }
           
           record
-            .getMedicationTherapies
+            .getTherapies
             .map(_.latest)
             .flatMap {
               therapy =>
@@ -504,13 +502,13 @@ extends KaplanMeierModule[cats.Id]
     for {
       pfs1 <-
         record
-          .getGuidelineMedicationTherapies
+          .getGuidelineTherapies
           .maxByOption(_.recordedOn)
           .flatMap(progressionTime(_,record.patient))
 
       pfs2 <-
         record
-          .getMedicationTherapies
+          .getTherapies
           .map(_.latest)             // Take latest entry of each therapy history...
           .maxByOption(_.recordedOn) // ... then take the latest recorded therapy of all
           .flatMap(progressionTime(_,record.patient))

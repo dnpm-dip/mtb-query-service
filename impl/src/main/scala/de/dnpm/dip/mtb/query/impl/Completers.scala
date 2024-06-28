@@ -162,9 +162,16 @@ trait Completers extends BaseCompleters
 
     Completer.of(
       criteria => criteria.copy(
-        diagnoses         = criteria.diagnoses.complete,
-        tumorMorphologies = criteria.tumorMorphologies.complete,
-        medication        = criteria.medication.complete,
+        diagnoses =
+          criteria.diagnoses.complete,
+        tumorMorphologies =
+          criteria.tumorMorphologies.complete,
+        medication =
+          criteria.medication.map(
+            med => med.copy(
+              drugs = med.drugs.complete
+            )
+          )
       )
     )
 

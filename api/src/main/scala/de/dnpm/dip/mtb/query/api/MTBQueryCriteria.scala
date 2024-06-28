@@ -114,7 +114,7 @@ final case class MedicationCriteria
 (
   operator: Option[LogicalOperator],
   drugs: Set[Coding[ATC]],
-  usage: Set[Coding[MedicationUsage.Value]]
+  usage: Option[Set[Coding[MedicationUsage.Value]]]
 )
 
 

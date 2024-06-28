@@ -55,9 +55,8 @@ trait MTBReportingOps extends ReportingOps
 
     val therapies =
       records
-        .flatMap(_.getMedicationTherapies)
+        .flatMap(_.getTherapies)
         .map(_.latest)
-//        .flatMap(_.history.maxByOption(_.recordedOn))
         .filter(_.medication.isDefined)
 
     val therapyDistribution =
@@ -259,7 +258,7 @@ trait MTBReportingOps extends ReportingOps
 
         val therapies =
           record
-            .getMedicationTherapies
+            .getTherapies
             .map(_.latest)
 
         record

@@ -15,6 +15,7 @@ import de.dnpm.dip.coding.{
   CodeSystem,
   Coding
 }
+import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.mtb.query.api._
 import de.dnpm.dip.mtb.model.MTBPatientRecord
@@ -116,14 +117,14 @@ class Tests extends AsyncFlatSpec
 
       medicationCriteria =
         patRec
-          .getMedicationTherapies
+          .getTherapies
           .map(_.latest)
           .collectFirst {
             case th if th.medication.isDefined =>
               MedicationCriteria(
                 None,
                 th.medication.get,
-                Set(Coding(MedicationUsage.Used))
+                Some(Set(Coding(MedicationUsage.Used)))
              )
           }
 
@@ -156,9 +157,7 @@ class Tests extends AsyncFlatSpec
 
 
   val queryMode =
-    Some(
-      Coding(Query.Mode.Local)
-    )
+    Coding(Query.Mode.Local)
 
 
   "Query ResultSet" must "contain the total number of data sets for a query without criteria" in {
