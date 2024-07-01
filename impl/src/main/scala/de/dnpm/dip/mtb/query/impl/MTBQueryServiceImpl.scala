@@ -178,7 +178,7 @@ with Completers
   private implicit val kmEstimator: KaplanMeierEstimator[Id] =
     DefaultKaplanMeierEstimator
 
-  private val kmModule: KaplanMeierModule[Id] =
+  private implicit val kmModule: KaplanMeierModule[Id] =
     new DefaultKaplanMeierModule
 
 
@@ -187,39 +187,11 @@ with Completers
       new MTBResultSetImpl(
         id,
         criteria,
-        results,
-        kmModule.survivalReport(results.map(_._1))
+        results
       )
 
 
-  import KaplanMeier._
-  import SurvivalType._
-  import Grouping._
-
-
-  override val survivalConfig: Config =
+  override val survivalConfig: KaplanMeier.Config =
     kmModule.survivalConfig
 
-
-  override def survivalStatistics(
-    query: Query.Id,
-    survivalType: Option[SurvivalType.Value],
-    grouping: Option[Grouping.Value]
-  )(
-    implicit
-    F: Monad[Future],
-    user: Querier
-  ): Future[Option[SurvivalStatistics]] =
-    F.pure(
-      cache.getResults(query)
-        .map(
-          rs =>
-            kmModule.survivalStatistics(
-              survivalType,
-              grouping,
-              rs.results.map(_._1)
-            )
-        )
-    )
-       
 }

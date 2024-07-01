@@ -50,7 +50,6 @@ object PFSRatio
 }
 
 
-
 object KaplanMeier
 {
 
@@ -83,7 +82,6 @@ object KaplanMeier
       Map(
         ByTherapy     -> "Nach Therapie",
         ByTumorEntity -> "Nach Tumor-Entität",
-//        ByGender      -> "Nach Geschlecht",
         Ungrouped     -> "Keine"
       )
 
@@ -139,9 +137,6 @@ object KaplanMeier
   )
 
 
-  type SurvivalReport = Seq[SurvivalStatistics]
-
-
   implicit val writesDataPoint: OWrites[DataPoint] =
     Json.writes[DataPoint]
 
@@ -159,16 +154,11 @@ import KaplanMeier._
 trait KaplanMeierOps[F[_],Env]
 {
 
-  def survivalConfig: Config
-
   def survivalStatistics(
-    query: Query.Id,
     survivalType: Option[SurvivalType.Value],
     grouping: Option[Grouping.Value]
   )(
-    implicit
-    env: Env,
-    user: Querier
-  ): F[Option[SurvivalStatistics]]
+    implicit env: Env
+  ): F[SurvivalStatistics]
 
 }

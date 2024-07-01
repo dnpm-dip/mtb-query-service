@@ -1,7 +1,10 @@
 package de.dnpm.dip.mtb.query.api
 
 
-
+import cats.{
+  Id,
+  Applicative
+}
 import de.dnpm.dip.util.DisplayLabel
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.coding.atc.ATC
@@ -35,9 +38,9 @@ import play.api.libs.json.{
 
 trait MTBResultSet
 extends ResultSet[MTBPatientRecord,MTBQueryCriteria]
+with KaplanMeierOps[Id,Applicative[Id]]
 {
   type SummaryType = MTBResultSet.Summary
-
 }
 
 
@@ -107,8 +110,7 @@ object MTBResultSet
     patientCount: Int,
     demographics: ResultSet.Demographics,
     diagnostics: TumorDiagnostics,
-    medication: Medication,
-    survivalReport: KaplanMeier.SurvivalReport
+    medication: Medication
   )
   extends ResultSet.Summary
 

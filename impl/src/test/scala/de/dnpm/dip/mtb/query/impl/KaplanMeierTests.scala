@@ -26,6 +26,7 @@ import de.dnpm.dip.mtb.query.api.KaplanMeier.{
   SurvivalType,
   Grouping
 }
+import de.dnpm.dip.service.query.Entry
 import de.ekut.tbi.generators.Gen
 import de.dnpm.dip.mtb.gens.Generators._
 
@@ -268,7 +269,18 @@ class KaplanMeierTests extends AnyFlatSpec
 
     forAll(
       kmModule
-        .survivalReport(records)
+        .survivalConfig.entries
+        .flatMap { 
+          case Entry(typ,groupings,_) =>
+            groupings.collect {
+              case Grouping(grp) =>
+                kmModule.survivalStatistics(
+                  SurvivalType.unapply(typ),
+                  Some(grp),
+                  records
+                )
+            }
+        }
         .flatMap(_.data.map(_.value))
         .map(_.survivalRates)
     ){

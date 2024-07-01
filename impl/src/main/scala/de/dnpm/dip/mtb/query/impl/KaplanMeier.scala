@@ -50,8 +50,7 @@ import de.dnpm.dip.mtb.query.api.KaplanMeier.{
   Grouping,
   DataPoint,
   CohortResult,
-  SurvivalStatistics,
-  SurvivalReport
+  SurvivalStatistics
 }
 import SurvivalType._
 import Grouping._
@@ -111,16 +110,13 @@ trait KaplanMeierModule[F[_]]
   def survivalStatistics(
     survivalType: Option[SurvivalType.Value],
     grouping: Option[Grouping.Value],
-//    survivalType: SurvivalType.Value,
-//    grouping: Grouping.Value,
     cohort: Seq[Snapshot[MTBPatientRecord]],
     timeUnit: UnitOfTime = UnitOfTime.Weeks
   )(
-    implicit
-    estimator: KaplanMeierEstimator[F],
+    implicit estimator: KaplanMeierEstimator[F],
   ): F[SurvivalStatistics]
 
-
+/*
   def survivalReport(
     cohort: Seq[Snapshot[MTBPatientRecord]],
     timeUnit: UnitOfTime = UnitOfTime.Weeks,
@@ -139,23 +135,18 @@ trait KaplanMeierModule[F[_]]
     import cats.syntax.traverse._
     import cats.syntax.functor._
 
-//    val chronoUnit =
-//      UnitOfTime.chronoUnit(timeUnit)
-
     typesAndGroupings.traverse { 
       case (survivalType,grouping) =>
         self.survivalStatistics(
           Some(survivalType),
           Some(grouping),
-//          survivalType,
-//          grouping,
           cohort,
           timeUnit
       )
     }
 
   }
-
+*/
 
   def pfsRatioReport(
     cohort: Seq[Snapshot[MTBPatientRecord]],
