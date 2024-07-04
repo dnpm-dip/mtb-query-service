@@ -8,7 +8,8 @@ import cats.{
 }
 import de.dnpm.dip.util.{
   Completer,
-  DisplayLabel
+  DisplayLabel,
+  Tree
 }
 import de.dnpm.dip.coding.{
   Code,
@@ -50,6 +51,18 @@ trait Completers extends BaseCompleters
   implicit val icdo3: ICDO3.Catalogs[Id,Applicative[Id]]
 
 
+
+  private implicit def treeCompleter[T: Completer]: Completer[Tree[T]] =
+    Completer.of(
+      t => t.copy(
+        element = t.element.complete
+//        children = t.children.map(_.complete)
+      )
+    )
+
+
+
+
   private implicit def hgvsCompleter[S <: HGVS]: Completer[Coding[S]] =
     Completer.of(
       coding => coding.copy(
@@ -74,7 +87,7 @@ trait Completers extends BaseCompleters
           .getOrElse(coding)
     }
 
-
+/*
   implicit val medicationCriteriaCompleter: Completer[MedicationCriteria] =
     Completer.of(
       med => med.copy(
@@ -82,7 +95,7 @@ trait Completers extends BaseCompleters
         usage = med.usage.complete
       )
     )
-
+*/
   implicit protected val criteriaCompleter: Completer[MTBQueryCriteria] = {
 
     implicit val snvCriteriaCompleter: Completer[SNVCriteria] = {
@@ -122,6 +135,14 @@ trait Completers extends BaseCompleters
         )
       )
 
+    implicit val medicationCriteriaCompleter: Completer[MedicationCriteria] =
+      Completer.of(
+        med => med.copy(
+          drugs = med.drugs.complete,
+          usage = med.usage.complete
+        )
+      )
+
     Completer.of(
       criteria => criteria.copy(
         diagnoses         = criteria.diagnoses.complete,
@@ -138,13 +159,14 @@ trait Completers extends BaseCompleters
   }
 
 
+
   val CriteriaExpander: Completer[MTBQueryCriteria] = {
 
     implicit val icd10Expander: Completer[Set[Coding[ICD10GM]]] =
       descendantExpander[ICD10GM]
 
-    implicit val atcExpander: Completer[Set[Coding[ATC]]] =
-      descendantExpander[ATC]
+//    implicit val atcExpander: Completer[Set[Coding[ATC]]] =
+//      descendantExpander[ATC]
 
     implicit val icdO3MExpander: Completer[Set[Coding[ICDO3.M]]] =
       Completer.of(
@@ -169,7 +191,8 @@ trait Completers extends BaseCompleters
         medication =
           criteria.medication.map(
             med => med.copy(
-              drugs = med.drugs.complete
+              drugs = med.drugs.flatMap(_.element.expand)
+//              drugs = med.drugs.complete
             )
           )
       )

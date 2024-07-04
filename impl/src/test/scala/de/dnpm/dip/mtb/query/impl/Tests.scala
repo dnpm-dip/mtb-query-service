@@ -9,6 +9,7 @@ import org.scalatest.Inspectors._
 import scala.util.Random
 import scala.concurrent.Future
 import cats.Monad
+import de.dnpm.dip.util.Tree
 import de.dnpm.dip.model.Site
 import de.dnpm.dip.coding.{
   Code,
@@ -122,8 +123,9 @@ class Tests extends AsyncFlatSpec
           .collectFirst {
             case th if th.medication.isDefined =>
               MedicationCriteria(
-                None,
-                th.medication.get,
+                Some(LogicalOperator.And),
+//                None,
+                th.medication.get.map(Tree(_)),
                 Some(Set(Coding(MedicationUsage.Used)))
              )
           }

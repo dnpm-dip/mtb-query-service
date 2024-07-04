@@ -2,6 +2,7 @@ package de.dnpm.dip.mtb.query.api
 
 
 import cats.Applicative
+import de.dnpm.dip.util.Tree
 import de.dnpm.dip.coding.{
   Coding,
   CodedEnum,
@@ -33,10 +34,15 @@ import play.api.libs.json.{
 
 
 
-sealed trait LogicalOperator
-object LogicalOperator
+//sealed trait LogicalOperator
+object LogicalOperator extends Enumeration
 {
+  val And = Value("and")
+  val Or  = Value("or")
 
+  implicit val format: Format[Value] =
+    Json.formatEnum(this)
+/*
   final case object And extends LogicalOperator
   final case object Or extends LogicalOperator
 
@@ -55,6 +61,7 @@ object LogicalOperator
       case And => JsString("and")
       case Or  => JsString("or")
     }
+*/    
 }
 
 sealed trait VariantCriteria
@@ -112,8 +119,9 @@ with DefaultCodeSystem
 
 final case class MedicationCriteria
 (
-  operator: Option[LogicalOperator],
-  drugs: Set[Coding[ATC]],
+  operator: Option[LogicalOperator.Value],
+  drugs: Set[Tree[Coding[ATC]]],
+//  drugs: Set[Coding[ATC]],
   usage: Option[Set[Coding[MedicationUsage.Value]]]
 )
 

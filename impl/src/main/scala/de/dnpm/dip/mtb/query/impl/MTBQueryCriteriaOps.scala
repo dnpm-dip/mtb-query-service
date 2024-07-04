@@ -210,6 +210,91 @@ private trait MTBQueryCriteriaOps
     import MedicationUsage._
     import LogicalOperator.{And,Or}
 
+    import de.dnpm.dip.util.Tree
+
+
+    def drugMatches(
+      queriedDrugs: Set[Tree[Coding[ATC]]],
+      drugNames: List[Set[String]],
+      op: LogicalOperator.Value
+    ): Set[Tree[Coding[ATC]]] = {
+
+      op match {
+        case Or =>
+          // filter those queried drug sub-tree for which any drug name set exists
+          // containing an element that contains the queried drug's name as a substring
+          queriedDrugs.flatMap( 
+            _.find(coding => drugNames.exists(_ exists (name => coding.display.exists(name contains _.toLowerCase))))
+             .map(Tree(_))
+          )
+
+        case And =>
+          drugNames.map(
+            drugSet =>
+              queriedDrugs.map(
+                _.find(coding => drugSet.exists(name => coding.display.exists(name contains _.toLowerCase)))
+              )             
+          )
+          .collectFirst {
+            case ts if ts.forall(_.isDefined) => ts.flatten.map(Tree(_))
+          }
+          .getOrElse(Set.empty)
+      }
+    }
+
+
+    criteria match {
+      case Some(MedicationCriteria(op,queriedDrugs,usage)) if queriedDrugs.nonEmpty => 
+
+        lazy val recommendedDrugNames =
+          recommendedDrugs.map(_.flatMap(_.display.map(_.toLowerCase)))
+
+        lazy val usedDrugNames =
+          usedDrugs.map(_.flatMap(_.display.map(_.toLowerCase)))
+
+        val operator =
+          op.getOrElse(Or)
+
+        usage
+          .getOrElse(Set.empty)
+          .collect { case MedicationUsage(value) => value }
+          .pipe {
+
+            case s if s.contains(Recommended) && s.contains(Used) =>
+              drugMatches(queriedDrugs,recommendedDrugNames,operator) & drugMatches(queriedDrugs,usedDrugNames,operator)
+
+            case s if s.contains(Recommended) =>
+              drugMatches(queriedDrugs,recommendedDrugNames,operator)
+
+            case s if s.contains(Used) =>
+              drugMatches(queriedDrugs,usedDrugNames,operator)
+
+            case _ =>
+              drugMatches(queriedDrugs,recommendedDrugNames,operator) | drugMatches(queriedDrugs,usedDrugNames,operator)
+
+          }
+          .pipe {
+            case matches if matches.nonEmpty =>
+              Some(MedicationCriteria(op,matches,usage)) -> true
+            case _ =>
+              None  -> false
+          }
+
+      case _ => None -> true
+    }
+
+  }
+
+/*
+  private def medicationsMatch(
+    criteria: Option[MedicationCriteria],
+    recommendedDrugs: => List[Set[Coding[ATC]]],
+    usedDrugs: => List[Set[Coding[ATC]]],
+  ): (Option[MedicationCriteria],Boolean) = {
+
+    import MedicationUsage._
+    import LogicalOperator.{And,Or}
+
     def drugMatches(
       queriedDrugs: Set[Coding[ATC]],
       drugNames: List[Set[String]],
@@ -270,7 +355,7 @@ private trait MTBQueryCriteriaOps
     }
 
   }
-
+*/
 
   def criteriaMatcher(
     strict: Boolean = true
