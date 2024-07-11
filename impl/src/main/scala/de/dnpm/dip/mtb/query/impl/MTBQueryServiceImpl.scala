@@ -116,6 +116,22 @@ with MTBQueryService
 with Completers
 {
 
+  import scala.language.implicitConversions
+
+  override implicit def filterToPredicate(filter: MTBFilters): MTBPatientRecord => Boolean = {
+
+    implicit def diagnosisFilterPredicate(f: DiagnosisFilter): MTBDiagnosis => Boolean =
+      diag =>
+        f.code match {
+          case Some(icd10s) if icd10s.nonEmpty => icd10s.exists(_.code == diag.code.code)
+          case _                               => true
+        }
+
+    record =>
+      filter.patientFilter(record.patient) &&
+      record.getDiagnoses.exists(filter.diagnosisFilter)
+  }
+
 
 
   override def DefaultFilter(
@@ -133,7 +149,7 @@ with Completers
     )
   }
 
-
+/*
   import scala.language.implicitConversions
 
   override implicit def toPredicate(filter: MTBFilters): MTBPatientRecord => Boolean = {
@@ -151,7 +167,7 @@ with Completers
       record.getDiagnoses.exists(filter.diagnosisFilter)
 
   }
-
+*/
     
   override implicit val hgnc: CodeSystemProvider[HGNC,Id,Applicative[Id]] =
     HGNC.GeneSet

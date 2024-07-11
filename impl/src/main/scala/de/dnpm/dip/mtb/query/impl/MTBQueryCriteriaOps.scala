@@ -212,33 +212,75 @@ private trait MTBQueryCriteriaOps
 
     import de.dnpm.dip.util.Tree
 
+/*
+    def combinedMatches(
+      queriedDrugs: Set[Tree[Coding[ATC]]],
+      drugSets: List[Set[String]],
+    ): Set[Coding[ATC]] =
+      if (queriedDrugs.nonEmpty){
+
+        val q = queriedDrugs.head
+
+        // Iterate over drugSets to accumulate both
+        // the matching entries from the current Coding tree
+        // and those drugSets which do lead to a match
+        val (drugMatches,matchingDrugSets) =
+          drugSets.foldLeft(
+            Set.empty[Coding[ATC]] -> List.empty[Set[String]]
+          ){
+            case ((drugMatches,acc),drugSet) =>
+              val matches =
+                drugSet.foldLeft(
+                  Seq.empty[Coding[ATC]]
+                )(
+                  (acc2,drug) => acc2 ++ q.filter(_.display.exists(drug contains _.toLowerCase))  
+                )
+                
+              if (matches.nonEmpty) 
+                (drugMatches ++ matches, acc :+ drugSet) 
+              else 
+                (drugMatches, acc)
+          }
+
+        // If there are matches, proceed with the remaining queried drugs,
+        // using those drugSet which had a match
+        if (drugMatches.nonEmpty)
+          drugMatches.toSet ++ combinedMatches(queriedDrugs.tail,matchingDrugSets)
+        // else break here
+        else 
+          drugMatches.toSet
+          
+      } else {
+        Set.empty  
+      }
+*/
 
     def drugMatches(
       queriedDrugs: Set[Tree[Coding[ATC]]],
-      drugNames: List[Set[String]],
+      drugSets: List[Set[String]],
       op: LogicalOperator.Value
     ): Set[Tree[Coding[ATC]]] = {
 
       op match {
         case Or =>
-          // filter those queried drug sub-tree for which any drug name set exists
-          // containing an element that contains the queried drug's name as a substring
+          // Pick those elements among the sub-trees which occur in any of the drug name sets
           queriedDrugs.flatMap( 
-            _.find(coding => drugNames.exists(_ exists (name => coding.display.exists(name contains _.toLowerCase))))
+            _.find(coding => drugSets.exists(_ exists (name => coding.display.exists(name contains _.toLowerCase))))
              .map(Tree(_))
           )
-
+          
         case And =>
-          drugNames.map(
+          drugSets.view.map(
             drugSet =>
               queriedDrugs.map(
                 _.find(coding => drugSet.exists(name => coding.display.exists(name contains _.toLowerCase)))
-              )             
+              )
           )
           .collectFirst {
             case ts if ts.forall(_.isDefined) => ts.flatten.map(Tree(_))
           }
           .getOrElse(Set.empty)
+
       }
     }
 

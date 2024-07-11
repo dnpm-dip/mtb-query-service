@@ -124,7 +124,6 @@ class Tests extends AsyncFlatSpec
             case th if th.medication.isDefined =>
               MedicationCriteria(
                 Some(LogicalOperator.And),
-//                None,
                 th.medication.get.map(Tree(_)),
                 Some(Set(Coding(MedicationUsage.Used)))
              )
@@ -157,6 +156,9 @@ class Tests extends AsyncFlatSpec
     
   }
 
+  // For implicit conversion of MTBFilters to predicate function
+  import service.filterToPredicate
+
 
   val queryMode =
     Coding(Query.Mode.Local)
@@ -177,7 +179,7 @@ class Tests extends AsyncFlatSpec
       resultSet <-
         service.resultSet(query.id).map(_.value)
 
-      summary = resultSet.summary()
+      summary = resultSet.summary(MTBFilters.empty)
 
       _ = summary.patientCount must equal (dataSets.size) 
 
@@ -211,7 +213,7 @@ class Tests extends AsyncFlatSpec
           .map(_.value)
 
       patientMatches = 
-        resultSet.patientMatches()
+        resultSet.patientMatches(MTBFilters.empty)
 
       _ = all (query.criteria.diagnoses.value.map(_.display)) must be (defined)  
       _ = all (query.criteria.diagnoses.value.map(_.version)) must be (defined)  
@@ -244,7 +246,7 @@ class Tests extends AsyncFlatSpec
 
     for {
       result <-
-        service ? PreparedQuery.Query(Some(querier))
+        service ? PreparedQuery.Filter(Some(querier))
 
       _ = result must not be empty 
 

@@ -32,6 +32,13 @@ extends Filters[MTBPatientRecord]
 object MTBFilters
 {
 
+  lazy val empty: MTBFilters =
+    MTBFilters(
+      PatientFilter.empty,
+      DiagnosisFilter(None)
+    )
+
+
   implicit val writesDiagnosisFilter: OWrites[DiagnosisFilter] =
     Json.writes[DiagnosisFilter]
 

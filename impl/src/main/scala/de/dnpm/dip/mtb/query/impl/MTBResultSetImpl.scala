@@ -8,6 +8,7 @@ import cats.{
   Applicative,
   Id
 }
+import de.dnpm.dip.util.DisplayLabel
 import de.dnpm.dip.coding.{
   Coding,
   CodeSystem,
@@ -23,17 +24,26 @@ import de.dnpm.dip.model.Snapshot
 import de.dnpm.dip.service.query.{
   Distribution,
   Entry,
+Filters,
   PatientFilter,
   PatientMatch,
   Query,
   ResultSet,
   ReportingOps
 }
-import de.dnpm.dip.mtb.model.MTBPatientRecord
+import de.dnpm.dip.mtb.model.{
+  MTBPatientRecord,
+  MTBDiagnosis,
+  RECIST,
+  Variant
+}
 import de.dnpm.dip.mtb.query.api.{
   MTBQueryCriteria,
+  MTBFilters,
+  DiagnosisFilter,
   MTBResultSet,
-  KaplanMeier
+  KaplanMeier,
+  Medication
 }
 
 
@@ -58,15 +68,32 @@ with MTBReportingOps
   import MTBResultSet.{
     Summary,
     TumorDiagnostics,
-    Medication
   }
 
+/*
+  import scala.language.implicitConversions
+  override implicit def toPredicate(filter: MTBFilters): MTBPatientRecord => Boolean = {
 
+    implicit def diagnosisFilterPredicate(f: DiagnosisFilter): MTBDiagnosis => Boolean =
+      diag =>
+        f.code match {
+          case Some(icd10s) if icd10s.nonEmpty => icd10s.exists(_.code == diag.code.code)
+          case _                               => true
+        }
+
+    record =>
+      filter.patientFilter(record.patient) &&
+      record.getDiagnoses.exists(filter.diagnosisFilter)
+  }
+*/
+
+//  override def summary(filter: MTBFilters): Summary = {
   override def summary(
-    f: MTBPatientRecord => Boolean
-  ): Summary =
+    filter: MTBPatientRecord => Boolean
+  ): Summary = {
+
     results
-      .collect { case (snp,_) if f(snp.data) => snp }
+      .collect { case (snp,_) if filter(snp.data) => snp }
       .pipe {
         snps =>
 
@@ -84,20 +111,22 @@ with MTBReportingOps
             overallDiagnosticDistributions(records),
             diagnosticDistributionsByVariant(records)
           ),
-          Medication(
-            Medication.Recommendations(
+          MTBResultSet.Medication(
+            MTBResultSet.Medication.Recommendations(
               recommendationDistribution(records),
               recommendationsBySupportingVariant(records)
             ),
-            Medication.Therapies(
+            MTBResultSet.Medication.Therapies(
               therapyDistribution,
               meanTherapyDurations,
               responsesByTherapy(records)  
             )
-          ),
+          )
         )
 
     }
+
+  }
 
 
   import KaplanMeier._
@@ -114,5 +143,108 @@ with MTBReportingOps
       results.map(_._1)
     )
 
+
+
+  import ATC.extensions._
+
+  override def medicationStats(
+    filter: MTBPatientRecord => Boolean
+  ): Medication =  {
+
+
+    results
+      .collect { 
+        case (snp,_) if filter(snp.data) => snp.data 
+      }
+      .foldLeft(
+        Map.empty[
+          Set[DisplayLabel[Coding[ATC]]],
+          (
+           Set[DisplayLabel[Coding[ATC]]],
+           Set[DisplayLabel[Variant]],
+           List[Coding[RECIST.Value]]
+          )
+        ]
+      ){
+        (acc,record) =>
+
+          val recommendations =
+            record
+              .getCarePlans
+              .flatMap(_.medicationRecommendations.getOrElse(List.empty))
+              
+          val variants =
+            record
+              .getNgsReports
+              .flatMap(_.variants)
+
+          record
+            .getTherapies
+            .map(_.latest)
+            .view
+            .filter(_.medication.isDefined)
+            .foldLeft(acc){
+              (acc2,therapy) =>
+
+                val medication =
+                  therapy
+                    .medication.get
+
+                val medicationClasses =
+                  medication
+                    .flatMap(_.currentGroup)
+                    .map(DisplayLabel.of(_))
+
+                val supportingVariants =
+                  therapy
+                    .basedOn
+                    .flatMap(_.resolveOn(recommendations))
+                    .flatMap(_.supportingVariants)
+                    .getOrElse(List.empty)
+                    .flatMap(_.resolveOn(variants))
+                    .map(DisplayLabel.of(_))
+                    .toSet
+     
+                val response =
+                  record.getResponses
+                    .filter(_.therapy.id.exists(_ == therapy.id))
+                    .maxByOption(_.effectiveDate)
+                    .map(_.value)
+
+                acc.updatedWith(
+                  medication.map(DisplayLabel.of(_))
+                ){ 
+                  case Some((classes,suppVars,responses)) => 
+                    Some(
+                     (
+                      classes ++ medicationClasses,
+                      suppVars ++ supportingVariants,
+                      response.fold(responses)(_ :: responses)
+                     )
+                    )
+                  case _ =>
+                    Some(
+                     (
+                      medicationClasses,
+                      supportingVariants,
+                      response.toList
+                     )
+                    )  
+                }    
+            }
+
+      }
+      .map { 
+        case (medications,(classes,supportingVariants,responses)) =>
+          Medication.TherapyResponseDistribution(
+            classes,
+            medications,
+            supportingVariants,
+            Distribution.of(responses)
+          )
+      }
+      .toSeq
+      .pipe(Medication(_))
+  }      
 
 }
