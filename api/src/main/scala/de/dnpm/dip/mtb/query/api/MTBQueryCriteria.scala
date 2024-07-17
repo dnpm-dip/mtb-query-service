@@ -34,7 +34,6 @@ import play.api.libs.json.{
 
 
 
-//sealed trait LogicalOperator
 object LogicalOperator extends Enumeration
 {
   val And = Value("and")
@@ -42,26 +41,6 @@ object LogicalOperator extends Enumeration
 
   implicit val format: Format[Value] =
     Json.formatEnum(this)
-/*
-  final case object And extends LogicalOperator
-  final case object Or extends LogicalOperator
-
-  implicit val reads: Reads[LogicalOperator] =
-    Reads(
-      _.validate[String]
-        .map(_.toLowerCase)
-        .map {
-          case "and" => And
-          case "or"  => Or
-        }
-    )
-
-  implicit val writes: Writes[LogicalOperator] =
-    Writes { 
-      case And => JsString("and")
-      case Or  => JsString("or")
-    }
-*/    
 }
 
 sealed trait VariantCriteria

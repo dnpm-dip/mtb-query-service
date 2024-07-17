@@ -15,6 +15,23 @@ import play.api.libs.json.{
 }
 
 
+
+final case class TherapyResponseDistribution
+(
+  medicationClasses: Set[DisplayLabel[Coding[ATC]]],
+  medications: Set[DisplayLabel[Coding[ATC]]],
+  supportingVariants: Set[DisplayLabel[Variant]],
+  responseDistribution: Distribution[Coding[RECIST.Value]]
+)
+
+object TherapyResponseDistribution
+{
+  implicit val writes: OWrites[TherapyResponseDistribution] =
+    Json.writes[TherapyResponseDistribution]
+}
+
+
+/*
 final case class Medication
 (
   therapyResponses: Seq[Medication.TherapyResponseDistribution]  
@@ -40,3 +57,4 @@ object Medication
     Json.writes[Medication]
 
 }
+*/

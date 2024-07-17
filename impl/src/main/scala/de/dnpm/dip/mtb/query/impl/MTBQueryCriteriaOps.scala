@@ -217,9 +217,8 @@ private trait MTBQueryCriteriaOps
       queriedDrugs: Set[Tree[Coding[ATC]]],
       drugSets: List[Set[String]],
     ): Set[Coding[ATC]] =
-      if (queriedDrugs.nonEmpty){
-
-        val q = queriedDrugs.head
+      queriedDrugs.headOption.map {
+        queriedDrug =>
 
         // Iterate over drugSets to accumulate both
         // the matching entries from the current Coding tree
@@ -229,17 +228,15 @@ private trait MTBQueryCriteriaOps
             Set.empty[Coding[ATC]] -> List.empty[Set[String]]
           ){
             case ((drugMatches,acc),drugSet) =>
-              val matches =
-                drugSet.foldLeft(
-                  Seq.empty[Coding[ATC]]
-                )(
-                  (acc2,drug) => acc2 ++ q.filter(_.display.exists(drug contains _.toLowerCase))  
-                )
-                
-              if (matches.nonEmpty) 
-                (drugMatches ++ matches, acc :+ drugSet) 
-              else 
+              queriedDrug.find(
+                coding => drugSet.exists(name => coding.display.exists(name contains _.toLowerCase))
+              ) 
+              .map(
+                m => (drugMatches + m, acc :+ drugSet)
+              )
+              .getOrElse(
                 (drugMatches, acc)
+              )
           }
 
         // If there are matches, proceed with the remaining queried drugs,
@@ -248,12 +245,12 @@ private trait MTBQueryCriteriaOps
           drugMatches.toSet ++ combinedMatches(queriedDrugs.tail,matchingDrugSets)
         // else break here
         else 
-          drugMatches.toSet
+          drugMatches
           
-      } else {
-        Set.empty  
       }
+      .getOrElse(Set.empty)
 */
+
 
     def drugMatches(
       queriedDrugs: Set[Tree[Coding[ATC]]],
@@ -268,7 +265,7 @@ private trait MTBQueryCriteriaOps
             _.find(coding => drugSets.exists(_ exists (name => coding.display.exists(name contains _.toLowerCase))))
              .map(Tree(_))
           )
-          
+
         case And =>
           drugSets.view.map(
             drugSet =>

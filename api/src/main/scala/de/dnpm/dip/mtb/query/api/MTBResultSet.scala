@@ -40,12 +40,23 @@ trait MTBResultSet
 extends ResultSet[MTBPatientRecord,MTBQueryCriteria]
 with KaplanMeierOps[Id,Applicative[Id]]
 {
+  type Filter = MTBFilters
 
   type SummaryType = MTBResultSet.Summary
 
+/*
   def medicationStats(
     filter: MTBPatientRecord => Boolean = _ => true
   ): Medication
+*/
+  def therapyResponses(
+    filter: MTBPatientRecord => Boolean = _ => true
+  ): Seq[TherapyResponseDistribution]
+
+
+  def tumorDiagnostics(
+    filter: MTBPatientRecord => Boolean = _ => true
+  ): MTBResultSet.TumorDiagnostics
 
 }
 

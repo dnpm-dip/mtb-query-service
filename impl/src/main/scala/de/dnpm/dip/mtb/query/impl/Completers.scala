@@ -25,14 +25,13 @@ import de.dnpm.dip.coding.icd.{
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.model.{
+  BaseCompleters,
   Patient,
   Site,
   Reference,
-  Resolver,
+  Resolver
 }
-import de.dnpm.dip.service.BaseCompleters
 import de.dnpm.dip.mtb.query.api._
-
 
 
 trait Completers extends BaseCompleters
@@ -60,15 +59,6 @@ trait Completers extends BaseCompleters
       )
     )
 
-
-
-
-  private implicit def hgvsCompleter[S <: HGVS]: Completer[Coding[S]] =
-    Completer.of(
-      coding => coding.copy(
-        display = coding.display.orElse(Some(coding.code.value))
-      )
-    )
 
   private implicit val icdo3mCompleter: Completer[Coding[ICDO3.M]] =
     Completer.of {

@@ -6,6 +6,7 @@ import play.api.libs.json.{
   OWrites
 }
 import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.service.query.{
   Filters,
@@ -21,6 +22,7 @@ final case class DiagnosisFilter
 (
   code: Option[Set[Coding[ICD10GM]]]
 )
+
 
 final case class MTBFilters
 (

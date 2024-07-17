@@ -22,9 +22,9 @@ import de.dnpm.dip.coding.icd.{
 }
 import de.dnpm.dip.model.Snapshot
 import de.dnpm.dip.service.query.{
+  Count,
   Distribution,
   Entry,
-Filters,
   PatientFilter,
   PatientMatch,
   Query,
@@ -43,7 +43,7 @@ import de.dnpm.dip.mtb.query.api.{
   DiagnosisFilter,
   MTBResultSet,
   KaplanMeier,
-  Medication
+  TherapyResponseDistribution
 }
 
 
@@ -70,62 +70,48 @@ with MTBReportingOps
     TumorDiagnostics,
   }
 
-/*
-  import scala.language.implicitConversions
-  override implicit def toPredicate(filter: MTBFilters): MTBPatientRecord => Boolean = {
+  override def summary(filter: MTBPatientRecord => Boolean): Summary = {
 
-    implicit def diagnosisFilterPredicate(f: DiagnosisFilter): MTBDiagnosis => Boolean =
-      diag =>
-        f.code match {
-          case Some(icd10s) if icd10s.nonEmpty => icd10s.exists(_.code == diag.code.code)
-          case _                               => true
-        }
+    val records =
+      patientRecords(filter)
 
-    record =>
-      filter.patientFilter(record.patient) &&
-      record.getDiagnoses.exists(filter.diagnosisFilter)
-  }
-*/
+    val (therapyDistribution,meanTherapyDurations) =  
+      therapyDistributionAndMeanDurations(records)
 
-//  override def summary(filter: MTBFilters): Summary = {
-  override def summary(
-    filter: MTBPatientRecord => Boolean
-  ): Summary = {
-
-    results
-      .collect { case (snp,_) if filter(snp.data) => snp }
-      .pipe {
-        snps =>
-
-        val records =
-          snps.map(_.data)
-
-        val (therapyDistribution,meanTherapyDurations) =  
-          therapyDistributionAndMeanDurations(records)
-
-        Summary(
-          id,
-          records.size,
-          ResultSet.Demographics.on(records.map(_.patient)),
-          TumorDiagnostics(
-            overallDiagnosticDistributions(records),
-            diagnosticDistributionsByVariant(records)
-          ),
-          MTBResultSet.Medication(
-            MTBResultSet.Medication.Recommendations(
-              recommendationDistribution(records),
-              recommendationsBySupportingVariant(records)
-            ),
-            MTBResultSet.Medication.Therapies(
-              therapyDistribution,
-              meanTherapyDurations,
-              responsesByTherapy(records)  
-            )
-          )
+    Summary(
+      id,
+      records.size,
+      ResultSet.Demographics.on(records.map(_.patient)),
+      TumorDiagnostics(
+        overallDiagnosticDistributions(records),
+        diagnosticDistributionsByVariant(records)
+      ),
+      MTBResultSet.Medication(
+        MTBResultSet.Medication.Recommendations(
+          recommendationDistribution(records),
+          recommendationsBySupportingVariant(records)
+        ),
+        MTBResultSet.Medication.Therapies(
+          therapyDistribution,
+          meanTherapyDurations,
+          responsesByTherapy(records)  
         )
+      )
+    )
 
-    }
+  }
 
+
+  def tumorDiagnostics(
+    filter: MTBPatientRecord => Boolean = _ => true
+  ): MTBResultSet.TumorDiagnostics = {
+
+    val records = patientRecords(filter)
+
+    TumorDiagnostics(
+      overallDiagnosticDistributions(records),
+      diagnosticDistributionsByVariant(records)
+    )
   }
 
 
@@ -146,16 +132,75 @@ with MTBReportingOps
 
 
   import ATC.extensions._
+  import RECIST._
+ 
+  private val recistOrdering: Ordering[RECIST.Value] = {
+    val weights =
+      Map(
+        CR  -> 7,
+        PR  -> 6,
+        MR  -> 5,
+        SD  -> 4,
+        PD  -> 3,
+        NA  -> 2,
+        NYA -> 1
+      )
 
-  override def medicationStats(
-    filter: MTBPatientRecord => Boolean
-  ): Medication =  {
+    new Ordering[RECIST.Value]{
+      override def compare(
+        r1: RECIST.Value,
+        r2: RECIST.Value
+      ): Int =
+        weights(r1) compareTo weights(r2)
+    }
+  }
 
 
-    results
-      .collect { 
-        case (snp,_) if filter(snp.data) => snp.data 
+  val responseDistributionOrdering: Ordering[Distribution[Coding[RECIST.Value]]] =
+    new Ordering[Distribution[Coding[RECIST.Value]]]{
+
+      override def compare(
+        d1: Distribution[Coding[RECIST.Value]],
+        d2: Distribution[Coding[RECIST.Value]]
+      ): Int = {
+
+        val c1: Seq[(RECIST.Value,Int)] =
+          d1.elements
+            .collect { 
+              case Entry(RECIST(code),Count(n,_),_) => code -> n
+            }
+            .toSeq
+            .sortBy(_._1)(recistOrdering.reverse)
+
+        val c2: Seq[(RECIST.Value,Int)] =
+          d2.elements
+            .collect { 
+              case Entry(RECIST(code),Count(n,_),_) => code -> n
+            }
+            .toSeq
+            .sortBy(_._1)(recistOrdering.reverse)
+
+        c1.zip(c2)
+          .dropWhile {
+            case ((r1,n1),(r2,n2)) => r1 == r2 && n1 == n2 
+          }
+          .headOption
+          .map { 
+            case ((r1,n1),(r2,n2)) => 
+              if (r1 == r2) n1.compareTo(n2)
+              else recistOrdering.compare(r1,r2)
+          }
+          .getOrElse(0)
+        
       }
+    }
+    .reverse
+  
+
+  override def therapyResponses(
+    filter: MTBPatientRecord => Boolean
+  ): Seq[TherapyResponseDistribution] = 
+    patientRecords(filter)
       .foldLeft(
         Map.empty[
           Set[DisplayLabel[Coding[ATC]]],
@@ -236,7 +281,7 @@ with MTBReportingOps
       }
       .map { 
         case (medications,(classes,supportingVariants,responses)) =>
-          Medication.TherapyResponseDistribution(
+          TherapyResponseDistribution(
             classes,
             medications,
             supportingVariants,
@@ -244,7 +289,6 @@ with MTBReportingOps
           )
       }
       .toSeq
-      .pipe(Medication(_))
-  }      
+      .sortBy(_.responseDistribution)(responseDistributionOrdering)
 
 }
