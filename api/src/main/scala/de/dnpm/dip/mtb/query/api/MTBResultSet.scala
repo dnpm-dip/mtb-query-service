@@ -7,17 +7,10 @@ import cats.{
 }
 import de.dnpm.dip.util.DisplayLabel
 import de.dnpm.dip.coding.Coding
-import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.coding.icd.ICDO3
 import de.dnpm.dip.coding.hgvs.HGVS
-import de.dnpm.dip.model.{
-  Gender,
-  Interval,
-  Site,
-  Reference,
-  Duration
-}
+import de.dnpm.dip.model.Medications
 import de.dnpm.dip.service.query.{
   PatientFilter,
   Query,
@@ -44,11 +37,6 @@ with KaplanMeierOps[Id,Applicative[Id]]
 
   type SummaryType = MTBResultSet.Summary
 
-/*
-  def medicationStats(
-    filter: MTBPatientRecord => Boolean = _ => true
-  ): Medication
-*/
   def therapyResponses(
     filter: MTBPatientRecord => Boolean = _ => true
   ): Seq[TherapyResponseDistribution]
@@ -95,16 +83,15 @@ object MTBResultSet
 
     final case class Recommendations
     (
-      overallDistribution: Distribution[Set[String]],
-      distributionBySupportingVariant: Seq[Entry[DisplayLabel[Variant],Distribution[Set[String]]]]
+      overallDistribution: Distribution[Set[DisplayLabel[Coding[Medications]]]],
+      distributionBySupportingVariant: Seq[Entry[DisplayLabel[Variant],Distribution[Set[DisplayLabel[Coding[Medications]]]]]]
     )
 
     final case class Therapies
     (
-      overallDistribution: Distribution[Set[String]],
-      meanDurations: Seq[Entry[Set[String],Double]],
-      responseDistributionByTherapy: Seq[Entry[Set[String],Distribution[Coding[RECIST.Value]]]]
-//      responseDistributionByTherapy: Seq[Entry[DisplayLabel[Set[Coding[ATC]]],Distribution[Coding[RECIST.Value]]]]
+      overallDistribution: Distribution[Set[DisplayLabel[Coding[Medications]]]],
+      meanDurations: Seq[Entry[Set[DisplayLabel[Coding[Medications]]],Double]],
+      responseDistributionByTherapy: Seq[Entry[Set[DisplayLabel[Coding[Medications]]],Distribution[Coding[RECIST.Value]]]]
     )
 
 

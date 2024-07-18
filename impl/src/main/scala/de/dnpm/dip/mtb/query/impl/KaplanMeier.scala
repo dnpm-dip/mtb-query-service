@@ -36,6 +36,7 @@ import de.dnpm.dip.model.{
   Therapy,
   UnitOfTime
 }
+import de.dnpm.dip.model.Medications._
 import Therapy.StatusReason.Progression
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,

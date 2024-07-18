@@ -3,8 +3,8 @@ package de.dnpm.dip.mtb.query.api
 
 import de.dnpm.dip.util.DisplayLabel
 import de.dnpm.dip.coding.Coding
-import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.service.query.Distribution
+import de.dnpm.dip.model.Medications
 import de.dnpm.dip.mtb.model.{
   RECIST,
   Variant
@@ -18,8 +18,8 @@ import play.api.libs.json.{
 
 final case class TherapyResponseDistribution
 (
-  medicationClasses: Set[DisplayLabel[Coding[ATC]]],
-  medications: Set[DisplayLabel[Coding[ATC]]],
+  medicationClasses: Set[DisplayLabel[Coding[Medications]]],
+  medications: Set[DisplayLabel[Coding[Medications]]],
   supportingVariants: Set[DisplayLabel[Variant]],
   responseDistribution: Distribution[Coding[RECIST.Value]]
 )
@@ -30,31 +30,12 @@ object TherapyResponseDistribution
     Json.writes[TherapyResponseDistribution]
 }
 
-
 /*
-final case class Medication
+final case class TherapyResponseDistribution
 (
-  therapyResponses: Seq[Medication.TherapyResponseDistribution]  
+  medicationClasses: Set[DisplayLabel[Coding[ATC]]],
+  medications: Set[DisplayLabel[Coding[ATC]]],
+  supportingVariants: Set[DisplayLabel[Variant]],
+  responseDistribution: Distribution[Coding[RECIST.Value]]
 )
-
-
-object Medication
-{
-
-  final case class TherapyResponseDistribution
-  (
-    medicationClasses: Set[DisplayLabel[Coding[ATC]]],
-    medications: Set[DisplayLabel[Coding[ATC]]],
-    supportingVariants: Set[DisplayLabel[Variant]],
-    responseDistribution: Distribution[Coding[RECIST.Value]]
-  )
-
-
-  implicit val writesTherapyResponseDistribution: OWrites[TherapyResponseDistribution] =
-    Json.writes[TherapyResponseDistribution]
-
-  implicit val writes: OWrites[Medication] =
-    Json.writes[Medication]
-
-}
 */

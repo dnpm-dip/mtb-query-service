@@ -20,7 +20,10 @@ import de.dnpm.dip.coding.icd.{
   ICD10GM,
   ICDO3
 }
-import de.dnpm.dip.model.Snapshot
+import de.dnpm.dip.model.{
+  Medications,
+  Snapshot
+}
 import de.dnpm.dip.service.query.{
   Count,
   Distribution,
@@ -131,7 +134,7 @@ with MTBReportingOps
 
 
 
-  import ATC.extensions._
+  import Medications._
   import RECIST._
  
   private val recistOrdering: Ordering[RECIST.Value] = {
@@ -159,38 +162,39 @@ with MTBReportingOps
   val responseDistributionOrdering: Ordering[Distribution[Coding[RECIST.Value]]] =
     new Ordering[Distribution[Coding[RECIST.Value]]]{
 
+      // Project the RECIST codes with their counts 
+      // and order by decreasing order of Response "goodness",
+      // i.e. from CR to PD
+      private def codeCounts(
+        d: Distribution[Coding[RECIST.Value]]
+      ): Seq[(RECIST.Value,Int)] =
+        d.elements
+         .collect { 
+           case Entry(RECIST(code),Count(n,_),_) => code -> n
+         }
+         .toSeq
+         .sortBy(_._1)(recistOrdering.reverse)
+
+
       override def compare(
         d1: Distribution[Coding[RECIST.Value]],
         d2: Distribution[Coding[RECIST.Value]]
       ): Int = {
-
-        val c1: Seq[(RECIST.Value,Int)] =
-          d1.elements
-            .collect { 
-              case Entry(RECIST(code),Count(n,_),_) => code -> n
-            }
-            .toSeq
-            .sortBy(_._1)(recistOrdering.reverse)
-
-        val c2: Seq[(RECIST.Value,Int)] =
-          d2.elements
-            .collect { 
-              case Entry(RECIST(code),Count(n,_),_) => code -> n
-            }
-            .toSeq
-            .sortBy(_._1)(recistOrdering.reverse)
-
-        c1.zip(c2)
+        // Zip both ordered codeCounts and
+        // skip entries with equal code and count
+        codeCounts(d1)
+          .zip(codeCounts(d2))
           .dropWhile {
             case ((r1,n1),(r2,n2)) => r1 == r2 && n1 == n2 
           }
           .headOption
+          // Then compare by count in case of equal code, else by code 
           .map { 
             case ((r1,n1),(r2,n2)) => 
-              if (r1 == r2) n1.compareTo(n2)
+              if (r1 == r2) n1 compareTo n2
               else recistOrdering.compare(r1,r2)
           }
-          .getOrElse(0)
+          .getOrElse(0)  // Else the distributions are equal
         
       }
     }
@@ -203,9 +207,9 @@ with MTBReportingOps
     patientRecords(filter)
       .foldLeft(
         Map.empty[
-          Set[DisplayLabel[Coding[ATC]]],
+          Set[DisplayLabel[Coding[Medications]]],
           (
-           Set[DisplayLabel[Coding[ATC]]],
+           Set[DisplayLabel[Coding[Medications]]],
            Set[DisplayLabel[Variant]],
            List[Coding[RECIST.Value]]
           )

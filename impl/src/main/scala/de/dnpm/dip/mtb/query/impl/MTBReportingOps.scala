@@ -21,8 +21,10 @@ import de.dnpm.dip.coding.icd.{
 import ClassKinds._
 import de.dnpm.dip.model.{
   Duration,
+  Medications,
   Therapy
 }
+import de.dnpm.dip.model.Medications._
 import de.dnpm.dip.model.UnitOfTime.Weeks
 import de.dnpm.dip.service.query.{
   Count,
@@ -51,7 +53,7 @@ trait MTBReportingOps extends ReportingOps
     records: Seq[MTBPatientRecord]
   )(
     implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
-  ): (Distribution[Set[String]],Seq[Entry[Set[String],Double]]) = {
+  ): (Distribution[Set[DisplayLabel[Coding[Medications]]]],Seq[Entry[Set[DisplayLabel[Coding[Medications]]],Double]]) = {
 
     val therapies =
       records
@@ -64,12 +66,12 @@ trait MTBReportingOps extends ReportingOps
         therapies.flatMap(_.medication)
       )(
         _.map(coding => coding.currentGroup.getOrElse(coding)),
-        _.flatMap(_.display)
+        _.map(DisplayLabel.of(_))
       )
 
     val meanDurations =
       therapies
-        .groupBy(_.medication.get.flatMap(_.display))
+        .groupBy(_.medication.get.map(DisplayLabel.of(_)))
         .map {
           case (meds,ths) =>
             Entry(
@@ -179,14 +181,14 @@ trait MTBReportingOps extends ReportingOps
   )(
     implicit
     atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
-  ): Distribution[Set[String]] =
+  ): Distribution[Set[DisplayLabel[Coding[Medications]]]] =
     Distribution.byParentAndBy(
       records
         .flatMap(_.getCarePlans.flatMap(_.medicationRecommendations.getOrElse(List.empty)))
         .map(_.medication)
     )(
       _.map(coding => coding.currentGroup.getOrElse(coding)),
-      _.flatMap(_.display)
+      _.map(DisplayLabel.of(_))
     )
 
 
@@ -196,9 +198,9 @@ trait MTBReportingOps extends ReportingOps
   )(
     implicit
     atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
-  ): Seq[Entry[DisplayLabel[Variant],Distribution[Set[String]]]] =
+  ): Seq[Entry[DisplayLabel[Variant],Distribution[Set[DisplayLabel[Coding[Medications]]]]]] =
     records.foldLeft(
-      Map.empty[DisplayLabel[Variant],Seq[Set[Coding[ATC]]]]
+      Map.empty[DisplayLabel[Variant],Seq[Set[Coding[Medications]]]]
     ){
       (acc,record) =>
 
@@ -239,7 +241,7 @@ trait MTBReportingOps extends ReportingOps
             meds
           )(
             _.map(coding => coding.currentGroup.getOrElse(coding)),
-            _.flatMap(_.display)
+            _.map(DisplayLabel.of(_))
           )
         )
     }
@@ -250,9 +252,9 @@ trait MTBReportingOps extends ReportingOps
 
   def responsesByTherapy(
     records: Seq[MTBPatientRecord]
-  ): Seq[Entry[Set[String],Distribution[Coding[RECIST.Value]]]] =
+  ): Seq[Entry[Set[DisplayLabel[Coding[Medications]]],Distribution[Coding[RECIST.Value]]]] =
     records.foldLeft(
-      Map.empty[Set[String],Seq[Coding[RECIST.Value]]]
+      Map.empty[Set[DisplayLabel[Coding[Medications]]],Seq[Coding[RECIST.Value]]]
     ){
       (acc,record) =>
 
@@ -275,7 +277,7 @@ trait MTBReportingOps extends ReportingOps
                 .flatMap(
                   _.medication
                    .map(
-                     _.flatMap(_.display) -> response.value 
+                     _.map(DisplayLabel.of(_)) -> response.value 
                    )
                 )              
           }

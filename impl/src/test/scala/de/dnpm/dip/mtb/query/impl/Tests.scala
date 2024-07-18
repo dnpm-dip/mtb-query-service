@@ -124,7 +124,10 @@ class Tests extends AsyncFlatSpec
             case th if th.medication.isDefined =>
               MedicationCriteria(
                 Some(LogicalOperator.And),
-                th.medication.get.map(Tree(_)),
+                th.medication
+                  .get
+                  .map(_.asInstanceOf[Coding[ATC]])
+                  .map(Tree(_)),
                 Some(Set(Coding(MedicationUsage.Used)))
              )
           }
