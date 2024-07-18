@@ -37,14 +37,18 @@ with KaplanMeierOps[Id,Applicative[Id]]
 
   type SummaryType = MTBResultSet.Summary
 
-  def therapyResponses(
-    filter: MTBPatientRecord => Boolean = _ => true
-  ): Seq[TherapyResponseDistribution]
-
 
   def tumorDiagnostics(
     filter: MTBPatientRecord => Boolean = _ => true
   ): MTBResultSet.TumorDiagnostics
+
+  def medication(
+    filter: MTBPatientRecord => Boolean = _ => true
+  ): MTBResultSet.Medication
+
+  def therapyResponses(
+    filter: MTBPatientRecord => Boolean = _ => true
+  ): Seq[TherapyResponseDistribution]
 
 }
 
@@ -122,9 +126,6 @@ object MTBResultSet
 
   implicit val writesTumorDiagnostics: OWrites[TumorDiagnostics] =
     Json.writes[TumorDiagnostics]
-
-  implicit val writesMedication: OWrites[Medication] =
-    Json.writes[Medication]
 
   implicit val writes: OWrites[Summary] =
     Json.writes[Summary]

@@ -105,15 +105,40 @@ with MTBReportingOps
   }
 
 
-  def tumorDiagnostics(
+  override def tumorDiagnostics(
     filter: MTBPatientRecord => Boolean = _ => true
   ): MTBResultSet.TumorDiagnostics = {
 
-    val records = patientRecords(filter)
+    val records =
+      patientRecords(filter)
 
     TumorDiagnostics(
       overallDiagnosticDistributions(records),
       diagnosticDistributionsByVariant(records)
+    )
+  }
+
+
+  override def medication(
+    filter: MTBPatientRecord => Boolean = _ => true
+  ): MTBResultSet.Medication = {
+
+    val records =
+      patientRecords(filter)
+
+    val (therapyDistribution,meanTherapyDurations) =  
+      therapyDistributionAndMeanDurations(records)
+
+    MTBResultSet.Medication(
+      MTBResultSet.Medication.Recommendations(
+        recommendationDistribution(records),
+        recommendationsBySupportingVariant(records)
+      ),
+      MTBResultSet.Medication.Therapies(
+        therapyDistribution,
+        meanTherapyDurations,
+        responsesByTherapy(records)  
+      )
     )
   }
 
