@@ -259,7 +259,7 @@ class KaplanMeierTests extends AnyFlatSpec
 
     val records =
       LazyList.fill(200)(Gen.of[MTBPatientRecord].next)
-        .map(Snapshot(_))
+        .map(Snapshot.of(_))
 
     implicit val estimator: KaplanMeierEstimator[cats.Id] =
       DefaultKaplanMeierEstimator

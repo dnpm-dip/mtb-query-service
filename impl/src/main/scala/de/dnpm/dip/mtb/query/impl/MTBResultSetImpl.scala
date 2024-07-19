@@ -53,9 +53,7 @@ import de.dnpm.dip.mtb.query.api.{
 class MTBResultSetImpl
 (
   val id: Query.Id,
-  val criteria: MTBQueryCriteria,
-  val results: Seq[(Snapshot[MTBPatientRecord],Option[MTBQueryCriteria])],
-//  val results: Seq[(Snapshot[MTBPatientRecord],MTBQueryCriteria)],
+  val results: Seq[Query.Match[MTBPatientRecord,MTBQueryCriteria]],
 )(
   implicit
   atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
@@ -155,7 +153,7 @@ with MTBReportingOps
     kmModule.survivalStatistics(
       survivalType,
       grouping,
-      results.map(_._1)
+      results.map(_.record)
     )
 
 

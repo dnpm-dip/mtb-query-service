@@ -179,17 +179,8 @@ with Completers
     new DefaultKaplanMeierModule
 
 
-  import MTBQueryCriteriaOps._
-
-  override val ResultSetFrom =
-    (id,criteria,results) =>
-      new MTBResultSetImpl(
-        id,
-        criteria,
-        results.map { 
-          case (snp,criteria) => snp -> Some(criteria).filterNot(_.isEmpty)
-        }
-      )
+  override val ResultSetFrom =    
+    new MTBResultSetImpl(_,_)
 
 
   override val survivalConfig: KaplanMeier.Config =
