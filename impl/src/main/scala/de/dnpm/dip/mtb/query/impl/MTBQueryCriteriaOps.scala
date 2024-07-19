@@ -49,7 +49,6 @@ private trait MTBQueryCriteriaOps
 
     def nonEmpty = !criteria.isEmpty
 
-
     def intersect(other: MTBQueryCriteria): MTBQueryCriteria =
       MTBQueryCriteria(
         criteria.diagnoses.map(_ intersect other.getDiagnoses),
@@ -434,5 +433,5 @@ private trait MTBQueryCriteriaOps
 
 }
 
-private object MTBQueryCriteriaOps extends MTBQueryCriteriaOps
+private[impl] object MTBQueryCriteriaOps extends MTBQueryCriteriaOps
 

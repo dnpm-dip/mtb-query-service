@@ -225,11 +225,14 @@ class Tests extends AsyncFlatSpec
 
       _ = patientMatches.size must be < (dataSets.size) 
 
-    } yield forAll(
+      matchingCriteria =
         patientMatches.map(_.matchingCriteria)
-      ){ 
+
+      _ = all (matchingCriteria) must be (defined)
+
+    } yield forAll(matchingCriteria){ 
         matches =>
-          assert( (query.criteria intersect matches).nonEmpty )
+          assert( (query.criteria intersect matches.get).nonEmpty )
       }
 
   }

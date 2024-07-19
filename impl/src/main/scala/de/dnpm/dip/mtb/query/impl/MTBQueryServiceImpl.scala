@@ -149,25 +149,6 @@ with Completers
     )
   }
 
-/*
-  import scala.language.implicitConversions
-
-  override implicit def toPredicate(filter: MTBFilters): MTBPatientRecord => Boolean = {
-    record =>
-
-      implicit def diagnosisFilterPredicate(f: DiagnosisFilter): MTBDiagnosis => Boolean =
-        diag =>
-          f.code match {
-            case Some(icd10s) if icd10s.nonEmpty => icd10s.exists(_.code == diag.code.code)
-            case _                               => true
-          }
-
-
-      filter.patientFilter(record.patient) &&
-      record.getDiagnoses.exists(filter.diagnosisFilter)
-
-  }
-*/
     
   override implicit val hgnc: CodeSystemProvider[HGNC,Id,Applicative[Id]] =
     HGNC.GeneSet
@@ -198,12 +179,16 @@ with Completers
     new DefaultKaplanMeierModule
 
 
+  import MTBQueryCriteriaOps._
+
   override val ResultSetFrom =
     (id,criteria,results) =>
       new MTBResultSetImpl(
         id,
         criteria,
-        results
+        results.map { 
+          case (snp,criteria) => snp -> Some(criteria).filterNot(_.isEmpty)
+        }
       )
 
 

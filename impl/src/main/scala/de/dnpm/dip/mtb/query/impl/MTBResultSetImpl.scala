@@ -54,7 +54,8 @@ class MTBResultSetImpl
 (
   val id: Query.Id,
   val criteria: MTBQueryCriteria,
-  val results: Seq[(Snapshot[MTBPatientRecord],MTBQueryCriteria)],
+  val results: Seq[(Snapshot[MTBPatientRecord],Option[MTBQueryCriteria])],
+//  val results: Seq[(Snapshot[MTBPatientRecord],MTBQueryCriteria)],
 )(
   implicit
   atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
