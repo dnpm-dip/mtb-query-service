@@ -162,15 +162,15 @@ with MTBReportingOps
   import RECIST._
  
   private val recistOrdering: Ordering[RECIST.Value] = {
-    val weights =
+    val ordinals =
       Map(
         CR  -> 7,
         PR  -> 6,
         MR  -> 5,
         SD  -> 4,
         PD  -> 3,
-        NA  -> 2,
-        NYA -> 1
+        NYA -> 2,
+        NA  -> 1
       )
 
     new Ordering[RECIST.Value]{
@@ -178,7 +178,7 @@ with MTBReportingOps
         r1: RECIST.Value,
         r2: RECIST.Value
       ): Int =
-        weights(r1) compareTo weights(r2)
+        ordinals(r1) compareTo ordinals(r2)
     }
   }
 
@@ -206,8 +206,7 @@ with MTBReportingOps
       ): Int = {
         // Zip both ordered codeCounts and
         // skip entries with equal code and count
-        codeCounts(d1)
-          .zip(codeCounts(d2))
+        (codeCounts(d1) zip codeCounts(d2))
           .dropWhile {
             case ((r1,n1),(r2,n2)) => r1 == r2 && n1 == n2 
           }
@@ -314,6 +313,16 @@ with MTBReportingOps
             medications,
             supportingVariants,
             Distribution.of(responses)
+              .pipe(
+                dist => dist.copy(
+                  elements =
+                    dist.elements.sortBy {
+                      entry =>
+                        val RECIST(r) = entry.key
+                        r
+                    }(recistOrdering.reverse)
+                )
+              )
           )
       }
       .toSeq
