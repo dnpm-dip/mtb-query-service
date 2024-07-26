@@ -26,6 +26,7 @@ import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.model.{
   BaseCompleters,
+  Medications,
   Patient,
   Site,
   Reference,
@@ -155,8 +156,6 @@ trait Completers extends BaseCompleters
     implicit val icd10Expander: Completer[Set[Coding[ICD10GM]]] =
       descendantExpander[ICD10GM]
 
-//    implicit val atcExpander: Completer[Set[Coding[ATC]]] =
-//      descendantExpander[ATC]
 
     implicit val icdO3MExpander: Completer[Set[Coding[ICDO3.M]]] =
       Completer.of(
@@ -181,8 +180,18 @@ trait Completers extends BaseCompleters
         medication =
           criteria.medication.map(
             med => med.copy(
-              drugs = med.drugs.flatMap(_.element.expand)
-//              drugs = med.drugs.complete
+              drugs = med.drugs.flatMap {
+                t => t.element.system match {
+                  case sys if sys == Coding.System[ATC].uri =>
+                    t.element
+                     .asInstanceOf[Coding[ATC]]
+                     .expand
+                     .map(_.asInstanceOf[Tree[Coding[Medications]]])
+
+                  case _ => Some(Tree(t.element.complete))
+                }
+              }
+//              drugs = med.drugs.flatMap(_.element.expand)
             )
           )
       )

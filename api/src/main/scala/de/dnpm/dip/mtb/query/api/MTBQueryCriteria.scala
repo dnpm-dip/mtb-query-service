@@ -1,9 +1,11 @@
 package de.dnpm.dip.mtb.query.api
 
 
+import java.net.URI
 import cats.Applicative
 import de.dnpm.dip.util.Tree
 import de.dnpm.dip.coding.{
+  Code,
   Coding,
   CodedEnum,
   CodeSystemProvider,
@@ -15,6 +17,8 @@ import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.coding.icd.ICDO3
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
+import de.dnpm.dip.coding.UnregisteredMedication
+import de.dnpm.dip.model.Medications
 import de.dnpm.dip.service.query.{
   PatientFilter,
   Query,
@@ -25,6 +29,7 @@ import de.dnpm.dip.mtb.model.{
 }
 import play.api.libs.json.{
   Json,
+  JsPath,
   Format,
   Reads,
   Writes,
@@ -99,10 +104,45 @@ with DefaultCodeSystem
 final case class MedicationCriteria
 (
   operator: Option[LogicalOperator.Value],
-  drugs: Set[Tree[Coding[ATC]]],
-//  drugs: Set[Coding[ATC]],
+  drugs: Set[Tree[Coding[Medications]]],
+//  drugs: Set[Tree[Coding[ATC]]],
   usage: Option[Set[Coding[MedicationUsage.Value]]]
 )
+
+object MedicationCriteria
+{
+  import play.api.libs.functional.syntax._
+  import scala.util.matching.Regex
+
+  val atc = "(?i)atc".r.unanchored
+
+  // Custom JSON Reads for Coding[Medications] to handle the "system" attribute as optional:
+  // If specified as ATC, handle accordingly, else handle as "unregistered medication Coding"
+  implicit val readsMedicationCoding: Reads[Coding[Medications]] =
+    (
+      (JsPath \ "code").read[Code[Medications]] and
+      (JsPath \ "display").readNullable[String] and
+      (JsPath \ "system").readNullable[URI]     and
+      (JsPath \ "version").readNullable[String]
+    )(
+      (code,display,system,version) =>
+
+        Coding[Medications](
+          code,
+          display,
+          system match {
+            case Some(uri) if atc matches uri.toString => Coding.System[ATC].uri
+            case _ => Coding.System[UnregisteredMedication].uri
+          },
+          version
+        )
+    )
+
+
+  implicit val formatMedicationCriteria: OFormat[MedicationCriteria] =
+    Json.format[MedicationCriteria]
+
+}
 
 
 final case class MTBQueryCriteria
@@ -140,8 +180,8 @@ object MTBQueryCriteria
   implicit val formatFusionCriteria: OFormat[FusionCriteria] =
     Json.format[FusionCriteria]
 
-  implicit val formatMedicationCriteria: OFormat[MedicationCriteria] =
-    Json.format[MedicationCriteria]
+//  implicit val formatMedicationCriteria: OFormat[MedicationCriteria] =
+//    Json.format[MedicationCriteria]
 
   implicit val format: OFormat[MTBQueryCriteria] =
     Json.format[MTBQueryCriteria]

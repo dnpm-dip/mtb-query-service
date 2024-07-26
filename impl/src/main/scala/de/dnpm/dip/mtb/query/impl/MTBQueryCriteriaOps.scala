@@ -285,9 +285,10 @@ private trait MTBQueryCriteriaOps
 
 
     criteria match {
-      case Some(MedicationCriteria(op,qDs,usage)) if qDs.nonEmpty => 
+      case Some(MedicationCriteria(op,queriedDrugs,usage)) if queriedDrugs.nonEmpty => 
+//      case Some(MedicationCriteria(op,qDs,usage)) if qDs.nonEmpty => 
 
-        val queriedDrugs = qDs.asInstanceOf[Set[Tree[Coding[Medications]]]]
+//        val queriedDrugs = qDs.asInstanceOf[Set[Tree[Coding[Medications]]]]
 
         lazy val recommendedDrugNames =
           recommendedDrugs.map(_.flatMap(_.display.map(_.toLowerCase)))
@@ -318,7 +319,8 @@ private trait MTBQueryCriteriaOps
           }
           .pipe {
             case matches if matches.nonEmpty =>
-              Some(MedicationCriteria(op,matches.asInstanceOf[Set[Tree[Coding[ATC]]]],usage)) -> true
+              Some(MedicationCriteria(op,matches,usage)) -> true
+//              Some(MedicationCriteria(op,matches.asInstanceOf[Set[Tree[Coding[ATC]]]],usage)) -> true
             case _ =>
               None  -> false
           }
