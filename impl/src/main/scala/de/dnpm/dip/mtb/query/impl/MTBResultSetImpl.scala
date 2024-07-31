@@ -45,8 +45,7 @@ import de.dnpm.dip.mtb.query.api.{
   MTBFilters,
   DiagnosisFilter,
   MTBResultSet,
-  KaplanMeier,
-  TherapyResponseDistribution
+  KaplanMeier
 }
 
 
@@ -67,46 +66,12 @@ with MTBReportingOps
 {
 
   import scala.util.chaining._
-  import MTBResultSet.{
-    Summary,
-    TumorDiagnostics,
-  }
-
-  override def summary(filter: MTBPatientRecord => Boolean): Summary = {
-
-    val records =
-      patientRecords(filter)
-
-    val (therapyDistribution,meanTherapyDurations) =  
-      therapyDistributionAndMeanDurations(records)
-
-    Summary(
-      id,
-      records.size,
-      ResultSet.Demographics.on(records.map(_.patient)),
-      TumorDiagnostics(
-        overallDiagnosticDistributions(records),
-        diagnosticDistributionsByVariant(records)
-      ),
-      MTBResultSet.Medication(
-        MTBResultSet.Medication.Recommendations(
-          recommendationDistribution(records),
-          recommendationsBySupportingVariant(records)
-        ),
-        MTBResultSet.Medication.Therapies(
-          therapyDistribution,
-          meanTherapyDurations,
-          responsesByTherapy(records)  
-        )
-      )
-    )
-
-  }
+  import MTBResultSet._
 
 
   override def tumorDiagnostics(
     filter: MTBPatientRecord => Boolean = _ => true
-  ): MTBResultSet.TumorDiagnostics = {
+  ): TumorDiagnostics = {
 
     val records =
       patientRecords(filter)

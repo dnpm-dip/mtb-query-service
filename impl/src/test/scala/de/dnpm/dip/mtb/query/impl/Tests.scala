@@ -175,25 +175,13 @@ class Tests extends AsyncFlatSpec
           queryMode,
           None,
           None
-//          MTBQueryCriteria(None,None,None,None,None,None,None,None)
         )
 
       query = result.value
 
-      resultSet <-
-        service.resultSet(query.id).map(_.value)
+      resultSet <- service.resultSet(query.id).map(_.value)
 
-      summary = resultSet.summary(MTBFilters.empty)
-
-      _ = summary.patientCount must equal (dataSets.size) 
-
-      _ = summary.diagnostics.overallDistributions.tumorEntities.elements must not be empty
-
-      _ = summary.medication.recommendations.distributionBySupportingVariant must not be empty
-
-      _ = summary.medication.therapies.responseDistributionByTherapy must not be empty
-
-    } yield succeed
+    } yield resultSet.demographics().patientCount must equal (dataSets.size)  
 
   }
 
@@ -235,9 +223,9 @@ class Tests extends AsyncFlatSpec
       _ = all (matchingCriteria) must be (defined)
 
     } yield forAll(matchingCriteria){ 
-        matches =>
-          assert( (queryCriteria intersect matches.value).nonEmpty )
-      }
+      matches =>
+        assert( (queryCriteria intersect matches.value).nonEmpty )
+    }
 
   }
 

@@ -33,10 +33,6 @@ trait MTBResultSet
 extends ResultSet[MTBPatientRecord,MTBQueryCriteria]
 with KaplanMeierOps[Id,Applicative[Id]]
 {
-  type Filter = MTBFilters
-
-  type SummaryType = MTBResultSet.Summary
-
 
   def tumorDiagnostics(
     filter: MTBPatientRecord => Boolean = _ => true
@@ -48,7 +44,7 @@ with KaplanMeierOps[Id,Applicative[Id]]
 
   def therapyResponses(
     filter: MTBPatientRecord => Boolean = _ => true
-  ): Seq[TherapyResponseDistribution]
+  ): Seq[MTBResultSet.TherapyResponseDistribution]
 
 }
 
@@ -109,25 +105,24 @@ object MTBResultSet
       Json.writes[Medication]
 
   }
- 
 
 
-  final case class Summary
+  final case class TherapyResponseDistribution
   (
-    id: Query.Id,
-    patientCount: Int,
-    demographics: ResultSet.Demographics,
-    diagnostics: TumorDiagnostics,
-    medication: Medication
+    medicationClasses: Set[DisplayLabel[Coding[Medications]]],
+    medications: Set[DisplayLabel[Coding[Medications]]],
+    supportingVariants: Set[DisplayLabel[Variant]],
+    responseDistribution: Distribution[Coding[RECIST.Value]]
   )
-  extends ResultSet.Summary
 
+  object TherapyResponseDistribution
+  {
+    implicit val writes: OWrites[TherapyResponseDistribution] =
+      Json.writes[TherapyResponseDistribution]
+  }
 
 
   implicit val writesTumorDiagnostics: OWrites[TumorDiagnostics] =
     Json.writes[TumorDiagnostics]
-
-  implicit val writes: OWrites[Summary] =
-    Json.writes[Summary]
 
 }

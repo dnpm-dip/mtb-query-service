@@ -105,7 +105,6 @@ final case class MedicationCriteria
 (
   operator: Option[LogicalOperator.Value],
   drugs: Set[Tree[Coding[Medications]]],
-//  drugs: Set[Tree[Coding[ATC]]],
   usage: Option[Set[Coding[MedicationUsage.Value]]]
 )
 
@@ -126,7 +125,6 @@ object MedicationCriteria
       (JsPath \ "version").readNullable[String]
     )(
       (code,display,system,version) =>
-
         Coding[Medications](
           code,
           display,
@@ -179,9 +177,6 @@ object MTBQueryCriteria
 
   implicit val formatFusionCriteria: OFormat[FusionCriteria] =
     Json.format[FusionCriteria]
-
-//  implicit val formatMedicationCriteria: OFormat[MedicationCriteria] =
-//    Json.format[MedicationCriteria]
 
   implicit val format: OFormat[MTBQueryCriteria] =
     Json.format[MTBQueryCriteria]
