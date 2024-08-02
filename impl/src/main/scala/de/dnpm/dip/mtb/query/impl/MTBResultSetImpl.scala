@@ -182,7 +182,11 @@ with MTBReportingOps
               if (r1 == r2) n1 compareTo n2
               else recistOrdering.compare(r1,r2)
           }
-          .getOrElse(0)  // Else the distributions are equal
+          // Else the zip of both distributions (determined by the shorter of both) is equal,
+          // then compare their total size (more entries -> larger)
+          .getOrElse(
+            d1.elements.size compareTo d2.elements.size
+          )
         
       }
     }
