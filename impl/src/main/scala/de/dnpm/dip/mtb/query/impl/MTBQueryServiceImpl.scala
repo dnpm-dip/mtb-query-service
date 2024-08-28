@@ -24,7 +24,6 @@ import de.dnpm.dip.model.{
   Patient
 }
 import de.dnpm.dip.service.Connector
-import de.dnpm.dip.service.Data.Save
 import de.dnpm.dip.connector.{
   FakeConnector,
   HttpConnector

@@ -48,7 +48,7 @@ object LogicalOperator extends Enumeration
     Json.formatEnum(this)
 }
 
-sealed trait VariantCriteria
+sealed trait Supportable
 {
   val supporting: Option[Boolean]
 }
@@ -60,7 +60,7 @@ final case class SNVCriteria
   proteinChange: Option[Coding[HGVS.Protein]],
   supporting: Option[Boolean] = None
 )
-extends VariantCriteria
+extends Supportable
 
 final case class CNVCriteria
 (
@@ -68,7 +68,7 @@ final case class CNVCriteria
   `type`: Option[Coding[CNV.Type.Value]],
   supporting: Option[Boolean] = None
 )
-extends VariantCriteria
+extends Supportable
 
 final case class FusionCriteria
 (
@@ -76,8 +76,16 @@ final case class FusionCriteria
   fusionPartner3pr: Option[Coding[HGNC]],
   supporting: Option[Boolean] = None
 )
-extends VariantCriteria
+extends Supportable
 
+final case class VariantCriteria
+(
+  operator: Option[LogicalOperator.Value],
+  simpleVariants: Option[Set[SNVCriteria]],
+  copyNumberVariants: Option[Set[CNVCriteria]],
+  dnaFusions: Option[Set[FusionCriteria]],
+  rnaFusions: Option[Set[FusionCriteria]],
+) 
 
 object MedicationUsage
 extends CodedEnum("dnpm-dip/mtb/query/medication-usage")
@@ -147,23 +155,10 @@ final case class MTBQueryCriteria
 (
   diagnoses: Option[Set[Coding[ICD10GM]]],
   tumorMorphologies: Option[Set[Coding[ICDO3.M]]],
-  simpleVariants: Option[Set[SNVCriteria]],
-  copyNumberVariants: Option[Set[CNVCriteria]],
-  dnaFusions: Option[Set[FusionCriteria]],
-  rnaFusions: Option[Set[FusionCriteria]],
+  variants: Option[VariantCriteria],
   medication: Option[MedicationCriteria],
   responses: Option[Set[Coding[RECIST.Value]]]
 )
-{
-  def getDiagnoses          = diagnoses.getOrElse(Set.empty)
-  def getTumorMorphologies  = tumorMorphologies.getOrElse(Set.empty) 
-  def getSimpleVariants     = simpleVariants.getOrElse(Set.empty)    
-  def getCopyNumberVariants = copyNumberVariants.getOrElse(Set.empty)
-  def getDnaFusions         = dnaFusions.getOrElse(Set.empty) 
-  def getRnaFusions         = rnaFusions.getOrElse(Set.empty)        
-  def getResponses          = responses.getOrElse(Set.empty)        
-  def getDrugs              = medication.map(_.drugs).getOrElse(Set.empty)
-}
 
 
 object MTBQueryCriteria
@@ -177,6 +172,9 @@ object MTBQueryCriteria
 
   implicit val formatFusionCriteria: OFormat[FusionCriteria] =
     Json.format[FusionCriteria]
+
+  implicit val formatVariantCriteria: OFormat[VariantCriteria] =
+    Json.format[VariantCriteria]
 
   implicit val format: OFormat[MTBQueryCriteria] =
     Json.format[MTBQueryCriteria]

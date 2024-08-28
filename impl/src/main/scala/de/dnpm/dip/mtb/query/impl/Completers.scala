@@ -56,7 +56,6 @@ trait Completers extends BaseCompleters
     Completer.of(
       t => t.copy(
         element = t.element.complete
-//        children = t.children.map(_.complete)
       )
     )
 
@@ -78,15 +77,6 @@ trait Completers extends BaseCompleters
           .getOrElse(coding)
     }
 
-/*
-  implicit val medicationCriteriaCompleter: Completer[MedicationCriteria] =
-    Completer.of(
-      med => med.copy(
-        drugs = med.drugs.complete,
-        usage = med.usage.complete
-      )
-    )
-*/
   implicit protected val criteriaCompleter: Completer[MTBQueryCriteria] = {
 
     implicit val snvCriteriaCompleter: Completer[SNVCriteria] = {
@@ -138,10 +128,14 @@ trait Completers extends BaseCompleters
       criteria => criteria.copy(
         diagnoses         = criteria.diagnoses.complete,
         tumorMorphologies = criteria.tumorMorphologies.complete,
-        simpleVariants     = criteria.simpleVariants.complete,
-        copyNumberVariants = criteria.copyNumberVariants.complete,
-        dnaFusions         = criteria.dnaFusions.complete,
-        rnaFusions         = criteria.rnaFusions.complete,
+        variants           = criteria.variants.map(
+          vs => vs.copy(
+            simpleVariants     = vs.simpleVariants.complete,
+            copyNumberVariants = vs.copyNumberVariants.complete,
+            dnaFusions         = vs.dnaFusions.complete,
+            rnaFusions         = vs.rnaFusions.complete,
+          )
+        ),
         medication         = criteria.medication.complete,
         responses          = criteria.responses.complete,
       )

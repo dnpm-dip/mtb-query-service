@@ -252,7 +252,7 @@ with MTBReportingOps
                     .maxByOption(_.effectiveDate)
                     .map(_.value)
 
-                acc.updatedWith(
+                acc2.updatedWith(
                   medication.map(DisplayLabel.of(_))
                 ){ 
                   case Some((classes,suppVars,responses)) => 
@@ -289,7 +289,9 @@ with MTBReportingOps
                       entry =>
                         val RECIST(r) = entry.key
                         r
-                    }(recistOrdering.reverse)
+                    }(
+                      recistOrdering.reverse
+                    )
                 )
               )
           )

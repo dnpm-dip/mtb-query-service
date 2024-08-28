@@ -21,7 +21,6 @@ import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.mtb.query.api._
 import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.mtb.model.Completers._
-import de.dnpm.dip.service.Data.Save
 import de.dnpm.dip.service.query.{
   BaseQueryCache,
   Query,
@@ -30,6 +29,7 @@ import de.dnpm.dip.service.query.{
   PreparedQueryDB,
   InMemPreparedQueryDB
 }
+import de.dnpm.dip.service.query.QueryService.Save
 import de.dnpm.dip.connector.{
   HttpConnector,
   FakeConnector
@@ -135,10 +135,15 @@ class Tests extends AsyncFlatSpec
     } yield MTBQueryCriteria(
       Some(Set(icd10)),
       None,
-      Some(Set(snvCriteria)),
-      Some(Set(cnvCriteria)),
-      None,
-      None,
+      Some(
+        VariantCriteria(
+          None,
+          Some(Set(snvCriteria)),
+          Some(Set(cnvCriteria)),
+          None,
+          None
+        )
+      ),
       medicationCriteria,
       None,
     )
