@@ -116,6 +116,7 @@ with Completers
 {
 
 
+/*
   import scala.language.implicitConversions
 
   override implicit def filterToPredicate(filter: MTBFilters): MTBPatientRecord => Boolean = {
@@ -131,7 +132,7 @@ with Completers
       filter.patientFilter(record.patient) &&
       record.getDiagnoses.exists(filter.diagnosisFilter)
   }
-
+*/
 
   override def DefaultFilter(
     results: Seq[Snapshot[MTBPatientRecord]]

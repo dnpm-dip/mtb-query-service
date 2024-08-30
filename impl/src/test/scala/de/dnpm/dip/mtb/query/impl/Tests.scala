@@ -86,24 +86,25 @@ class Tests extends AsyncFlatSpec
         patRec
           .getNgsReports.head
 
-      snv =
+      snvCriteria =
         ngs.results
           .simpleVariants
-          .head
-
-      snvCriteria =
-        SNVCriteria(
-          snv.gene,
-          None,
-          snv.proteinChange
-            // Change the protein change to just a substring of the occurring one
-            // to test that matches are also returned by substring match of the protein (or DNA) change
-            .map(
-              pch => pch.copy( 
-                code = Code[HGVS.Protein](pch.code.value.substring(2,pch.code.value.size-1))
-              )
+          .take(2)
+          .map(snv =>
+            SNVCriteria(
+              snv.gene,
+              None,
+              snv.proteinChange
+                // Change the protein change to just a substring of the occurring one
+                // to test that matches are also returned by substring match of the protein (or DNA) change
+                .map(
+                  pch => pch.copy( 
+                    code = Code[HGVS.Protein](pch.code.value.substring(2,pch.code.value.size-1))
+                  )
+                )
             )
-        )
+          )
+          .toSet
 
       cnv = 
         ngs.results
@@ -137,8 +138,8 @@ class Tests extends AsyncFlatSpec
       None,
       Some(
         VariantCriteria(
-          None,
-          Some(Set(snvCriteria)),
+          Some(LogicalOperator.And),
+          Some(snvCriteria),
           Some(Set(cnvCriteria)),
           None,
           None
@@ -158,14 +159,10 @@ class Tests extends AsyncFlatSpec
   "Importing MTBPatientRecords" must "have worked" in {
 
     for {
-      outcomes <-
-        Future.traverse(dataSets)(service ! Save(_))
+      outcomes <- Future.traverse(dataSets)(service ! Save(_))
     } yield all (outcomes.map(_.isRight)) mustBe true 
     
   }
-
-  // For implicit conversion of MTBFilters to predicate function
-  import service.filterToPredicate
 
 
   val queryMode =
@@ -186,7 +183,7 @@ class Tests extends AsyncFlatSpec
 
       resultSet <- service.resultSet(query.id).map(_.value)
 
-    } yield resultSet.demographics().patientCount must equal (dataSets.size)  
+    } yield resultSet.demographics(MTBFilters.empty).patientCount must equal (dataSets.size)  
 
   }
 

@@ -1,7 +1,6 @@
 package de.dnpm.dip.mtb.query.impl
 
 
-import java.time.temporal.ChronoUnit.DAYS
 import de.dnpm.dip.model.UnitOfTime
 import scala.math.round
 import cats.{
@@ -69,8 +68,27 @@ with MTBReportingOps
   import MTBResultSet._
 
 
+  import scala.language.implicitConversions
+
+  override implicit def toPredicate[F >: MTBFilters](f: F): MTBPatientRecord => Boolean = {
+
+    val filter = f.asInstanceOf[MTBFilters]
+
+    implicit def diagnosisFilterPredicate(f: DiagnosisFilter): MTBDiagnosis => Boolean =
+      diag =>
+        f.code match {
+          case Some(icd10s) if icd10s.nonEmpty => icd10s.exists(_.code == diag.code.code)
+          case _                               => true
+        }
+
+    record =>
+      filter.patientFilter(record.patient) &&
+      record.getDiagnoses.exists(filter.diagnosisFilter)
+  }
+
+
   override def tumorDiagnostics(
-    filter: MTBPatientRecord => Boolean = _ => true
+    filter: MTBFilters
   ): TumorDiagnostics = {
 
     val records =
@@ -82,9 +100,8 @@ with MTBReportingOps
     )
   }
 
-
   override def medication(
-    filter: MTBPatientRecord => Boolean = _ => true
+    filter: MTBFilters
   ): MTBResultSet.Medication = {
 
     val records =
@@ -194,7 +211,7 @@ with MTBReportingOps
   
 
   override def therapyResponses(
-    filter: MTBPatientRecord => Boolean
+    filter: MTBFilters
   ): Seq[TherapyResponseDistribution] = 
     patientRecords(filter)
       .foldLeft(

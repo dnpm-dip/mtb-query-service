@@ -34,16 +34,19 @@ extends ResultSet[MTBPatientRecord,MTBQueryCriteria]
 with KaplanMeierOps[Id,Applicative[Id]]
 {
 
+  type Filter = MTBFilters
+
+
   def tumorDiagnostics(
-    filter: MTBPatientRecord => Boolean = _ => true
+    filter: MTBFilters
   ): MTBResultSet.TumorDiagnostics
 
   def medication(
-    filter: MTBPatientRecord => Boolean = _ => true
+    filter: MTBFilters
   ): MTBResultSet.Medication
 
   def therapyResponses(
-    filter: MTBPatientRecord => Boolean = _ => true
+    filter: MTBFilters
   ): Seq[MTBResultSet.TherapyResponseDistribution]
 
 }

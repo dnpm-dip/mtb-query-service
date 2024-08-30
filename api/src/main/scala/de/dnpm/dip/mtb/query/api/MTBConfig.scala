@@ -12,7 +12,7 @@ sealed trait MTBConfig extends UseCaseConfig
 
   type Criteria = MTBQueryCriteria
 
-  type Filter = MTBFilters
+//  type Filter = MTBFilters
 
   type Results = MTBResultSet
 
