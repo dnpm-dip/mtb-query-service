@@ -185,7 +185,6 @@ trait Completers extends BaseCompleters
                   case _ => Some(Tree(t.element.complete))
                 }
               }
-//              drugs = med.drugs.flatMap(_.element.expand)
             )
           )
       )

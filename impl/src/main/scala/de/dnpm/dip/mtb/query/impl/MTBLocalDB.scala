@@ -19,7 +19,10 @@ import de.dnpm.dip.service.query.{
   InMemLocalDB,
 }
 import de.dnpm.dip.mtb.model.MTBPatientRecord
-import de.dnpm.dip.mtb.query.api.MTBQueryCriteria
+import de.dnpm.dip.mtb.query.api.{
+  LogicalOperator,
+  MTBQueryCriteria
+}
 import de.dnpm.dip.util.{
   SPI,
   SPILoader
@@ -54,7 +57,7 @@ object MTBLocalDB extends SPILoader[MTBLocalDBSPI]
       .getOrElse {
 
         val matcher =
-          MTBQueryCriteriaOps.criteriaMatcher(strict = true)
+          MTBQueryCriteriaOps.criteriaMatcher(LogicalOperator.And)
     
         Try(
           System.getProperty(dataGenProp).toInt

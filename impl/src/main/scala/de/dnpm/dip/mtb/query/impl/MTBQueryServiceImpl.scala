@@ -15,10 +15,12 @@ import cats.{
 }
 import de.dnpm.dip.util.{
   Completer,
-  Logging
+  Logging,
+  Tree
 }
 import de.dnpm.dip.model.{
   ClosedInterval,
+  Medications,
   Site,
   Snapshot,
   Patient
@@ -116,24 +118,6 @@ with Completers
 {
 
 
-/*
-  import scala.language.implicitConversions
-
-  override implicit def filterToPredicate(filter: MTBFilters): MTBPatientRecord => Boolean = {
-
-    implicit def diagnosisFilterPredicate(f: DiagnosisFilter): MTBDiagnosis => Boolean =
-      diag =>
-        f.code match {
-          case Some(icd10s) if icd10s.nonEmpty => icd10s.exists(_.code == diag.code.code)
-          case _                               => true
-        }
-
-    record =>
-      filter.patientFilter(record.patient) &&
-      record.getDiagnoses.exists(filter.diagnosisFilter)
-  }
-*/
-
   override def DefaultFilter(
     results: Seq[Snapshot[MTBPatientRecord]]
   ): MTBFilters = {
@@ -145,6 +129,22 @@ with Completers
       PatientFilter.on(records),
       DiagnosisFilter(
         Some(records.flatMap(_.getDiagnoses.map(_.code)).toSet)
+      ),
+      RecommendationFilter(
+        Some(
+          records.flatMap(_.getCarePlans)
+            .flatMap(_.medicationRecommendations.getOrElse(List.empty))
+            .map(_.medication)
+            .toSet
+        )
+      ),
+      TherapyFilter(
+        Some(
+          records.flatMap(_.getTherapies)
+            .map(_.latest)
+            .flatMap(_.medication)
+            .toSet
+        )
       )
     )
   }

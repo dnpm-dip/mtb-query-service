@@ -13,6 +13,7 @@ import de.dnpm.dip.coding.{
   Coding
 }
 import de.dnpm.dip.coding.atc.ATC
+import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.model.{
   Reference,
@@ -21,6 +22,7 @@ import de.dnpm.dip.model.{
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
   MTBMedicationRecommendation,
+  Fusion,
   SNV,
   CNV,
   Variant
@@ -96,12 +98,12 @@ private trait MTBQueryCriteriaOps
   private def checkMatches(
     bs: Boolean*
   )(
-    strict: Boolean
+    op: LogicalOperator.Value 
   ): Boolean =
-    if (strict)
-      bs forall (_ == true)
-    else
-      bs exists (_ == true)
+    op match {
+      case And => bs forall (_ == true)
+      case Or  => bs exists (_ == true)
+    }
 
 
   private def matches[T](
@@ -137,6 +139,103 @@ private trait MTBQueryCriteriaOps
     opt.getOrElse(false)
 
 
+  import VariantCriteriaOps._
+
+
+  private def snvsMatch(
+    criteria: Option[Set[SNVCriteria]],
+    snvs: => Seq[SNV],
+    op: LogicalOperator.Value
+  )(
+    implicit recommendations: Iterable[MTBMedicationRecommendation]
+  ): (Option[Set[SNVCriteria]],Boolean) = {
+
+    import HGVS.extensions._
+
+    criteria match {
+      case Some(set) if set.nonEmpty =>
+        set.filter(
+          crit => snvs.exists(crit matches _)
+        )
+        .pipe {
+          case matches if matches.nonEmpty =>
+            Some(matches) -> {
+              op match {
+                case Or  => true
+                case And => matches.size == set.size // ensure all criteria are matched
+              }
+            }
+        
+          case _ => None -> false
+        }
+
+      case _ => None -> true
+    }
+
+  }
+
+  private def cnvsMatch(
+    criteria: Option[Set[CNVCriteria]],
+    cnvs: => Seq[CNV],
+    op: LogicalOperator.Value
+  )(
+    implicit recommendations: Iterable[MTBMedicationRecommendation]
+  ): (Option[Set[CNVCriteria]],Boolean) =
+    criteria match {
+      case Some(set) if set.nonEmpty =>
+        set.filter(
+          crit => cnvs.exists(crit matches _)
+        )
+        .pipe {
+          case matches if matches.nonEmpty =>
+            Some(matches) -> {
+              op match {
+                case Or  => true
+                case And => matches.size == set.size // ensure all criteria are matched
+              }
+            }
+
+          case _ =>
+            None -> false
+        }
+
+      case _ => None -> true
+    }
+
+  private def fusionsMatch[F <: Fusion[_ <: { def gene: Coding[HGNC] }]](
+    criteria: Option[Set[FusionCriteria]],
+    fusions: => Seq[F],
+    op: LogicalOperator.Value
+  )(
+    implicit recommendations: Iterable[MTBMedicationRecommendation]
+  ): (Option[Set[FusionCriteria]],Boolean) = {
+
+    import scala.language.reflectiveCalls
+
+    criteria match {
+      case Some(set) if set.nonEmpty =>
+        set.filter {
+          crit => fusions.exists(crit matches _)
+        }
+        .pipe {
+          case matches if matches.nonEmpty =>
+            Some(matches) -> {
+              op match {
+                case Or  => true
+                case And => matches.size == set.size // ensure all criteria are matched
+              }
+            }
+
+          case _ =>
+            None -> false
+        }
+
+      case _ => None -> true
+
+    }
+
+  }
+/*  
   private def snvsMatch(
     criteria: Option[Set[SNVCriteria]],
     snvs: => Seq[SNV],
@@ -147,8 +246,8 @@ private trait MTBQueryCriteriaOps
 
     import HGVS.extensions._
 
-    criteria.collect {
-      case set if set.nonEmpty =>
+    criteria match {
+      case Some(set) if set.nonEmpty =>
         set.filter {
           case SNVCriteria(gene,dnaChange,proteinChange,supporting) =>
             snvs.find(
@@ -158,30 +257,28 @@ private trait MTBQueryCriteriaOps
                   dnaChange.map(g => snv.dnaChange.exists(_ matches g)).getOrElse(true),
                   proteinChange.map(g => snv.proteinChange.exists(_ matches g)).getOrElse(true)
                 )(
-                  true
+                  And
                 ) 
             )
             .exists { 
-              case snv if supporting => supportingVariants.exists(_.id.exists(_ == snv.id))
+              case v if supporting => supportingVariants.exists(_.id.exists(_ == v.id))
               case _ => true 
             }
             
         }
         .pipe {
           case matches if matches.nonEmpty =>
-            val fulfilled =
+            Some(matches) -> {
               op match {
                 case Or  => true
                 case And => matches.size == set.size // ensure all criteria are matched
               }
-            Some(matches) -> fulfilled
+            }
         
           case _ => None -> false
         }
+      case _ => None -> true
     }
-    .getOrElse(
-      None -> true
-    )
 
   }
 
@@ -192,8 +289,8 @@ private trait MTBQueryCriteriaOps
   )(
     implicit supportingVariants: Seq[Reference[Variant]]
   ): (Option[Set[CNVCriteria]],Boolean) =
-    criteria.collect {
-      case set if set.nonEmpty =>
+    criteria match {
+      case Some(set) if set.nonEmpty =>
         set.filter {
           case CNVCriteria(affectedGenes,typ,supporting) =>
             cnvs.find(
@@ -205,30 +302,78 @@ private trait MTBQueryCriteriaOps
                   },
                   typ.map(_ == cnv.`type`).getOrElse(true)
                 )(
-                  true
+                  And
                 ) 
               )
               .exists { 
-                case snv if supporting => supportingVariants.exists(_.id.exists(_ == snv.id))
+                case v if supporting => supportingVariants.exists(_.id.exists(_ == v.id))
                 case _ => true 
               }
         }
         .pipe {
           case matches if matches.nonEmpty =>
-            val fulfilled =
+            Some(matches) -> {
               op match {
                 case Or  => true
                 case And => matches.size == set.size // ensure all criteria are matched
               }
-            Some(matches) -> fulfilled
+            }
 
           case _ =>
             None -> false
         }
+
+      case _ => None -> true
     }
-    .getOrElse(
-      None -> true
-    )
+
+
+  private def fusionsMatch[F <: Fusion[_ <: { def gene: Coding[HGNC] }]](
+    criteria: Option[Set[FusionCriteria]],
+    fusions: => Seq[F],
+    op: LogicalOperator.Value
+  )(
+    implicit supportingVariants: Seq[Reference[Variant]]
+  ): (Option[Set[FusionCriteria]],Boolean) = {
+
+    import scala.language.reflectiveCalls
+
+    criteria match {
+      case Some(set) if set.nonEmpty =>
+        set.filter {
+          case FusionCriteria(gene5pr,gene3pr,supporting) =>
+            fusions.find(
+              fusion => 
+                checkMatches(
+                  gene5pr.map(_.code == fusion.fusionPartner5prime.gene.code).getOrElse(true),
+                  gene3pr.map(_.code == fusion.fusionPartner3prime.gene.code).getOrElse(true)
+                )(
+                  And
+                )
+            )
+            .exists { 
+              case v if supporting => supportingVariants.exists(_.id.exists(_ == v.id))
+              case _ => true 
+            }
+        }
+        .pipe {
+          case matches if matches.nonEmpty =>
+            Some(matches) -> {
+              op match {
+                case Or  => true
+                case And => matches.size == set.size // ensure all criteria are matched
+              }
+            }
+
+          case _ =>
+            None -> false
+        }
+
+      case _ => None -> true
+
+    }
+
+  }
+*/
 
 
   private def medicationsMatch(
@@ -356,7 +501,7 @@ private trait MTBQueryCriteriaOps
 
 
   def criteriaMatcher(
-    strict: Boolean = true
+    operator: LogicalOperator.Value = And
   ): MTBQueryCriteria => (MTBPatientRecord => Option[MTBQueryCriteria]) = {
 
      _ match {
@@ -370,10 +515,14 @@ private trait MTBQueryCriteriaOps
 
           record =>
 
-            implicit lazy val supportingVariants =
+            implicit lazy val recommendations =
               record.getCarePlans
                 .flatMap(_.medicationRecommendations.getOrElse(List.empty))
-                .flatMap(_.supportingVariants.getOrElse(List.empty)) 
+
+//            implicit lazy val supportingVariants =
+//              record.getCarePlans
+//                .flatMap(_.medicationRecommendations.getOrElse(List.empty))
+//                .flatMap(_.supportingVariants.getOrElse(List.empty)) 
 
             val (diagnosisMatches, diagnosesFulfilled) =
               matches(
@@ -412,6 +561,22 @@ private trait MTBQueryCriteriaOps
                 variantOperator
               )
 
+            val (dnaFusionMatches, dnaFusionsFulfilled) =
+              fusionsMatch(
+                criteria.variants.flatMap(_.dnaFusions),
+                record.getNgsReports
+                  .flatMap(_.results.dnaFusions),
+                variantOperator
+              )
+
+            val (rnaFusionMatches, rnaFusionsFulfilled) =
+              fusionsMatch(
+                criteria.variants.flatMap(_.rnaFusions),
+                record.getNgsReports
+                  .flatMap(_.results.rnaFusions),
+                variantOperator
+              )
+
             val (medicationMatches, medicationFulfilled) =
               medicationsMatch(
                 criteria.medication,
@@ -439,26 +604,28 @@ private trait MTBQueryCriteriaOps
               checkMatches(
                 snvsFulfilled,
                 cnvsFulfilled,
-                //TODO: DNA-/RNA-Fusions
+                dnaFusionsFulfilled,
+                rnaFusionsFulfilled
               )(
-                variantOperator == And
+                variantOperator
               ),
               medicationFulfilled,
               responseFulfilled
             )(
-              strict
+              operator
             )
           )
             Some(
               MTBQueryCriteria(
                 diagnosisMatches,
                 morphologyMatches,
-                criteria.variants.map(
-                  _.copy(
-                    simpleVariants = snvMatches,
-                    copyNumberVariants = cnvMatches,
-                    dnaFusions = None, //TODO: DNA-Fusions
-                    rnaFusions = None  //TODO: RNA-Fusions
+                criteria.variants.map(_ =>
+                  VariantCriteria(
+                    Some(variantOperator),
+                    snvMatches,
+                    cnvMatches,
+                    dnaFusionMatches,
+                    rnaFusionMatches
                   )
                 ),
                 medicationMatches,

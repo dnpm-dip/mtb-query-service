@@ -10,7 +10,10 @@ import scala.util.Random
 import scala.concurrent.Future
 import cats.Monad
 import de.dnpm.dip.util.Tree
-import de.dnpm.dip.model.Site
+import de.dnpm.dip.model.{
+  Gender,
+  Site
+}
 import de.dnpm.dip.coding.{
   Code,
   CodeSystem,
@@ -29,6 +32,7 @@ import de.dnpm.dip.service.query.{
   PreparedQueryDB,
   InMemPreparedQueryDB
 }
+import de.dnpm.dip.service.query.PatientFilter
 import de.dnpm.dip.service.query.QueryService.Save
 import de.dnpm.dip.connector.{
   HttpConnector,
@@ -228,6 +232,37 @@ class Tests extends AsyncFlatSpec
       matches =>
         assert( (queryCriteria intersect matches.value).nonEmpty )
     }
+
+  }
+
+
+  "Filtering" must "have worked" in {
+
+    for {
+      result <-
+        service ! Query.Submit(
+          queryMode,
+          None,
+          None
+        )
+
+      query = result.value
+
+      resultSet <-
+        service.resultSet(query.id)
+          .map(_.value)
+
+      filter =
+        MTBFilters.empty
+          .copy(
+            patient = PatientFilter.empty.copy(
+              gender = Some(Set(Coding(Gender.Female)))
+            )
+          )
+      patientMatches = 
+        resultSet.patientMatches(filter)
+
+    } yield patientMatches.size must be < (dataSets.size)
 
   }
 

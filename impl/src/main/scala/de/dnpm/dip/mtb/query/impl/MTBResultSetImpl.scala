@@ -7,13 +7,18 @@ import cats.{
   Applicative,
   Id
 }
-import de.dnpm.dip.util.DisplayLabel
+import de.dnpm.dip.util.{
+  Completer,
+  DisplayLabel,
+  Tree
+}
 import de.dnpm.dip.coding.{
   Coding,
   CodeSystem,
   CodeSystemProvider
 }
 import de.dnpm.dip.coding.atc.ATC
+import de.dnpm.dip.coding.UnregisteredMedication
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.icd.{
   ICD10GM,
@@ -36,6 +41,8 @@ import de.dnpm.dip.service.query.{
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
   MTBDiagnosis,
+  MTBMedicationRecommendation,
+  MTBMedicationTherapy,
   RECIST,
   Variant
 }
@@ -43,6 +50,8 @@ import de.dnpm.dip.mtb.query.api.{
   MTBQueryCriteria,
   MTBFilters,
   DiagnosisFilter,
+  RecommendationFilter,
+  TherapyFilter,
   MTBResultSet,
   KaplanMeier
 }
@@ -66,24 +75,92 @@ with MTBReportingOps
 
   import scala.util.chaining._
   import MTBResultSet._
+  import Completer.syntax._
 
 
   import scala.language.implicitConversions
 
   override implicit def toPredicate[F >: MTBFilters](f: F): MTBPatientRecord => Boolean = {
 
-    val filter = f.asInstanceOf[MTBFilters]
+    val MTBFilters(patient,diagnoses,recommendations,therapies) =
+      f.asInstanceOf[MTBFilters]
 
-    implicit def diagnosisFilterPredicate(f: DiagnosisFilter): MTBDiagnosis => Boolean =
+
+    def expandedMedicationNames(meds: Set[Set[Coding[Medications]]]): Set[Set[Tree[String]]] =
+      meds.map(
+        _.flatMap(
+          coding => coding.system match {
+            case sys if sys == Coding.System[ATC].uri =>
+              coding.asInstanceOf[Coding[ATC]]
+                .expand
+                .map(_.map(_.display.get.toLowerCase))
+
+            case _ => Some(Tree(coding.code.value.toLowerCase))
+          }
+        )
+      )   
+
+    val diagnosisFilter: MTBDiagnosis => Boolean = {
+
+      val icd10s =
+        diagnoses
+          .code
+          .map(
+            _.flatMap(
+              _.expand
+            )
+          )
+
       diag =>
-        f.code match {
-          case Some(icd10s) if icd10s.nonEmpty => icd10s.exists(_.code == diag.code.code)
-          case _                               => true
-        }
+        icd10s.fold(true)(_ exists (_ exists (_.code == diag.code.code)))
+    }
+    
+    val recommendationFilter: MTBMedicationRecommendation => Boolean = { 
 
-    record =>
-      filter.patientFilter(record.patient) &&
-      record.getDiagnoses.exists(filter.diagnosisFilter)
+      val medicationNames =
+        recommendations
+          .medication
+          .map(expandedMedicationNames)
+
+      recommendation =>
+        lazy val occurringDrugNames =
+          recommendation.medication
+            .flatMap(_.display)
+            .map(_.toLowerCase)
+
+        lazy val occurring: String => Boolean =
+          name => occurringDrugNames exists (_ contains name)
+
+        medicationNames.fold(true)(_ exists (_ forall (_ exists occurring)))
+    }
+
+    val therapyFilter: MTBMedicationTherapy => Boolean = { 
+
+      val medicationNames =
+        therapies
+          .medication
+          .map(expandedMedicationNames)
+
+      therapy =>
+        lazy val optOccurringDrugNames =
+          therapy.medication
+            .map(
+              _.flatMap(_.display)
+               .map(_.toLowerCase)
+            )
+
+        lazy val occurring: String => Boolean =
+          name => optOccurringDrugNames.exists(_ exists (_ contains name))
+
+        medicationNames.fold(true)(_ exists (_ forall (_ exists occurring)))
+    }
+
+
+    record => 
+      patient(record.patient) &&
+      record.getDiagnoses.exists(diagnosisFilter) &&
+      record.getCarePlans.flatMap(_.medicationRecommendations.getOrElse(List.empty)).exists(recommendationFilter) &&
+      record.getTherapies.map(_.latest).exists(therapyFilter)
   }
 
 
@@ -216,9 +293,9 @@ with MTBReportingOps
     patientRecords(filter)
       .foldLeft(
         Map.empty[
-          Set[DisplayLabel[Coding[Medications]]],
+          Set[Coding[Medications]],
           (
-           Set[DisplayLabel[Coding[Medications]]],
+           Set[Coding[Medications]],
            Set[DisplayLabel[Variant]],
            List[Coding[RECIST.Value]]
           )
@@ -251,7 +328,6 @@ with MTBReportingOps
                 val medicationClasses =
                   medication
                     .flatMap(_.currentGroup)
-                    .map(DisplayLabel.of(_))
 
                 val supportingVariants =
                   therapy
@@ -269,9 +345,7 @@ with MTBReportingOps
                     .maxByOption(_.effectiveDate)
                     .map(_.value)
 
-                acc2.updatedWith(
-                  medication.map(DisplayLabel.of(_))
-                ){ 
+                acc2.updatedWith(medication){ 
                   case Some((classes,suppVars,responses)) => 
                     Some(
                      (

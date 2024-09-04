@@ -53,6 +53,43 @@ trait MTBReportingOps extends ReportingOps
     records: Seq[MTBPatientRecord]
   )(
     implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
+  ): (Distribution[Set[Coding[Medications]]],Seq[Entry[Set[Coding[Medications]],Double]]) = {
+
+    val therapies =
+      records
+        .flatMap(_.getTherapies)
+        .map(_.latest)
+        .filter(_.medication.isDefined)
+
+    val therapyDistribution =
+      Distribution.byParent(
+        therapies.flatMap(_.medication),
+        (meds: Set[Coding[Medications]]) => meds.map(coding => coding.currentGroup.getOrElse(coding)),
+      )
+
+    val meanDurations =
+      therapies
+        .groupBy(_.medication.get)
+        .map {
+          case (meds,ths) =>
+            Entry(
+              meds,
+              ths.flatMap(_.period.flatMap(_.duration(Weeks)))
+                .map(_.value)
+                .pipe(mean(_))
+            )
+        }
+        .toSeq
+
+    therapyDistribution -> meanDurations
+
+  }
+
+/*
+  def therapyDistributionAndMeanDurations(
+    records: Seq[MTBPatientRecord]
+  )(
+    implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
   ): (Distribution[Set[DisplayLabel[Coding[Medications]]]],Seq[Entry[Set[DisplayLabel[Coding[Medications]]],Double]]) = {
 
     val therapies =
@@ -86,7 +123,7 @@ trait MTBReportingOps extends ReportingOps
     therapyDistribution -> meanDurations
 
   }
-
+*/
 
   def overallDiagnosticDistributions(
     records: Seq[MTBPatientRecord]
@@ -181,6 +218,20 @@ trait MTBReportingOps extends ReportingOps
   )(
     implicit
     atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
+  ): Distribution[Set[Coding[Medications]]] =
+    Distribution.byParent(
+      records
+        .flatMap(_.getCarePlans.flatMap(_.medicationRecommendations.getOrElse(List.empty)))
+        .map(_.medication),
+      _.map(coding => coding.currentGroup.getOrElse(coding))
+    )
+
+/*
+  def recommendationDistribution(
+    records: Seq[MTBPatientRecord]
+  )(
+    implicit
+    atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
   ): Distribution[Set[DisplayLabel[Coding[Medications]]]] =
     Distribution.byParentAndBy(
       records
@@ -190,15 +241,15 @@ trait MTBReportingOps extends ReportingOps
       _.map(coding => coding.currentGroup.getOrElse(coding)),
       _.map(DisplayLabel.of(_))
     )
-
-
+*/
 
   def recommendationsBySupportingVariant(
     records: Seq[MTBPatientRecord]
   )(
     implicit
     atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
-  ): Seq[Entry[DisplayLabel[Variant],Distribution[Set[DisplayLabel[Coding[Medications]]]]]] =
+  ): Seq[Entry[DisplayLabel[Variant],Distribution[Set[Coding[Medications]]]]] =
+//  ): Seq[Entry[DisplayLabel[Variant],Distribution[Set[DisplayLabel[Coding[Medications]]]]]] =
     records.foldLeft(
       Map.empty[DisplayLabel[Variant],Seq[Set[Coding[Medications]]]]
     ){
@@ -237,12 +288,18 @@ trait MTBReportingOps extends ReportingOps
       case (variant,meds) =>
         Entry(
           variant,
+          Distribution.byParent(
+            meds,
+            (ms: Set[Coding[Medications]]) => ms.map(coding => coding.currentGroup.getOrElse(coding))
+          )
+/*        
           Distribution.byParentAndBy(
             meds
           )(
             _.map(coding => coding.currentGroup.getOrElse(coding)),
             _.map(DisplayLabel.of(_))
           )
+*/        
         )
     }
     .toSeq
@@ -252,9 +309,11 @@ trait MTBReportingOps extends ReportingOps
 
   def responsesByTherapy(
     records: Seq[MTBPatientRecord]
-  ): Seq[Entry[Set[DisplayLabel[Coding[Medications]]],Distribution[Coding[RECIST.Value]]]] =
+  ): Seq[Entry[Set[Coding[Medications]],Distribution[Coding[RECIST.Value]]]] =
+//  ): Seq[Entry[Set[DisplayLabel[Coding[Medications]]],Distribution[Coding[RECIST.Value]]]] =
     records.foldLeft(
-      Map.empty[Set[DisplayLabel[Coding[Medications]]],Seq[Coding[RECIST.Value]]]
+      Map.empty[Set[Coding[Medications]],Seq[Coding[RECIST.Value]]]
+//      Map.empty[Set[DisplayLabel[Coding[Medications]]],Seq[Coding[RECIST.Value]]]
     ){
       (acc,record) =>
 
@@ -277,7 +336,8 @@ trait MTBReportingOps extends ReportingOps
                 .flatMap(
                   _.medication
                    .map(
-                     _.map(DisplayLabel.of(_)) -> response.value 
+                     _ -> response.value 
+//                     _.map(DisplayLabel.of(_)) -> response.value 
                    )
                 )              
           }

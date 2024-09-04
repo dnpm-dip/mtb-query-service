@@ -86,15 +86,15 @@ object MTBResultSet
 
     final case class Recommendations
     (
-      overallDistribution: Distribution[Set[DisplayLabel[Coding[Medications]]]],
-      distributionBySupportingVariant: Seq[Entry[DisplayLabel[Variant],Distribution[Set[DisplayLabel[Coding[Medications]]]]]]
+      overallDistribution: Distribution[Set[Coding[Medications]]],
+      distributionBySupportingVariant: Seq[Entry[DisplayLabel[Variant],Distribution[Set[Coding[Medications]]]]]
     )
 
     final case class Therapies
     (
-      overallDistribution: Distribution[Set[DisplayLabel[Coding[Medications]]]],
-      meanDurations: Seq[Entry[Set[DisplayLabel[Coding[Medications]]],Double]],
-      responseDistributionByTherapy: Seq[Entry[Set[DisplayLabel[Coding[Medications]]],Distribution[Coding[RECIST.Value]]]]
+      overallDistribution: Distribution[Set[Coding[Medications]]],
+      meanDurations: Seq[Entry[Set[Coding[Medications]],Double]],
+      responseDistributionByTherapy: Seq[Entry[Set[Coding[Medications]],Distribution[Coding[RECIST.Value]]]]
     )
 
 
@@ -112,8 +112,8 @@ object MTBResultSet
 
   final case class TherapyResponseDistribution
   (
-    medicationClasses: Set[DisplayLabel[Coding[Medications]]],
-    medications: Set[DisplayLabel[Coding[Medications]]],
+    medicationClasses: Set[Coding[Medications]],
+    medications: Set[Coding[Medications]],
     supportingVariants: Set[DisplayLabel[Variant]],
     responseDistribution: Distribution[Coding[RECIST.Value]]
   )

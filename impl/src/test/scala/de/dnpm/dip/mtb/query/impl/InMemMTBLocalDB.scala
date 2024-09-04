@@ -4,7 +4,10 @@ package de.dnpm.dip.mtb.query.impl
 import scala.concurrent.Future
 import cats.Monad
 import de.dnpm.dip.mtb.model.MTBPatientRecord
-import de.dnpm.dip.mtb.query.api.MTBQueryCriteria
+import de.dnpm.dip.mtb.query.api.{
+  LogicalOperator,
+  MTBQueryCriteria
+}
 import de.dnpm.dip.service.query.InMemLocalDB
 
 
@@ -19,7 +22,7 @@ extends InMemLocalDB[
   MTBQueryCriteria,
   MTBPatientRecord
 ](
-  MTBQueryCriteriaOps.criteriaMatcher(strict = strict)
+  MTBQueryCriteriaOps.criteriaMatcher(LogicalOperator.And)
 )
 with MTBLocalDB
 
