@@ -51,14 +51,14 @@ trait Completers extends BaseCompleters
   implicit val icdo3: ICDO3.Catalogs[Id,Applicative[Id]]
 
 
-
+/*
   private implicit def treeCompleter[T: Completer]: Completer[Tree[T]] =
     Completer.of(
       t => t.copy(
         element = t.element.complete
       )
     )
-
+*/
 
   private implicit val icdo3mCompleter: Completer[Coding[ICDO3.M]] =
     Completer.of {
@@ -76,6 +76,16 @@ trait Completers extends BaseCompleters
           )
           .getOrElse(coding)
     }
+
+
+  private implicit val medicationCriteriaCompleter: Completer[MedicationCriteria] =
+    Completer.of(
+      med => med.copy(
+        drugs = med.drugs.complete,
+        usage = med.usage.complete
+      )
+    )
+
 
   implicit protected val criteriaCompleter: Completer[MTBQueryCriteria] = {
 
@@ -115,7 +125,7 @@ trait Completers extends BaseCompleters
           fusionPartner3pr = fusion.fusionPartner3pr.complete,
         )
       )
-
+/*
     implicit val medicationCriteriaCompleter: Completer[MedicationCriteria] =
       Completer.of(
         med => med.copy(
@@ -123,7 +133,7 @@ trait Completers extends BaseCompleters
           usage = med.usage.complete
         )
       )
-
+*/
     Completer.of(
       criteria => criteria.copy(
         diagnoses         = criteria.diagnoses.complete,
@@ -164,7 +174,7 @@ trait Completers extends BaseCompleters
        )
      )
 
-
+/*
     Completer.of(
       criteria => criteria.copy(
         diagnoses =
@@ -187,6 +197,32 @@ trait Completers extends BaseCompleters
               }
             )
           )
+      )
+    )
+*/
+    Completer.of(
+      criteria => criteria.copy(
+        diagnoses =
+          criteria.diagnoses.complete,
+        tumorMorphologies =
+          criteria.tumorMorphologies.complete,
+        medication =
+          criteria.medication.map {
+            _.complete
+             .tap(mc =>
+               mc.expandedDrugs =
+                 mc.drugs.flatMap {
+                   coding => coding.system match {
+                     case sys if sys == Coding.System[ATC].uri =>
+                       coding.asInstanceOf[Coding[ATC]]
+                        .expand
+                        .map(_.asInstanceOf[Tree[Coding[Medications]]])
+
+                     case _ => Some(Tree(coding.complete))
+                   }
+                }
+            )
+          }
       )
     )
 

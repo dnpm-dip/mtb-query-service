@@ -31,7 +31,7 @@ object VariantCriteriaOps
   import scala.language.reflectiveCalls
 
 
-  implicit class VariantOps[V <: Variant](val variant: V) extends AnyVal
+  implicit class VariantOps(val variant: Variant) extends AnyVal
   {
 
     def isSupporting[T <: CanHaveSupportingVariants](
@@ -57,6 +57,60 @@ object VariantCriteriaOps
     }
 
 
+  implicit class SNVCriteriaOps(val criteria: SNVCriteria) extends AnyVal
+  {
+
+    import HGVS.extensions._
+
+    def matches(snv: SNV): Boolean =
+      checkMatches(
+        criteria.gene.map(g => snv.gene.exists(_.code == g.code)).getOrElse(true),
+        criteria.dnaChange.map(g => snv.dnaChange.exists(_ matches g)).getOrElse(true),
+        criteria.proteinChange.map(g => snv.proteinChange.exists(_ matches g)).getOrElse(true)
+      )(
+        And
+      )
+
+  }
+  
+
+  implicit class CNVCriteriaOps(val criteria: CNVCriteria) extends AnyVal
+  {
+
+    def matches(cnv: CNV): Boolean =
+      checkMatches(
+        criteria.affectedGenes match {
+          case Some(queriedGenes) if queriedGenes.nonEmpty =>
+            cnv.reportedAffectedGenes.exists(cnvGenes => queriedGenes.forall(g => cnvGenes.exists(_.code == g.code)))
+
+          case _ => true
+        },
+        criteria.`type`.map(_ == cnv.`type`).getOrElse(true)
+      )(
+        And
+      )
+
+  }
+  
+
+  implicit class FusionCriteriaOps[F <: Fusion[_ <: { def gene: Coding[HGNC] }]](
+    val criteria: FusionCriteria
+  )
+  extends AnyVal
+  {
+
+    def matches(fusion: F): Boolean =
+      checkMatches(
+        criteria.fusionPartner5pr.map(_.code == fusion.fusionPartner5prime.gene.code).getOrElse(true),
+        criteria.fusionPartner3pr.map(_.code == fusion.fusionPartner3prime.gene.code).getOrElse(true)
+      )(
+        And
+      )
+
+  }
+
+
+/*  
   implicit class SNVCriteriaOps(val criteria: SNVCriteria) extends AnyVal
   {
 
@@ -135,6 +189,7 @@ object VariantCriteriaOps
       )
 
   }
-  
+*/ 
+
 
 }

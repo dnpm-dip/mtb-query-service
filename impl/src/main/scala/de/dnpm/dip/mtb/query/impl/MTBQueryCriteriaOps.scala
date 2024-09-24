@@ -155,7 +155,15 @@ private trait MTBQueryCriteriaOps
     criteria match {
       case Some(set) if set.nonEmpty =>
         set.filter(
-          crit => snvs.exists(crit matches _)
+          criterion =>
+            snvs.exists(snv =>
+              criterion.matches(snv) &&
+              criterion.supporting.map {
+                case true  => snv.isSupporting
+                case false => true 
+              }
+              .getOrElse(true))
+//          crit => snvs.exists(crit matches _)
         )
         .pipe {
           case matches if matches.nonEmpty =>
@@ -184,7 +192,14 @@ private trait MTBQueryCriteriaOps
     criteria match {
       case Some(set) if set.nonEmpty =>
         set.filter(
-          crit => cnvs.exists(crit matches _)
+//          criterion => cnvs.exists(criterion matches _)
+          criterion => cnvs.exists(cnv =>
+              criterion.matches(cnv) &&
+              criterion.supporting.map {
+                case true  => cnv.isSupporting
+                case false => true 
+              }
+              .getOrElse(true))
         )
         .pipe {
           case matches if matches.nonEmpty =>
@@ -215,7 +230,14 @@ private trait MTBQueryCriteriaOps
     criteria match {
       case Some(set) if set.nonEmpty =>
         set.filter {
-          crit => fusions.exists(crit matches _)
+//          crit => fusions.exists(crit matches _)
+          criterion => fusions.exists(fusion =>
+              criterion.matches(fusion) &&
+              criterion.supporting.map {
+                case true  => fusion.isSupporting
+                case false => true 
+              }
+              .getOrElse(true))
         }
         .pipe {
           case matches if matches.nonEmpty =>
@@ -458,6 +480,49 @@ private trait MTBQueryCriteriaOps
 
 
     criteria match {
+      case Some(crit @ MedicationCriteria(op,_,usage)) if crit.expandedDrugs.nonEmpty => 
+
+        val queriedDrugs = crit.expandedDrugs
+
+        lazy val recommendedDrugNames =
+          recommendedDrugs.map(_.flatMap(_.display.map(_.toLowerCase)))
+
+        lazy val usedDrugNames =
+          usedDrugs.map(_.flatMap(_.display.map(_.toLowerCase)))
+
+        val operator =
+          op.getOrElse(Or)
+
+        usage
+          .getOrElse(Set.empty)
+          .collect { case MedicationUsage(value) => value }
+          .pipe {
+
+            case s if s.contains(Recommended) && s.contains(Used) =>
+              drugMatches(queriedDrugs,recommendedDrugNames,operator) & drugMatches(queriedDrugs,usedDrugNames,operator)
+
+            case s if s.contains(Recommended) =>
+              drugMatches(queriedDrugs,recommendedDrugNames,operator)
+
+            case s if s.contains(Used) =>
+              drugMatches(queriedDrugs,usedDrugNames,operator)
+
+            case _ =>
+              drugMatches(queriedDrugs,recommendedDrugNames,operator) | drugMatches(queriedDrugs,usedDrugNames,operator)
+
+          }
+          .pipe {
+            case matches if matches.nonEmpty =>
+              Some(MedicationCriteria(op,matches.map(_.element),usage)) -> true
+            case _ =>
+              None  -> false
+          }
+
+      case _ => None -> true
+    }
+
+/*
+    criteria match {
       case Some(MedicationCriteria(op,queriedDrugs,usage)) if queriedDrugs.nonEmpty => 
 
         lazy val recommendedDrugNames =
@@ -496,6 +561,7 @@ private trait MTBQueryCriteriaOps
 
       case _ => None -> true
     }
+*/
 
   }
 

@@ -179,8 +179,11 @@ with Completers
     new DefaultKaplanMeierModule
 
 
-  override val ResultSetFrom =    
-    new MTBResultSetImpl(_,_)
+  override def ResultSetFrom(
+    query: Query[MTBQueryCriteria,MTBFilters],
+    results: Seq[Query.Match[MTBPatientRecord,MTBQueryCriteria]]
+  ) =
+    new MTBResultSetImpl(query.id,query.criteria,results)
 
 
   override val survivalConfig: KaplanMeier.Config =

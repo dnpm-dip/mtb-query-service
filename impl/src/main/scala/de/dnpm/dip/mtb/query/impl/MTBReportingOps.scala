@@ -36,9 +36,15 @@ import de.dnpm.dip.service.query.{
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
   RECIST,
-  Variant
+  Variant,
+  SNV,
+  CNV,
+  Fusion,
+  DNAFusion,
+  RNAFusion
 }
 import de.dnpm.dip.mtb.query.api.MTBResultSet.TumorDiagnostics
+import de.dnpm.dip.mtb.query.api.VariantCriteria
 
 
 trait MTBReportingOps extends ReportingOps
@@ -85,45 +91,6 @@ trait MTBReportingOps extends ReportingOps
 
   }
 
-/*
-  def therapyDistributionAndMeanDurations(
-    records: Seq[MTBPatientRecord]
-  )(
-    implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
-  ): (Distribution[Set[DisplayLabel[Coding[Medications]]]],Seq[Entry[Set[DisplayLabel[Coding[Medications]]],Double]]) = {
-
-    val therapies =
-      records
-        .flatMap(_.getTherapies)
-        .map(_.latest)
-        .filter(_.medication.isDefined)
-
-    val therapyDistribution =
-      Distribution.byParentAndBy(
-        therapies.flatMap(_.medication)
-      )(
-        _.map(coding => coding.currentGroup.getOrElse(coding)),
-        _.map(DisplayLabel.of(_))
-      )
-
-    val meanDurations =
-      therapies
-        .groupBy(_.medication.get.map(DisplayLabel.of(_)))
-        .map {
-          case (meds,ths) =>
-            Entry(
-              meds,
-              ths.flatMap(_.period.flatMap(_.duration(Weeks)))
-                .map(_.value)
-                .pipe(mean(_))
-            )
-        }
-        .toSeq
-
-    therapyDistribution -> meanDurations
-
-  }
-*/
 
   def overallDiagnosticDistributions(
     records: Seq[MTBPatientRecord]
@@ -226,32 +193,29 @@ trait MTBReportingOps extends ReportingOps
       _.map(coding => coding.currentGroup.getOrElse(coding))
     )
 
-/*
-  def recommendationDistribution(
-    records: Seq[MTBPatientRecord]
-  )(
-    implicit
-    atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
-  ): Distribution[Set[DisplayLabel[Coding[Medications]]]] =
-    Distribution.byParentAndBy(
-      records
-        .flatMap(_.getCarePlans.flatMap(_.medicationRecommendations.getOrElse(List.empty)))
-        .map(_.medication)
-    )(
-      _.map(coding => coding.currentGroup.getOrElse(coding)),
-      _.map(DisplayLabel.of(_))
-    )
-*/
 
   def recommendationsBySupportingVariant(
-    records: Seq[MTBPatientRecord]
+    records: Seq[MTBPatientRecord],
+    criteria: Option[VariantCriteria]
   )(
     implicit
     atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
-  ): Seq[Entry[DisplayLabel[Variant],Distribution[Set[Coding[Medications]]]]] =
-//  ): Seq[Entry[DisplayLabel[Variant],Distribution[Set[DisplayLabel[Coding[Medications]]]]]] =
+  ): Seq[Entry[DisplayLabel[Variant],Distribution[Set[Coding[Medications]]]]] = {
+
+    import VariantCriteriaOps._
+
+    def isRelevant(variant: Variant): Boolean =
+      variant match {
+        case snv: SNV          => criteria.flatMap(_.simpleVariants).fold(false)(_ exists(_ matches snv))
+        case cnv: CNV          => criteria.flatMap(_.copyNumberVariants).fold(false)(_ exists(_ matches cnv))
+        case fusion: DNAFusion => criteria.flatMap(_.dnaFusions).fold(false)(_ exists(_ matches fusion))
+        case fusion: RNAFusion => criteria.flatMap(_.rnaFusions).fold(false)(_ exists(_ matches fusion))
+        case rnaSeq            => false   // RNASeq currently not queryable
+      }
+
+
     records.foldLeft(
-      Map.empty[DisplayLabel[Variant],Seq[Set[Coding[Medications]]]]
+      Map.empty[DisplayLabel[Variant],(Seq[Set[Coding[Medications]]],Boolean)]
     ){
       (acc,record) =>
 
@@ -263,7 +227,7 @@ trait MTBReportingOps extends ReportingOps
         record
           .getCarePlans
           .flatMap(_.medicationRecommendations.getOrElse(List.empty))
-          .flatMap {
+          .flatMap(
             recommendation =>
               recommendation
                 .medication
@@ -271,49 +235,35 @@ trait MTBReportingOps extends ReportingOps
                   meds =>
                     recommendation
                       .supportingVariants.getOrElse(List.empty)
-                      .flatMap(_.resolveOn(variants).map(DisplayLabel.of(_)))
+                      .flatMap(_ resolveOn variants)
                       .map(_ -> meds)
                 }
-          }
+          )
           .foldLeft(acc){
             case (accPr,(variant,meds)) =>
-              accPr.updatedWith(variant){
-                _.map(_ :+ meds)
-                 .orElse(Some(Seq(meds)))
-
+              accPr.updatedWith(DisplayLabel.of(variant)){
+                case Some(medSets -> relevant) => Some((medSets :+ meds, relevant || isRelevant(variant)))
+                case None                      => Some(Seq(meds) -> isRelevant(variant))
               }
           }
     }
+    .toSeq
+    .sortBy { case (_,(_,relevant)) => relevant }(Ordering[Boolean].reverse)  // reverse Ordering to have relevant entries at the beginning instead of the end
     .map { 
-      case (variant,meds) =>
+      case (variant,(meds,_)) =>
         Entry(
           variant,
-          Distribution.byParent(
-            meds,
-            (ms: Set[Coding[Medications]]) => ms.map(coding => coding.currentGroup.getOrElse(coding))
-          )
-/*        
-          Distribution.byParentAndBy(
-            meds
-          )(
-            _.map(coding => coding.currentGroup.getOrElse(coding)),
-            _.map(DisplayLabel.of(_))
-          )
-*/        
+          Distribution.of(meds)        
         )
     }
-    .toSeq
-    .sortBy(_.key)
-
+  }
 
 
   def responsesByTherapy(
     records: Seq[MTBPatientRecord]
   ): Seq[Entry[Set[Coding[Medications]],Distribution[Coding[RECIST.Value]]]] =
-//  ): Seq[Entry[Set[DisplayLabel[Coding[Medications]]],Distribution[Coding[RECIST.Value]]]] =
     records.foldLeft(
       Map.empty[Set[Coding[Medications]],Seq[Coding[RECIST.Value]]]
-//      Map.empty[Set[DisplayLabel[Coding[Medications]]],Seq[Coding[RECIST.Value]]]
     ){
       (acc,record) =>
 
@@ -337,7 +287,6 @@ trait MTBReportingOps extends ReportingOps
                   _.medication
                    .map(
                      _ -> response.value 
-//                     _.map(DisplayLabel.of(_)) -> response.value 
                    )
                 )              
           }

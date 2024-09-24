@@ -112,9 +112,14 @@ with DefaultCodeSystem
 final case class MedicationCriteria
 (
   operator: Option[LogicalOperator.Value],
-  drugs: Set[Tree[Coding[Medications]]],
+  drugs: Set[Coding[Medications]],
+//  drugs: Set[Tree[Coding[Medications]]],
   usage: Option[Set[Coding[MedicationUsage.Value]]]
 )
+{
+  var expandedDrugs: Set[Tree[Coding[Medications]]] = Set.empty
+}
+
 
 object MedicationCriteria
 {

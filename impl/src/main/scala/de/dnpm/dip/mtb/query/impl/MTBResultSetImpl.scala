@@ -60,6 +60,7 @@ import de.dnpm.dip.mtb.query.api.{
 class MTBResultSetImpl
 (
   val id: Query.Id,
+  val queryCriteria: Option[MTBQueryCriteria],
   val results: Seq[Query.Match[MTBPatientRecord,MTBQueryCriteria]],
 )(
   implicit
@@ -190,12 +191,11 @@ with MTBReportingOps
     MTBResultSet.Medication(
       MTBResultSet.Medication.Recommendations(
         recommendationDistribution(records),
-        recommendationsBySupportingVariant(records)
+        recommendationsBySupportingVariant(records,queryCriteria.flatMap(_.variants))
       ),
       MTBResultSet.Medication.Therapies(
         therapyDistribution,
-        meanTherapyDurations,
-        responsesByTherapy(records)  
+        meanTherapyDurations
       )
     )
   }

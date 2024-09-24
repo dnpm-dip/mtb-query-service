@@ -93,8 +93,7 @@ object MTBResultSet
     final case class Therapies
     (
       overallDistribution: Distribution[Set[Coding[Medications]]],
-      meanDurations: Seq[Entry[Set[Coding[Medications]],Double]],
-      responseDistributionByTherapy: Seq[Entry[Set[Coding[Medications]],Distribution[Coding[RECIST.Value]]]]
+      meanDurations: Seq[Entry[Set[Coding[Medications]],Double]]
     )
 
 

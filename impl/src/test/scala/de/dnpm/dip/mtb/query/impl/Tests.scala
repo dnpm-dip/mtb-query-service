@@ -131,8 +131,8 @@ class Tests extends AsyncFlatSpec
                 Some(LogicalOperator.And),
                 th.medication
                   .get
-                  .map(_.asInstanceOf[Coding[ATC]])
-                  .map(Tree(_)),
+                  .map(_.asInstanceOf[Coding[ATC]]),
+//                  .map(Tree(_)),
                 Some(Set(Coding(MedicationUsage.Used)))
              )
           }
