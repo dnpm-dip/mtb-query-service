@@ -154,7 +154,7 @@ trait Completers extends BaseCompleters
   }
 
 
-
+  @deprecated
   val CriteriaExpander: Completer[MTBQueryCriteria] = {
 
     implicit val icd10Expander: Completer[Set[Coding[ICD10GM]]] =

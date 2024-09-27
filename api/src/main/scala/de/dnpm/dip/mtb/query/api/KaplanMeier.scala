@@ -10,7 +10,6 @@ import de.dnpm.dip.coding.{
   CodedEnum,
   DefaultCodeSystem
 }
-import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.service.query.{
   Count,
   Entry,

@@ -50,11 +50,13 @@ import MTBReport._
 final case class MTBReport
 (
 //  criteria: ...
-  ageData: AgeData,
+  ageStats: AgeStats,
   demographics: ResultSet.Demographics,
-  processStepDurations: Seq[Entry[Coding[ProcessStep.Value],Durations]],
+  processSteps: Seq[Entry[Coding[ProcessStep.Value],Durations]],
   tumorEntities: Distribution[Coding[ICD10GM]],
-  recommendationData: RecommendationData
+  recommendations: Recommendations,
+  claimResponses: ClaimResponses,
+  followUp: FollowUp
 )
 
 
@@ -67,17 +69,16 @@ object MTBReport
   {
     val ReferralToCarePlan = Value("referral-to-careplan")
     val ReferralToTherapy  = Value("referral-to-therapy")
-//    val CarePlanToTherapy  = Value(careplan-to-therapy)
+    val CarePlanToTherapy  = Value("careplan-to-therapy")
 
     override val display =
       Map(
         ReferralToCarePlan -> "Anmeldung bis MTB-Beschluss",
-        ReferralToTherapy  -> "Anmeldung bis Therapie-Beginn"
-//        CarePlanToTherapy  -> "MTB-Beschluss bis Therapie-Beginn"
+        ReferralToTherapy  -> "Anmeldung bis Therapie-Beginn",
+        CarePlanToTherapy  -> "MTB-Beschluss bis Therapie-Beginn"
       )
 
   }
-
 
 
   final case class Durations
@@ -86,62 +87,69 @@ object MTBReport
     median: Duration
   )
 
-  final case class AgeData
+
+  final case class AgeStats
   (
     distribution: Distribution[Interval[Int]],
     mean: Age,
     median: Age
   )
 
-  final case class RecommendationData
+
+  final case class Recommendations
   (
     overallCount: Count,
-    genderDistribution: Distribution[Coding[Gender.Value]],
-    ageDistribution: Distribution[Interval[Int]],
+    genders: Distribution[Coding[Gender.Value]],
+    ages: Distribution[Interval[Int]],
     recommendations: MTBResultSet.Medication.Recommendations,
     evidenceLevels: Distribution[Coding[LevelOfEvidence.Grading.Value]],
-    studyRecommendationData: RecommendationData.StudyRecommendationData
+    studyRecommendations: RecommendationData.StudyRecommendations
   )
 
   object RecommendationData
   {
 
-    final case class StudyRecommendationData
+    final case class StudyRecommendations
     (
-      genderDistribution: Distribution[Coding[Gender.Value]],
-      ageDistribution: Distribution[Interval[Int]],
-      studyDistribution: Distribution[ExternalId[Study]]
+      genders: Distribution[Coding[Gender.Value]],
+      ages: Distribution[Interval[Int]],
+      studies: Distribution[ExternalId[Study]]
     )
 
-    implicit val formatStudyRecommendationData: OWrites[StudyRecommendationData] =
-      Json.writes[StudyRecommendationData]
+    implicit val formatStudyRecommendations: OWrites[StudyRecommendations] =
+      Json.writes[StudyRecommendations]
 
   }
 
 
-  final case class ClaimResponseData
+  final case class ClaimResponses
   (
     status: Coding[ClaimResponse.Status.Value],
     count: Count,
-    reasonDistribution: Distribution[Coding[ClaimResponse.StatusReason.Value]]
+    statusReasons: Distribution[Coding[ClaimResponse.StatusReason.Value]]
   )
 
-  final case class FollowUpData
+  final case class FollowUp
   (
-    patientCount: Int,
+    patientCount: Count,
     therapyData: Seq[Entry[Coding[Therapy.Status.Value],Distribution[Coding[Therapy.StatusReason]]]]
-
   )
 
 
   implicit val formatDurations: OWrites[Durations] =
     Json.writes[Durations]
 
-  implicit val formatAgeData: OWrites[AgeData] =
-    Json.writes[AgeData]
+  implicit val formatAgeStats: OWrites[AgeStats] =
+    Json.writes[AgeStats]
 
-  implicit val formatRecommendationData: OWrites[RecommendationData] =
-    Json.writes[RecommendationData]
+  implicit val formatRecommendations: OWrites[Recommendations] =
+    Json.writes[Recommendations]
+
+  implicit val formatClaimResponses: OWrites[ClaimResponses] =
+    Json.writes[ClaimResponses]
+
+  implicit val formatFollowUp: OWrites[FollowUp] =
+    Json.writes[FollowUp]
 
   implicit val format: OWrites[MTBReport] =
     Json.writes[MTBReport]

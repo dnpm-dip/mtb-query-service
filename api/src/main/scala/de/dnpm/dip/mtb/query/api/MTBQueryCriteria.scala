@@ -108,12 +108,19 @@ with DefaultCodeSystem
 
 }
 
+/*
+final case class MedicationCriteria
+(
+  operator: Option[LogicalOperator.Value],
+  drugs: Set[Tree[Coding[Medications]]],
+  usage: Option[Set[Coding[MedicationUsage.Value]]]
+)
+*/
 
 final case class MedicationCriteria
 (
   operator: Option[LogicalOperator.Value],
   drugs: Set[Coding[Medications]],
-//  drugs: Set[Tree[Coding[Medications]]],
   usage: Option[Set[Coding[MedicationUsage.Value]]]
 )
 {
@@ -149,10 +156,8 @@ object MedicationCriteria
         )
     )
 
-
   implicit val formatMedicationCriteria: OFormat[MedicationCriteria] =
     Json.format[MedicationCriteria]
-
 }
 
 
@@ -164,6 +169,18 @@ final case class MTBQueryCriteria
   medication: Option[MedicationCriteria],
   responses: Option[Set[Coding[RECIST.Value]]]
 )
+
+
+/*
+final case class MTBQueryCriteria
+(
+  diagnoses: Option[Set[Tree[Coding[ICD10GM]]]],
+  tumorMorphologies: Option[Set[Tree[Coding[ICDO3.M]]]],
+  variants: Option[VariantCriteria],
+  medication: Option[MedicationCriteria],
+  responses: Option[Set[Coding[RECIST.Value]]]
+)
+*/
 
 
 object MTBQueryCriteria
