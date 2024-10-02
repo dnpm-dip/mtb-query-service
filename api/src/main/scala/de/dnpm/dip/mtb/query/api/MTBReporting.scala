@@ -14,12 +14,14 @@ import de.dnpm.dip.coding.{
 }
 import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.coding.icd.ICD10GM
+import de.dnpm.dip.util.DisplayLabel
 import de.dnpm.dip.model.{
   Age,
   Duration,
   ExternalId,
   Gender,
   Interval,
+  Medications,
   Period,
   Study,
   Therapy
@@ -34,6 +36,7 @@ import de.dnpm.dip.service.query.{
 import de.dnpm.dip.mtb.model.{
   ClaimResponse,
   LevelOfEvidence,
+  Variant
 }
 
 
@@ -50,12 +53,12 @@ import MTBReport._
 final case class MTBReport
 (
 //  criteria: ...
-  ageStats: AgeStats,
-  demographics: ResultSet.Demographics,
+  demographics: Demographics,    
   processSteps: Seq[Entry[Coding[ProcessStep.Value],Durations]],
   tumorEntities: Distribution[Coding[ICD10GM]],
   recommendations: Recommendations,
-  claimResponses: ClaimResponses,
+  claimResponses: Seq[Entry[Coding[ClaimResponse.Status.Value],ClaimResponses]],
+//  claimResponses: ClaimResponses,
   followUp: FollowUp
 )
 
@@ -88,31 +91,32 @@ object MTBReport
   )
 
 
-  final case class AgeStats
+  final case class Demographics
   (
-    distribution: Distribution[Interval[Int]],
-    mean: Age,
-    median: Age
+    genderDistribution: Distribution[Coding[Gender.Value]],
+    ageDistribution: Distribution[Interval[Int]],
+    meanAge: Age,
+//    medianAge: Age
   )
 
 
   final case class Recommendations
   (
-    overallCount: Count,
-    genders: Distribution[Coding[Gender.Value]],
-    ages: Distribution[Interval[Int]],
-    recommendations: MTBResultSet.Medication.Recommendations,
+    patientCount: Count,
+    demographics: Demographics,    
+    tumorEntities: Distribution[Coding[ICD10GM]],
+    medicationRecommendations: Distribution[Set[Coding[Medications]]],
+    medicationRecommendationsBySupportingVariant: Seq[Entry[DisplayLabel[Variant],Distribution[Set[Coding[Medications]]]]],
     evidenceLevels: Distribution[Coding[LevelOfEvidence.Grading.Value]],
-    studyRecommendations: RecommendationData.StudyRecommendations
+    studyRecommendations: Recommendations.StudyRecommendations
   )
 
-  object RecommendationData
+  object Recommendations
   {
 
     final case class StudyRecommendations
     (
-      genders: Distribution[Coding[Gender.Value]],
-      ages: Distribution[Interval[Int]],
+      demographics: Demographics,    
       studies: Distribution[ExternalId[Study]]
     )
 
@@ -121,26 +125,26 @@ object MTBReport
 
   }
 
-
   final case class ClaimResponses
   (
-    status: Coding[ClaimResponse.Status.Value],
     count: Count,
-    statusReasons: Distribution[Coding[ClaimResponse.StatusReason.Value]]
+    evidenceLevels: Distribution[Coding[LevelOfEvidence.Grading.Value]]
   )
+
 
   final case class FollowUp
   (
-    patientCount: Count,
-    therapyData: Seq[Entry[Coding[Therapy.Status.Value],Distribution[Coding[Therapy.StatusReason]]]]
+    livePatientCount: Count,
+    therapyData: Seq[Entry[Coding[Therapy.Status.Value],Distribution[Coding[Therapy.StatusReason.Value]]]],
+    //TODO: PFS-ratio, ...
   )
 
 
   implicit val formatDurations: OWrites[Durations] =
     Json.writes[Durations]
 
-  implicit val formatAgeStats: OWrites[AgeStats] =
-    Json.writes[AgeStats]
+  implicit val formatDemographics: OWrites[Demographics] =
+    Json.writes[Demographics]
 
   implicit val formatRecommendations: OWrites[Recommendations] =
     Json.writes[Recommendations]

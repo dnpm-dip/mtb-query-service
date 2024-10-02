@@ -10,6 +10,7 @@ import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.coding.icd.ICDO3
 import de.dnpm.dip.coding.hgvs.HGVS
+import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.model.Medications
 import de.dnpm.dip.service.query.{
   PatientFilter,
@@ -21,6 +22,8 @@ import de.dnpm.dip.service.query.{
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
   Variant,
+  CNV,
+  SNV,
   RECIST
 }
 import play.api.libs.json.{
@@ -64,10 +67,24 @@ object MTBResultSet
       tumorMorphologies: Distribution[Coding[ICDO3]]
     )
 
+    final case class VariantsByTumorEntity
+    (
+      simpleVariants: Seq[Entry[Coding[ICD10GM],Distribution[DisplayLabel[SNV]]]],
+      copyNumberVariants: Seq[Entry[Coding[ICD10GM],Distribution[DisplayLabel[CNV]]]] 
+    )
+
+/*  
+    final case class AlteredGenesByTumorEntity
+    (
+      simpleVariants: Seq[Entry[Coding[ICD10GM],Distribution[Coding[HGNC]]]],
+      copyNumberVariants: Seq[Entry[Coding[ICD10GM],Distribution[Coding[HGNC]]]]
+    )
+*/
+
     implicit val writesDistributions: OWrites[Distributions] =
       Json.writes[Distributions]
-
   }
+
 
   final case class TumorDiagnostics
   (

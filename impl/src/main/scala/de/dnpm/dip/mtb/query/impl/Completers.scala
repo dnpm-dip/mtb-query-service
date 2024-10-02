@@ -29,8 +29,7 @@ import de.dnpm.dip.model.{
   Medications,
   Patient,
   Site,
-  Reference,
-  Resolver
+  Reference
 }
 import de.dnpm.dip.mtb.query.api._
 

@@ -448,7 +448,7 @@ extends KaplanMeierModule[cats.Id]
                   .map {
                     case (dp,idx) => dp.copy(patient = s"Patient $idx")
                   },
-                ReportingOps.median[Double].apply(dataPoints.map(_.pfsr)),
+                ReportingOps.median(dataPoints.map(_.pfsr)),
                 Count.of(
                   n     = dataPoints.count(_.pfsr >= 1.3),
                   total = dataPoints.size
