@@ -165,6 +165,36 @@ with MTBReportingOps
   }
 
 
+  override lazy val defaultFilter: MTBFilters = {
+
+    val records =
+      patientRecords(_ => true)
+
+    MTBFilters(
+      PatientFilter.on(records),
+      DiagnosisFilter(
+        Some(records.flatMap(_.getDiagnoses.map(_.code)).toSet)
+      ),
+      RecommendationFilter(
+        Some(
+          records.flatMap(_.getCarePlans)
+            .flatMap(_.medicationRecommendations.getOrElse(List.empty))
+            .map(_.medication)
+            .toSet
+        )
+      ),
+      TherapyFilter(
+        Some(
+          records.flatMap(_.getTherapies)
+            .map(_.latest)
+            .flatMap(_.medication)
+            .toSet
+        )
+      )
+    )
+  }
+
+
   override def tumorDiagnostics(
     filter: MTBFilters
   ): TumorDiagnostics = {
@@ -303,12 +333,12 @@ with MTBReportingOps
       ){
         (acc,record) =>
 
-          val recommendations =
+          implicit val recommendations =
             record
               .getCarePlans
               .flatMap(_.medicationRecommendations.getOrElse(List.empty))
               
-          val variants =
+          implicit val variants =
             record
               .getNgsReports
               .flatMap(_.variants)
@@ -332,10 +362,10 @@ with MTBReportingOps
                 val supportingVariants =
                   therapy
                     .basedOn
-                    .flatMap(_.resolveOn(recommendations))
+                    .flatMap(_.resolve)
                     .flatMap(_.supportingVariants)
                     .getOrElse(List.empty)
-                    .flatMap(_.resolveOn(variants))
+                    .flatMap(_.resolve)
                     .map(DisplayLabel.of(_))
                     .toSet
      
@@ -389,5 +419,12 @@ with MTBReportingOps
       }
       .toSeq
       .sortBy(_.responseDistribution)(responseDistributionOrdering)
+
+
+/*
+  override def therapyResponsesBySupportingVariant(
+    filter: MTBFilters
+  ): Seq[Entry[DisplayLabel[Variant],MTBResultSet.TherapyResponses]]
+*/
 
 }

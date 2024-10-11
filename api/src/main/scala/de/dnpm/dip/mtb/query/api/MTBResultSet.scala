@@ -52,6 +52,11 @@ with KaplanMeierOps[Id,Applicative[Id]]
     filter: MTBFilters
   ): Seq[MTBResultSet.TherapyResponseDistribution]
 
+
+//  def therapyResponsesBySupportingVariant(
+//    filter: MTBFilters
+//  ): Seq[Entry[DisplayLabel[Variant],MTBResultSet.TherapyResponses]]
+
 }
 
 
@@ -139,6 +144,21 @@ object MTBResultSet
     implicit val writes: OWrites[TherapyResponseDistribution] =
       Json.writes[TherapyResponseDistribution]
   }
+
+
+  final case class TherapyResponses
+  (
+    medicationClasses: Set[Coding[Medications]],
+    medications: Set[Coding[Medications]],
+    responseDistribution: Distribution[Coding[RECIST.Value]]
+  )
+
+  object TherapyResponses
+  {
+    implicit val writes: OWrites[TherapyResponses] =
+      Json.writes[TherapyResponses]
+  }
+
 
 
   implicit val writesTumorDiagnostics: OWrites[TumorDiagnostics] =

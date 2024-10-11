@@ -209,6 +209,7 @@ trait MTBReportingOps extends ReportingOps
     )
   }
 
+
   def recommendationsBySupportingVariant(
     records: Seq[MTBPatientRecord],
     criteria: Option[VariantCriteria] = None,
@@ -237,7 +238,7 @@ trait MTBReportingOps extends ReportingOps
     ){
       (acc,record) =>
 
-        val variants =
+        implicit val variants =
           record
             .getNgsReports
             .flatMap(_.variants)
@@ -254,7 +255,7 @@ trait MTBReportingOps extends ReportingOps
                   meds =>
                     recommendation
                       .supportingVariants.getOrElse(List.empty)
-                      .flatMap(_ resolveOn variants)
+                      .flatMap(_.resolve)
                       .map(_ -> meds)
                 }
           )
@@ -574,9 +575,9 @@ trait MTBReportCompiler extends MTBReportingOps
     period: Period[LocalDate]
   ): FollowUp = {
 
-    implicit val recommendations =
+    implicit val recommendationsInPeriod =
       cohort
-        .flatMap(_.getCarePlans)
+        .flatMap(_.getCarePlans.filter(rec => period contains rec.issuedOn))
         .flatMap(_.getMedicationRecommendations)
 
     val therapies =
@@ -596,7 +597,8 @@ trait MTBReportCompiler extends MTBReportingOps
             Entry(
               status,
               Distribution.of(
-                ths.filter(_.basedOn.flatMap(_.resolve).exists(rec => period contains rec.issuedOn))
+                ths.filter(_.basedOn.flatMap(_.resolve).isDefined)
+//                ths.filter(_.basedOn.flatMap(_.resolve).exists(rec => period contains rec.issuedOn))
                   .flatMap(_.statusReason)
               )
             )

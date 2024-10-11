@@ -118,6 +118,7 @@ with Completers
 {
 
 
+  @deprecated
   override def DefaultFilter(
     results: Seq[Snapshot[MTBPatientRecord]]
   ): MTBFilters = {
