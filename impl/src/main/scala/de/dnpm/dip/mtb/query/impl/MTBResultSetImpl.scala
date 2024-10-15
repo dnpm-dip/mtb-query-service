@@ -44,7 +44,11 @@ import de.dnpm.dip.mtb.model.{
   MTBMedicationRecommendation,
   MTBMedicationTherapy,
   RECIST,
-  Variant
+  Variant,
+  SNV,
+  CNV,
+  DNAFusion,
+  RNAFusion
 }
 import de.dnpm.dip.mtb.query.api.{
   MTBQueryCriteria,
@@ -423,10 +427,12 @@ with MTBReportingOps
 
   override def therapyResponsesBySupportingVariant(
     filter: MTBFilters
-  ): Seq[Entry[DisplayLabel[Variant],MTBResultSet.TherapyResponses]] = {
-/*
+  ): Seq[MTBResultSet.TherapyResponses] = {
+
+    import VariantCriteriaOps._
+
     val variantCriteria =
-      queryCriteria.flatMap(_.variantCriteria)
+      queryCriteria.flatMap(_.variants)
 
     val isRelevant: Variant => Boolean = {
       case snv: SNV          => variantCriteria.flatMap(_.simpleVariants).fold(false)(_ exists(_ matches snv))
@@ -439,17 +445,8 @@ with MTBReportingOps
     patientRecords(filter)
       .foldLeft(
         Map.empty[
-          Set[DisplayLabel[Variant]],
-          (
-            Boolean, 
-            Map[
-              Set[Coding[Medications]],
-              (
-                Set[Coding[Medications]],
-                List[Coding[RECIST.Value]]
-              )
-            ]
-          )
+          DisplayLabel[Variant],
+          (Boolean, Map[Set[Coding[Medications]],(Set[Coding[Medications]],List[Coding[RECIST.Value]])])
         ]
       ){
         (acc,record) =>
@@ -495,74 +492,62 @@ with MTBReportingOps
                     .map(_.value)
 
                 supportingVariants.foldLeft(acc2){
-                  case (acc3,variant) =>
+                  (acc3,variant) =>
                     acc3.updatedWith(DisplayLabel.of(variant)){
                       _.map { 
                         case (relevant,acc4) =>
                           (
                             relevant || isRelevant(variant),
-                            acc.updatedWith(medication){
+                            acc4.updatedWith(medication){
                               _.map { 
-                                case (medClasses, responses) => (medClasses, response :: responses)
+                                case (medClasses, responses) => (medClasses, responses ++ response)
                               }
-                              .orElse(
-                                Some(medicationClasses -> List(response))
-                              )
+                              .orElse(Some(medicationClasses -> response.toList))
                             }
                           )
                       }
                       .orElse(
+                        Some(isRelevant(variant) -> Map(medication -> (medicationClasses,response.toList)))
                       )
                     }
 
                 }   
-
-                acc2.updatedWith(medication){ 
-                  case Some((classes,suppVars,responses)) => 
-                    Some(
-                     (
-                      classes ++ medicationClasses,
-                      suppVars ++ supportingVariants,
-                      response.fold(responses)(_ :: responses)
-                     )
-                    )
-                  case _ =>
-                    Some(
-                     (
-                      medicationClasses,
-                      supportingVariants,
-                      response.toList
-                     )
-                    )  
-                }    
-            }
-
-      }
-      .map { 
-        case (medications,(classes,supportingVariants,responses)) =>
-          TherapyResponseDistribution(
-            classes,
-            medications,
-            supportingVariants,
-            Distribution.of(responses)
-              .pipe(
-                dist => dist.copy(
-                  elements =
-                    dist.elements.sortBy {
-                      entry =>
-                        val RECIST(r) = entry.key
-                        r
-                    }(
-                      recistOrdering.reverse
-                    )
-                )
-              )
-          )
+              }   
       }
       .toSeq
-*/
+      .sortBy {
+        case (_,(relevant,_)) => relevant 
+      }(
+        Ordering[Boolean].reverse  // reverse Ordering to have relevant entries at the beginning instead of the end
+      )
+      .flatMap { 
+        case (supportingVariant,(_,acc)) =>
+          acc
+            .toSeq
+            .map {
+              case (medications,(medClasses,responses)) =>
+                TherapyResponses(
+                  supportingVariant,
+                  medClasses,
+                  medications,
+                  Distribution.of(responses)
+                    .pipe(
+                      dist => dist.copy(
+                        elements =
+                          dist.elements.sortBy {
+                            entry =>
+                              val RECIST(r) = entry.key
+                              r
+                          }(
+                            recistOrdering.reverse
+                          )
+                      )
+                    )
+                )
+            }
+            .sortBy(_.responseDistribution)(responseDistributionOrdering)
+      }
 
-    ???
   }
 
 }

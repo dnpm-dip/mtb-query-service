@@ -53,9 +53,9 @@ with KaplanMeierOps[Id,Applicative[Id]]
   ): Seq[MTBResultSet.TherapyResponseDistribution]
 
 
-//  def therapyResponsesBySupportingVariant(
-//    filter: MTBFilters
-//  ): Seq[Entry[DisplayLabel[Variant],MTBResultSet.TherapyResponses]]
+  def therapyResponsesBySupportingVariant(
+    filter: MTBFilters
+  ): Seq[MTBResultSet.TherapyResponses]
 
 }
 
@@ -148,6 +148,7 @@ object MTBResultSet
 
   final case class TherapyResponses
   (
+    supportingVariant: DisplayLabel[Variant],
     medicationClasses: Set[Coding[Medications]],
     medications: Set[Coding[Medications]],
     responseDistribution: Distribution[Coding[RECIST.Value]]
