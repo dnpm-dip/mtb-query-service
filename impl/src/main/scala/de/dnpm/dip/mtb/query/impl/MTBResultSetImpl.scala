@@ -87,6 +87,11 @@ with MTBReportingOps
       f.asInstanceOf[MTBFilters]
 
 
+    def matches[T](ts: Iterable[T], filter: T => Boolean) =
+      if (ts.nonEmpty) ts.exists(filter)
+      else true
+
+
     def expandedMedicationNames(meds: Set[Set[Coding[Medications]]]): Set[Set[Tree[String]]] =
       meds.map(
         _.flatMap(
@@ -101,67 +106,61 @@ with MTBReportingOps
         )
       )   
 
-    val diagnosisFilter: MTBDiagnosis => Boolean = {
-
-      val icd10s =
-        diagnoses
-          .code
-          .map(
-            _.flatMap(
-              _.expand
-            )
-          )
-
-      diag =>
-        icd10s.fold(true)(_ exists (_ exists (_.code == diag.code.code)))
-    }
+    val diagnosisFilter: Option[MTBDiagnosis => Boolean] =
+      diagnoses
+        .code
+        .map(
+          _.flatMap(_.expand)
+        )
+        .map(
+          icd10s => diag => icd10s exists (_ exists (_.code == diag.code.code))
+        )
     
-    val recommendationFilter: MTBMedicationRecommendation => Boolean = { 
+    val recommendationFilter: Option[MTBMedicationRecommendation => Boolean] = 
+      recommendations
+        .medication
+        .map(expandedMedicationNames)
+        .map {
+          medicationNames =>
+            recommendation =>
+              lazy val occurringDrugNames =
+                recommendation.medication
+                  .flatMap(_.display)
+                  .map(_.toLowerCase)
+            
+              lazy val occurring: String => Boolean =
+                name => occurringDrugNames exists (_ contains name)
+            
+              medicationNames exists (_ forall (_ exists occurring))
+        }
 
-      val medicationNames =
-        recommendations
-          .medication
-          .map(expandedMedicationNames)
-
-      recommendation =>
-        lazy val occurringDrugNames =
-          recommendation.medication
-            .flatMap(_.display)
-            .map(_.toLowerCase)
-
-        lazy val occurring: String => Boolean =
-          name => occurringDrugNames exists (_ contains name)
-
-        medicationNames.fold(true)(_ exists (_ forall (_ exists occurring)))
-    }
-
-    val therapyFilter: MTBMedicationTherapy => Boolean = { 
-
-      val medicationNames =
-        therapies
-          .medication
-          .map(expandedMedicationNames)
-
-      therapy =>
-        lazy val optOccurringDrugNames =
-          therapy.medication
-            .map(
-              _.flatMap(_.display)
-               .map(_.toLowerCase)
-            )
-
-        lazy val occurring: String => Boolean =
-          name => optOccurringDrugNames.exists(_ exists (_ contains name))
-
-        medicationNames.fold(true)(_ exists (_ forall (_ exists occurring)))
-    }
+    val therapyFilter: Option[MTBMedicationTherapy => Boolean] =
+      therapies
+        .medication
+        .map(expandedMedicationNames)
+        .map {
+          medicationNames =>
+            therapy =>
+              lazy val optOccurringDrugNames =
+                therapy.medication
+                  .map(
+                    _.flatMap(_.display)
+                     .map(_.toLowerCase)
+                  )
+            
+              lazy val occurring: String => Boolean =
+                name => optOccurringDrugNames.exists(_ exists (_ contains name))
+            
+              medicationNames  exists (_ forall (_ exists occurring))
+         }
 
 
     record => 
       patient(record.patient) &&
-      record.getDiagnoses.exists(diagnosisFilter) &&
-      record.getCarePlans.flatMap(_.medicationRecommendations.getOrElse(List.empty)).exists(recommendationFilter) &&
-      record.getTherapies.map(_.latest).exists(therapyFilter)
+      diagnosisFilter.fold(true)(record.getDiagnoses.exists) &&
+      recommendationFilter.fold(true)(record.getCarePlans.flatMap(_.medicationRecommendations.getOrElse(List.empty)).exists) &&
+      therapyFilter.fold(true)(record.getTherapies.map(_.latest).exists)
+
   }
 
 
@@ -337,7 +336,7 @@ with MTBReportingOps
             record
               .getCarePlans
               .flatMap(_.medicationRecommendations.getOrElse(List.empty))
-              
+
           implicit val variants =
             record
               .getNgsReports
@@ -368,12 +367,155 @@ with MTBReportingOps
                     .flatMap(_.resolve)
                     .map(DisplayLabel.of(_))
                     .toSet
+
+                val response =
+                  record.getResponses
+                    .filter(_.therapy.id.exists(_ == therapy.id))
+                    .maxByOption(_.effectiveDate)
+                    .map(_.value)
+
+                acc2.updatedWith(medication){
+                  case Some((classes,suppVars,responses)) =>
+                    Some(
+                     (
+                      classes ++ medicationClasses,
+                      suppVars ++ supportingVariants,
+                      response.fold(responses)(_ :: responses)
+                     )
+                    )
+                  case _ =>
+                    Some(
+                     (
+                      medicationClasses,
+                      supportingVariants,
+                      response.toList
+                     )
+                    )
+                }
+            }
+
+      }
+      .map {
+        case (medications,(classes,supportingVariants,responses)) =>
+          TherapyResponseDistribution(
+            classes,
+            medications,
+            supportingVariants,
+            Distribution.of(responses)
+              .pipe(
+                dist => dist.copy(
+                  elements =
+                    dist.elements.sortBy {
+                      entry =>
+                        val RECIST(r) = entry.key
+                        r
+                    }(
+                      recistOrdering.reverse
+                    )
+                )
+              )
+          )
+      }
+      .toSeq
+      .sortBy(_.responseDistribution)(responseDistributionOrdering)
+
+
+
+  override def therapyResponsesBySupportingVariant(
+    filter: MTBFilters
+  ): Seq[Entry[DisplayLabel[Variant],MTBResultSet.TherapyResponses]] = {
+/*
+    val variantCriteria =
+      queryCriteria.flatMap(_.variantCriteria)
+
+    val isRelevant: Variant => Boolean = {
+      case snv: SNV          => variantCriteria.flatMap(_.simpleVariants).fold(false)(_ exists(_ matches snv))
+      case cnv: CNV          => variantCriteria.flatMap(_.copyNumberVariants).fold(false)(_ exists(_ matches cnv))
+      case fusion: DNAFusion => variantCriteria.flatMap(_.dnaFusions).fold(false)(_ exists(_ matches fusion))
+      case fusion: RNAFusion => variantCriteria.flatMap(_.rnaFusions).fold(false)(_ exists(_ matches fusion))
+      case rnaSeq            => false   // RNASeq currently not queryable
+    }
+
+    patientRecords(filter)
+      .foldLeft(
+        Map.empty[
+          Set[DisplayLabel[Variant]],
+          (
+            Boolean, 
+            Map[
+              Set[Coding[Medications]],
+              (
+                Set[Coding[Medications]],
+                List[Coding[RECIST.Value]]
+              )
+            ]
+          )
+        ]
+      ){
+        (acc,record) =>
+
+          implicit val recommendations =
+            record
+              .getCarePlans
+              .flatMap(_.medicationRecommendations.getOrElse(List.empty))
+              
+          implicit val variants =
+            record
+              .getNgsReports
+              .flatMap(_.variants)
+
+          record
+            .getTherapies
+            .map(_.latest)
+            .view
+            .filter(_.medication.isDefined)
+            .foldLeft(acc){
+              (acc2,therapy) =>
+
+                val medication =
+                  therapy
+                    .medication.get
+
+                val medicationClasses =
+                  medication
+                    .flatMap(_.currentGroup)
+
+                val supportingVariants =
+                  therapy
+                    .basedOn
+                    .flatMap(_.resolve)
+                    .flatMap(_.supportingVariants)
+                    .getOrElse(List.empty)
+                    .flatMap(_.resolve)
      
                 val response =
                   record.getResponses
                     .filter(_.therapy.id.exists(_ == therapy.id))
                     .maxByOption(_.effectiveDate)
                     .map(_.value)
+
+                supportingVariants.foldLeft(acc2){
+                  case (acc3,variant) =>
+                    acc3.updatedWith(DisplayLabel.of(variant)){
+                      _.map { 
+                        case (relevant,acc4) =>
+                          (
+                            relevant || isRelevant(variant),
+                            acc.updatedWith(medication){
+                              _.map { 
+                                case (medClasses, responses) => (medClasses, response :: responses)
+                              }
+                              .orElse(
+                                Some(medicationClasses -> List(response))
+                              )
+                            }
+                          )
+                      }
+                      .orElse(
+                      )
+                    }
+
+                }   
 
                 acc2.updatedWith(medication){ 
                   case Some((classes,suppVars,responses)) => 
@@ -418,13 +560,9 @@ with MTBReportingOps
           )
       }
       .toSeq
-      .sortBy(_.responseDistribution)(responseDistributionOrdering)
-
-
-/*
-  override def therapyResponsesBySupportingVariant(
-    filter: MTBFilters
-  ): Seq[Entry[DisplayLabel[Variant],MTBResultSet.TherapyResponses]]
 */
+
+    ???
+  }
 
 }
