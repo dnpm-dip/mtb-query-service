@@ -85,85 +85,22 @@ with MTBReportingOps
 
   import scala.language.implicitConversions
 
-  override implicit def toPredicate[F >: MTBFilters](f: F): MTBPatientRecord => Boolean = {
 
-    val MTBFilters(patient,diagnoses,recommendations,therapies) =
-      f.asInstanceOf[MTBFilters]
+  override implicit def toPredicate[F >: MTBFilters](
+    mtbFilter: F
+  ): MTBPatientRecord => Boolean = {
 
+    import PatientFilter.Extensions._
+    import MTBFilterExtensions._
 
-    def matches[T](ts: Iterable[T], filter: T => Boolean) =
-      if (ts.nonEmpty) ts.exists(filter)
-      else true
+    val MTBFilters(patientFilter,diagnosisFilter,recommendationFilter,therapyFilter) =
+      mtbFilter.asInstanceOf[MTBFilters]
 
-
-    def expandedMedicationNames(meds: Set[Set[Coding[Medications]]]): Set[Set[Tree[String]]] =
-      meds.map(
-        _.flatMap(
-          coding => coding.system match {
-            case sys if sys == Coding.System[ATC].uri =>
-              coding.asInstanceOf[Coding[ATC]]
-                .expand
-                .map(_.map(_.display.get.toLowerCase))
-
-            case _ => Some(Tree(coding.code.value.toLowerCase))
-          }
-        )
-      )   
-
-    val diagnosisFilter: Option[MTBDiagnosis => Boolean] =
-      diagnoses
-        .code
-        .map(
-          _.flatMap(_.expand)
-        )
-        .map(
-          icd10s => diag => icd10s exists (_ exists (_.code == diag.code.code))
-        )
-    
-    val recommendationFilter: Option[MTBMedicationRecommendation => Boolean] = 
-      recommendations
-        .medication
-        .map(expandedMedicationNames)
-        .map {
-          medicationNames =>
-            recommendation =>
-              lazy val occurringDrugNames =
-                recommendation.medication
-                  .flatMap(_.display)
-                  .map(_.toLowerCase)
-            
-              lazy val occurring: String => Boolean =
-                name => occurringDrugNames exists (_ contains name)
-            
-              medicationNames exists (_ forall (_ exists occurring))
-        }
-
-    val therapyFilter: Option[MTBMedicationTherapy => Boolean] =
-      therapies
-        .medication
-        .map(expandedMedicationNames)
-        .map {
-          medicationNames =>
-            therapy =>
-              lazy val optOccurringDrugNames =
-                therapy.medication
-                  .map(
-                    _.flatMap(_.display)
-                     .map(_.toLowerCase)
-                  )
-            
-              lazy val occurring: String => Boolean =
-                name => optOccurringDrugNames.exists(_ exists (_ contains name))
-            
-              medicationNames  exists (_ forall (_ exists occurring))
-         }
-
-
-    record => 
-      patient(record.patient) &&
-      diagnosisFilter.fold(true)(record.getDiagnoses.exists) &&
-      recommendationFilter.fold(true)(record.getCarePlans.flatMap(_.medicationRecommendations.getOrElse(List.empty)).exists) &&
-      therapyFilter.fold(true)(record.getTherapies.map(_.latest).exists)
+    record =>
+      patientFilter(record.patient) &&
+      diagnosisFilter(record.getDiagnoses) &&
+      recommendationFilter(record.getCarePlans.flatMap(_.medicationRecommendations.getOrElse(List.empty))) &&
+      therapyFilter(record.getTherapies.map(_.latest))
 
   }
 
