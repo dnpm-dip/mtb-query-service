@@ -40,7 +40,7 @@ object PFSRatio
   (
     timeUnit: UnitOfTime,
     data: Seq[DataPoint],
-    medianPfsr: Double,
+    medianPfsr: Option[Double],
     upperSubset: Count
   )
 

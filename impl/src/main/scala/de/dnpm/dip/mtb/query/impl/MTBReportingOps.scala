@@ -88,7 +88,7 @@ trait MTBReportingOps extends ReportingOps
             Entry(
               meds,
               ths.flatMap(_.period.flatMap(_.duration(Weeks).map(_.value)))
-                .pipe(mean(_))
+                .pipe(mean(_).getOrElse(0.0))
             )
         }
         .toSeq
@@ -375,7 +375,7 @@ trait MTBReportCompiler extends MTBReportingOps
     Demographics(
       Distribution.of(patients.map(_.gender)),
       Distribution.binned(ages,5),
-      Age(mean(ages)),
+      Age(mean(ages).getOrElse(0.0)),
 //      Age(median(ages))
     )
   }
