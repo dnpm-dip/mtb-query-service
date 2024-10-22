@@ -55,9 +55,9 @@ final case class TherapyFilter
 final case class MTBFilters
 (
   patient: PatientFilter,
-  diagnoses: DiagnosisFilter,
-  recommendations: RecommendationFilter,
-  therapies: TherapyFilter
+  diagnosis: DiagnosisFilter,
+  recommendation: RecommendationFilter,
+  therapy: TherapyFilter
 )
 extends Filters[MTBPatientRecord]
 
