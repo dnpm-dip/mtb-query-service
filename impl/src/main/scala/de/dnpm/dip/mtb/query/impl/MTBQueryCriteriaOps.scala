@@ -38,7 +38,6 @@ private trait MTBQueryCriteriaOps
   private[impl] implicit class Extensions(criteria: MTBQueryCriteria){
 
     def getDiagnoses          = criteria.diagnoses.getOrElse(Set.empty)
-
     def getTumorMorphologies  = criteria.tumorMorphologies.getOrElse(Set.empty)
     def getSimpleVariants     = criteria.variants.flatMap(_.simpleVariants).getOrElse(Set.empty)
     def getCopyNumberVariants = criteria.variants.flatMap(_.copyNumberVariants).getOrElse(Set.empty)
@@ -106,6 +105,18 @@ private trait MTBQueryCriteriaOps
     }
 
 
+  private implicit class OperatorSyntax(op: LogicalOperator.Value){
+ 
+    def apply(bs: Seq[Boolean]): Boolean =
+      if (bs.nonEmpty) 
+        op match {
+          case And => bs forall (_ == true)
+          case Or  => bs exists (_ == true)
+        }
+      else true
+  }
+
+
   private def matches[T](
     criteria: Option[Set[T]],
     values: => Set[T]
@@ -133,12 +144,6 @@ private trait MTBQueryCriteriaOps
 
 
 
-  import scala.language.implicitConversions
-
-  implicit def optBooleanToBoolean(opt: Option[Boolean]): Boolean =
-    opt.getOrElse(false)
-
-
   import VariantCriteriaOps._
 
 
@@ -153,26 +158,25 @@ private trait MTBQueryCriteriaOps
     import HGVS.extensions._
 
     criteria match {
-      case Some(set) if set.nonEmpty =>
-        set.filter(
+      case Some(crit) if crit.nonEmpty =>
+        crit.filter(
           criterion =>
             snvs.exists(snv =>
               criterion.matches(snv) &&
-              criterion.supporting.map {
+              criterion.supporting.fold(true){
                 case true  => snv.isSupporting
                 case false => true 
               }
-              .getOrElse(true))
-//          crit => snvs.exists(crit matches _)
+            )
         )
         .pipe {
           case matches if matches.nonEmpty =>
-            Some(matches) -> {
-              op match {
+            Some(matches) -> { op match {
                 case Or  => true
-                case And => matches.size == set.size // ensure all criteria are matched
+                case And => matches.size == crit.size // ensure all criteria are matched
               }
             }
+            
         
           case _ => None -> false
         }
@@ -181,6 +185,7 @@ private trait MTBQueryCriteriaOps
     }
 
   }
+
 
   private def cnvsMatch(
     criteria: Option[Set[CNVCriteria]],
@@ -192,7 +197,6 @@ private trait MTBQueryCriteriaOps
     criteria match {
       case Some(set) if set.nonEmpty =>
         set.filter(
-//          criterion => cnvs.exists(criterion matches _)
           criterion => cnvs.exists(cnv =>
               criterion.matches(cnv) &&
               criterion.supporting.map {
@@ -230,7 +234,6 @@ private trait MTBQueryCriteriaOps
     criteria match {
       case Some(set) if set.nonEmpty =>
         set.filter {
-//          crit => fusions.exists(crit matches _)
           criterion => fusions.exists(fusion =>
               criterion.matches(fusion) &&
               criterion.supporting.map {
@@ -257,6 +260,7 @@ private trait MTBQueryCriteriaOps
     }
 
   }
+
 /*  
   private def snvsMatch(
     criteria: Option[Set[SNVCriteria]],
@@ -407,45 +411,6 @@ private trait MTBQueryCriteriaOps
     import MedicationUsage._
     import de.dnpm.dip.util.Tree
 
-/*
-    def combinedMatches(
-      queriedDrugs: Set[Tree[Coding[ATC]]],
-      drugSets: List[Set[String]],
-    ): Set[Coding[ATC]] =
-      queriedDrugs.headOption.map {
-        queriedDrug =>
-
-        // Iterate over drugSets to accumulate both
-        // the matching entries from the current Coding tree
-        // and those drugSets which do lead to a match
-        val (drugMatches,matchingDrugSets) =
-          drugSets.foldLeft(
-            Set.empty[Coding[ATC]] -> List.empty[Set[String]]
-          ){
-            case ((drugMatches,acc),drugSet) =>
-              queriedDrug.find(
-                coding => drugSet.exists(name => coding.display.exists(name contains _.toLowerCase))
-              ) 
-              .map(
-                m => (drugMatches + m, acc :+ drugSet)
-              )
-              .getOrElse(
-                (drugMatches, acc)
-              )
-          }
-
-        // If there are matches, proceed with the remaining queried drugs,
-        // using those drugSet which had a match
-        if (drugMatches.nonEmpty)
-          drugMatches.toSet ++ combinedMatches(queriedDrugs.tail,matchingDrugSets)
-        // else break here
-        else 
-          drugMatches
-          
-      }
-      .getOrElse(Set.empty)
-*/
-
 
     def drugMatches(
       queriedDrugs: Set[Tree[Coding[Medications]]],
@@ -521,50 +486,11 @@ private trait MTBQueryCriteriaOps
       case _ => None -> true
     }
 
-/*
-    criteria match {
-      case Some(MedicationCriteria(op,queriedDrugs,usage)) if queriedDrugs.nonEmpty => 
-
-        lazy val recommendedDrugNames =
-          recommendedDrugs.map(_.flatMap(_.display.map(_.toLowerCase)))
-
-        lazy val usedDrugNames =
-          usedDrugs.map(_.flatMap(_.display.map(_.toLowerCase)))
-
-        val operator =
-          op.getOrElse(Or)
-
-        usage
-          .getOrElse(Set.empty)
-          .collect { case MedicationUsage(value) => value }
-          .pipe {
-
-            case s if s.contains(Recommended) && s.contains(Used) =>
-              drugMatches(queriedDrugs,recommendedDrugNames,operator) & drugMatches(queriedDrugs,usedDrugNames,operator)
-
-            case s if s.contains(Recommended) =>
-              drugMatches(queriedDrugs,recommendedDrugNames,operator)
-
-            case s if s.contains(Used) =>
-              drugMatches(queriedDrugs,usedDrugNames,operator)
-
-            case _ =>
-              drugMatches(queriedDrugs,recommendedDrugNames,operator) | drugMatches(queriedDrugs,usedDrugNames,operator)
-
-          }
-          .pipe {
-            case matches if matches.nonEmpty =>
-              Some(MedicationCriteria(op,matches,usage)) -> true
-            case _ =>
-              None  -> false
-          }
-
-      case _ => None -> true
-    }
-*/
-
   }
 
+
+
+  import scala.collection.mutable.Stack
 
   def criteriaMatcher(
     operator: LogicalOperator.Value = And
@@ -585,10 +511,6 @@ private trait MTBQueryCriteriaOps
               record.getCarePlans
                 .flatMap(_.medicationRecommendations.getOrElse(List.empty))
 
-//            implicit lazy val supportingVariants =
-//              record.getCarePlans
-//                .flatMap(_.medicationRecommendations.getOrElse(List.empty))
-//                .flatMap(_.supportingVariants.getOrElse(List.empty)) 
 
             val (diagnosisMatches, diagnosesFulfilled) =
               matches(
@@ -643,6 +565,12 @@ private trait MTBQueryCriteriaOps
                 variantOperator
               )
 
+            val variantChecks = new Stack[Boolean]
+              criteria.variants.flatMap(_.simpleVariants).foreach(_ => variantChecks += snvsFulfilled)
+              criteria.variants.flatMap(_.copyNumberVariants).foreach(_ => variantChecks += cnvsFulfilled)
+              criteria.variants.flatMap(_.dnaFusions).foreach(_ => variantChecks += dnaFusionsFulfilled)
+              criteria.variants.flatMap(_.rnaFusions).foreach(_ => variantChecks += rnaFusionsFulfilled)
+
             val (medicationMatches, medicationFulfilled) =
               medicationsMatch(
                 criteria.medication,
@@ -654,7 +582,6 @@ private trait MTBQueryCriteriaOps
                   .flatMap(_.medication)
               )
 
-
             val (responseMatches, responseFulfilled) =
               matches(
                 criteria.responses,
@@ -663,10 +590,19 @@ private trait MTBQueryCriteriaOps
                   .toSet
               )
 
+            val checks = new Stack[Boolean]
+            criteria.diagnoses.foreach(_ => checks += diagnosesFulfilled)
+            criteria.tumorMorphologies.foreach(_ => checks += morphologyFulfilled)
+            criteria.medication.foreach(_ => checks += medicationFulfilled)
+            criteria.responses.foreach(_ => checks += responseFulfilled)
+            checks += variantOperator(variantChecks.toSeq)  
+
+/*             
           if (
             checkMatches(
               diagnosesFulfilled,
               morphologyFulfilled,
+              variantOperator(variantChecks.toSeq),
               checkMatches(
                 snvsFulfilled,
                 cnvsFulfilled,
@@ -681,6 +617,8 @@ private trait MTBQueryCriteriaOps
               operator
             )
           )
+*/            
+          if (operator(checks.toSeq))
             Some(
               MTBQueryCriteria(
                 diagnosisMatches,
