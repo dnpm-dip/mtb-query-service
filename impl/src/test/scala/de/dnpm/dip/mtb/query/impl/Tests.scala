@@ -215,9 +215,6 @@ class Tests extends AsyncFlatSpec
       patientMatches = 
         resultSet.patientMatches(MTBFilters.empty)
 
-//      _ = all (queryCriteria.diagnoses.value.map(_.display)) must be (defined)  
-//      _ = all (queryCriteria.diagnoses.value.map(_.version)) must be (defined)  
-
       _ = patientMatches must not be empty
 
       _ = patientMatches.size must be < (dataSets.size) 
