@@ -60,6 +60,7 @@ object MTBFilterExtensions
     )(
       implicit icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]]
     ): Boolean = {
+
       val occurringCodes =
         diagnoses.map(_.code.code)
 

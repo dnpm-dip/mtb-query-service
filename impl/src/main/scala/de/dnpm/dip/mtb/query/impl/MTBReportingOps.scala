@@ -30,7 +30,6 @@ import de.dnpm.dip.model.{
   Period,
   Therapy
 }
-import de.dnpm.dip.model.Medications._
 import de.dnpm.dip.model.UnitOfTime.Weeks
 import de.dnpm.dip.service.query.{
   Count,
@@ -58,8 +57,8 @@ import de.dnpm.dip.mtb.query.api.VariantCriteria
 trait MTBReportingOps extends ReportingOps
 {
 
-  import ATC.extensions._
   import ICD.extensions._
+  import de.dnpm.dip.model.Medications._  // For extensions methods on Coding[Medications]
 
 
   def therapyDistributionAndMeanDurations(

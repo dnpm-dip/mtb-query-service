@@ -20,6 +20,7 @@ import de.dnpm.dip.mtb.model.{
 }
 
 
+
 final case class DiagnosisFilter
 (
   code: Option[Set[Coding[ICD10GM]]]
@@ -35,31 +36,16 @@ final case class TherapyFilter
   medication: Option[Set[Set[Coding[Medications]]]]
 )
 
-/*
-final case class DiagnosisFilter
-(
-  code: Option[Set[Tree[Coding[ICD10GM]]]]
-)
-
-final case class RecommendationFilter
-(
-  medication: Option[Set[Set[Tree[Coding[Medications]]]]]
-)
-
-final case class TherapyFilter
-(
-  medication: Option[Set[Set[Tree[Coding[Medications]]]]]
-)
-*/
 
 final case class MTBFilters
 (
   patient: PatientFilter,
   diagnosis: DiagnosisFilter,
-  recommendation: RecommendationFilter,
+  therapyRecommendation: RecommendationFilter,
   therapy: TherapyFilter
 )
 extends Filters[MTBPatientRecord]
+
 
 object MTBFilters
 {

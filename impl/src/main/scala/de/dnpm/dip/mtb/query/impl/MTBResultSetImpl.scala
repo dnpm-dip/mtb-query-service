@@ -24,6 +24,7 @@ import de.dnpm.dip.coding.icd.{
   ICD10GM,
   ICDO3
 }
+import de.dnpm.dip.coding.icd.ClassKinds.Category
 import de.dnpm.dip.model.{
   Medications,
   Snapshot
@@ -79,11 +80,13 @@ with MTBReportingOps
 {
 
   import scala.util.chaining._
+  import scala.language.implicitConversions
+
   import MTBResultSet._
   import Completer.syntax._
+  import Medications._
+  import de.dnpm.dip.coding.icd.ICD.extensions._
 
-
-  import scala.language.implicitConversions
 
 
   override implicit def toPredicate[F >: MTBFilters](
@@ -113,7 +116,14 @@ with MTBReportingOps
     MTBFilters(
       PatientFilter.on(records),
       DiagnosisFilter(
-        Some(records.flatMap(_.getDiagnoses.map(_.code)).toSet)
+        Some(
+          records
+            .flatMap(_.getDiagnoses.map(_.code))
+            .toSet
+            .pipe(
+              icd10s => icd10s ++ icd10s.flatMap(_.parentOfKind(Category))
+            )
+        )
       ),
       RecommendationFilter(
         Some(
@@ -121,6 +131,9 @@ with MTBReportingOps
             .flatMap(_.medicationRecommendations.getOrElse(List.empty))
             .map(_.medication)
             .toSet
+            .pipe(
+              meds => meds ++ meds.map(_.flatMap(_.currentGroup))
+            )
         )
       ),
       TherapyFilter(
@@ -129,6 +142,9 @@ with MTBReportingOps
             .map(_.latest)
             .flatMap(_.medication)
             .toSet
+            .pipe(
+              meds => meds ++ meds.map(_.flatMap(_.currentGroup))
+            )
         )
       )
     )

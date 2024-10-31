@@ -77,7 +77,7 @@ object MTBQueryServiceImpl extends Logging
 {
 
   private val cache =
-    new BaseQueryCache[MTBQueryCriteria,MTBFilters,MTBResultSet,MTBPatientRecord]
+    new BaseQueryCache[MTBQueryCriteria,MTBResultSet,MTBPatientRecord]
 
 
   private lazy val connector =
@@ -110,45 +110,12 @@ class MTBQueryServiceImpl
   val preparedQueryDB: PreparedQueryDB[Future,Monad[Future],MTBQueryCriteria,String],
   val db: LocalDB[Future,Monad[Future],MTBQueryCriteria,MTBPatientRecord],
   val connector: Connector[Future,Monad[Future]],
-  val cache: QueryCache[MTBQueryCriteria,MTBFilters,MTBResultSet,MTBPatientRecord]
+  val cache: QueryCache[MTBQueryCriteria,MTBResultSet,MTBPatientRecord]
 )
 extends BaseQueryService[Future,MTBConfig]
 with MTBQueryService
 with Completers
 {
-
-
-  @deprecated
-  override def DefaultFilter(
-    results: Seq[Snapshot[MTBPatientRecord]]
-  ): MTBFilters = {
-
-    val records =
-      results.map(_.data)
-
-    MTBFilters(
-      PatientFilter.on(records),
-      DiagnosisFilter(
-        Some(records.flatMap(_.getDiagnoses.map(_.code)).toSet)
-      ),
-      RecommendationFilter(
-        Some(
-          records.flatMap(_.getCarePlans)
-            .flatMap(_.medicationRecommendations.getOrElse(List.empty))
-            .map(_.medication)
-            .toSet
-        )
-      ),
-      TherapyFilter(
-        Some(
-          records.flatMap(_.getTherapies)
-            .map(_.latest)
-            .flatMap(_.medication)
-            .toSet
-        )
-      )
-    )
-  }
 
     
   override implicit val hgnc: CodeSystemProvider[HGNC,Id,Applicative[Id]] =
@@ -173,6 +140,7 @@ with Completers
       .get
 
 
+
   private implicit val kmEstimator: KaplanMeierEstimator[Id] =
     DefaultKaplanMeierEstimator
 
@@ -181,7 +149,7 @@ with Completers
 
 
   override def ResultSetFrom(
-    query: Query[MTBQueryCriteria,MTBFilters],
+    query: Query[MTBQueryCriteria],
     results: Seq[Query.Match[MTBPatientRecord,MTBQueryCriteria]]
   ) =
     new MTBResultSetImpl(query.id,query.criteria,results)

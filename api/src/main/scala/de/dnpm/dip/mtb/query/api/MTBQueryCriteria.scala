@@ -53,30 +53,46 @@ sealed trait Supportable
   val supporting: Option[Boolean]
 }
 
+
+sealed trait Negatable
+{
+  val negated: Option[Boolean]
+}
+
+
 final case class SNVCriteria
 (
   gene: Option[Coding[HGNC]],
   dnaChange: Option[Coding[HGVS.DNA]],
   proteinChange: Option[Coding[HGVS.Protein]],
-  supporting: Option[Boolean] = None
+  supporting: Option[Boolean] = None,
+  negated: Option[Boolean] = None
 )
 extends Supportable
+with Negatable
+
 
 final case class CNVCriteria
 (
   affectedGenes: Option[Set[Coding[HGNC]]],
   `type`: Option[Coding[CNV.Type.Value]],
-  supporting: Option[Boolean] = None
+  supporting: Option[Boolean] = None,
+  negated: Option[Boolean] = None
 )
 extends Supportable
+with Negatable
+
 
 final case class FusionCriteria
 (
   fusionPartner5pr: Option[Coding[HGNC]],
   fusionPartner3pr: Option[Coding[HGNC]],
-  supporting: Option[Boolean] = None
+  supporting: Option[Boolean] = None,
+  negated: Option[Boolean] = None
 )
 extends Supportable
+with Negatable
+
 
 final case class VariantCriteria
 (
@@ -86,6 +102,8 @@ final case class VariantCriteria
   dnaFusions: Option[Set[FusionCriteria]],
   rnaFusions: Option[Set[FusionCriteria]],
 ) 
+
+
 
 object MedicationUsage
 extends CodedEnum("dnpm-dip/mtb/query/medication-usage")
@@ -108,14 +126,7 @@ with DefaultCodeSystem
 
 }
 
-/*
-final case class MedicationCriteria
-(
-  operator: Option[LogicalOperator.Value],
-  drugs: Set[Tree[Coding[Medications]]],
-  usage: Option[Set[Coding[MedicationUsage.Value]]]
-)
-*/
+
 
 final case class MedicationCriteria
 (
@@ -124,12 +135,13 @@ final case class MedicationCriteria
   usage: Option[Set[Coding[MedicationUsage.Value]]]
 )
 {
-  var expandedDrugs: Set[Tree[Coding[Medications]]] = Set.empty
+  var expandedDrugs: Set[Tree[Coding[Medications]]] =
+    Set.empty
 }
-
 
 object MedicationCriteria
 {
+
   import play.api.libs.functional.syntax._
   import scala.util.matching.Regex
 
@@ -161,6 +173,14 @@ object MedicationCriteria
 }
 
 
+/*
+final case class MedicationCriteria
+(
+  recommended: Option[Set[Set[Coding[Medications]]]],
+  used: Option[Set[Set[Coding[Medications]]]]
+*/
+
+
 final case class MTBQueryCriteria
 (
   diagnoses: Option[Set[Coding[ICD10GM]]],
@@ -169,18 +189,6 @@ final case class MTBQueryCriteria
   medication: Option[MedicationCriteria],
   responses: Option[Set[Coding[RECIST.Value]]]
 )
-
-
-/*
-final case class MTBQueryCriteria
-(
-  diagnoses: Option[Set[Tree[Coding[ICD10GM]]]],
-  tumorMorphologies: Option[Set[Tree[Coding[ICDO3.M]]]],
-  variants: Option[VariantCriteria],
-  medication: Option[MedicationCriteria],
-  responses: Option[Set[Coding[RECIST.Value]]]
-)
-*/
 
 
 object MTBQueryCriteria
