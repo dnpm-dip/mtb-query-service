@@ -46,6 +46,7 @@ object VariantCriteriaOps
   }
 
 
+/*
   private def checkMatches(
     bs: Boolean*
   )(
@@ -56,7 +57,7 @@ object VariantCriteriaOps
       case Or  => bs exists (_ == true)
     }
 
-
+  
   implicit class SNVCriteriaOps(val criteria: SNVCriteria) extends AnyVal
   {
 
@@ -108,88 +109,62 @@ object VariantCriteriaOps
       )
 
   }
+*/
+
+  sealed trait RelevanceMatcher[-T] extends Any {
+
+    def check(t: T): Seq[Boolean]
+
+    def score(t: T): Double = { 
+      val checks = check(t)
+      checks.count(_ == true).toDouble/checks.size
+    }
+
+    def matches(t: T): Boolean =
+      check(t).forall(_ == true)
+  }
 
 
-/*  
-  implicit class SNVCriteriaOps(val criteria: SNVCriteria) extends AnyVal
+
+  implicit class SNVCriteriaOps(val criteria: SNVCriteria) extends AnyVal with RelevanceMatcher[SNV]
   {
-
     import HGVS.extensions._
 
-    def matches[T <: CanHaveSupportingVariants](
-      snv: SNV
-    )(
-      implicit ts: Iterable[T]
-    ): Boolean =
-      checkMatches(
+    override def check(snv: SNV): Seq[Boolean] =
+      Seq(
         criteria.gene.map(g => snv.gene.exists(_.code == g.code)).getOrElse(true),
         criteria.dnaChange.map(g => snv.dnaChange.exists(_ matches g)).getOrElse(true),
-        criteria.proteinChange.map(g => snv.proteinChange.exists(_ matches g)).getOrElse(true),
-        criteria.supporting.map {
-          case true  => snv.isSupporting
-          case false => true 
-        }
-        .getOrElse(true)
-      )(
-        And
+        criteria.proteinChange.map(g => snv.proteinChange.exists(_ matches g)).getOrElse(true)
       )
-
   }
   
 
-  implicit class CNVCriteriaOps(val criteria: CNVCriteria) extends AnyVal
+  implicit class CNVCriteriaOps(val criteria: CNVCriteria) extends AnyVal with RelevanceMatcher[CNV]
   {
-
-    def matches[T <: CanHaveSupportingVariants](
-      cnv: CNV
-    )(
-      implicit ts: Iterable[T]
-    ): Boolean =
-      checkMatches(
+    override def check(cnv: CNV): Seq[Boolean] =
+      Seq(
         criteria.affectedGenes match {
           case Some(queriedGenes) if queriedGenes.nonEmpty =>
             cnv.reportedAffectedGenes.exists(cnvGenes => queriedGenes.forall(g => cnvGenes.exists(_.code == g.code)))
 
           case _ => true
         },
-        criteria.`type`.map(_ == cnv.`type`).getOrElse(true),
-        criteria.supporting.map {
-          case true  => cnv.isSupporting
-          case false => true 
-        }
-        .getOrElse(true)
-      )(
-        And
+        criteria.`type`.map(_ == cnv.`type`).getOrElse(true)
       )
-
   }
   
 
   implicit class FusionCriteriaOps[F <: Fusion[_ <: { def gene: Coding[HGNC] }]](
     val criteria: FusionCriteria
   )
-  extends AnyVal
+  extends AnyVal with RelevanceMatcher[F]
   {
-
-    def matches[T <: CanHaveSupportingVariants](
-      fusion: F
-    )(
-      implicit ts: Iterable[T]
-    ): Boolean =
-      checkMatches(
+    override def check(fusion: F): Seq[Boolean] =
+      Seq(
         criteria.fusionPartner5pr.map(_.code == fusion.fusionPartner5prime.gene.code).getOrElse(true),
-        criteria.fusionPartner3pr.map(_.code == fusion.fusionPartner3prime.gene.code).getOrElse(true),
-        criteria.supporting.map {
-          case true  => fusion.isSupporting
-          case false => true 
-        }
-        .getOrElse(true)
-      )(
-        And
+        criteria.fusionPartner3pr.map(_.code == fusion.fusionPartner3prime.gene.code).getOrElse(true)
       )
-
+//      .map(criteria.asNegated)
   }
-*/ 
-
 
 }

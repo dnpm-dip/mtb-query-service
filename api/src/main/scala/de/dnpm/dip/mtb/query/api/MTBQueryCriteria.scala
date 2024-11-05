@@ -57,6 +57,10 @@ sealed trait Supportable
 sealed trait Negatable
 {
   val negated: Option[Boolean]
+
+  def asNegated(cond: Boolean) =
+    if (negated.getOrElse(false)) !cond
+    else cond
 }
 
 

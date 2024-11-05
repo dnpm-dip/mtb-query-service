@@ -94,14 +94,23 @@ private trait MTBQueryCriteriaOps
   }
 
 
+  import scala.language.implicitConversions
+
+  private implicit def toBiFunction(op: LogicalOperator.Value): (Boolean,Boolean) => Boolean =
+    op match {
+      case And => _ & _
+      case Or  => _ | _
+    }
+
+/*
   private implicit class OperatorSyntax(op: LogicalOperator.Value){
- 
     def apply(bs: Stack[Boolean]): Boolean =
       op match {
-        case And => bs.reduceOption(_ && _).getOrElse(true)
-        case Or  => bs.reduceOption(_ || _).getOrElse(true)
+        case And => bs.reduceOption(_ & _).getOrElse(true)
+        case Or  => bs.reduceOption(_ | _).getOrElse(true)
       }
   }
+*/
   
 
   import VariantCriteriaOps._
@@ -122,6 +131,7 @@ private trait MTBQueryCriteriaOps
             case false => true 
           }
         )
+        .pipe(criterion.asNegated)
     )
 
 
@@ -140,6 +150,7 @@ private trait MTBQueryCriteriaOps
             case false => true 
           }
         )
+        .pipe(criterion.asNegated)
     )
 
   private def fusionMatches[F <: Fusion[_ <: { def gene: Coding[HGNC] }]](
@@ -160,6 +171,7 @@ private trait MTBQueryCriteriaOps
             case false => true 
           }
         )
+        .pipe(criterion.asNegated)
     )
   }
 
@@ -240,6 +252,158 @@ private trait MTBQueryCriteriaOps
      )
 
   }
+
+
+/*
+  def criteriaMatcher(
+    operator: LogicalOperator.Value = And
+  ): MTBQueryCriteria => (MTBPatientRecord => Option[MTBQueryCriteria]) =
+
+     _ match {
+
+        // If criteria object is empty, i.e. no query criteria are defined at all, any patient record matches
+        case criteria if criteria.isEmpty => 
+          record => Some(criteria)
+ 
+ 
+        case queryCriteria => 
+
+          record =>
+
+            implicit lazy val recommendations =
+              record.getCarePlans
+                .flatMap(_.medicationRecommendations.getOrElse(List.empty))
+
+
+            val (diagnosisMatches,diagnosesCheck) =
+              queryCriteria.diagnoses match {
+                case Some(criteria) if criteria.nonEmpty =>
+                  val matches = criteria intersect record.getDiagnoses.map(_.code).toSet
+                  Some(matches) -> Some(matches.nonEmpty)
+
+                case _ => (None,None)
+              }
+
+            val (morphologyMatches,morphologyCheck) =
+              queryCriteria.tumorMorphologies match {
+                case Some(criteria) if criteria.nonEmpty =>
+                  val matches = (criteria intersect record.getHistologyReports.flatMap(_.results.tumorMorphology).map(_.value).toSet)
+                  Some(matches) -> Some(matches.nonEmpty)
+
+                case _ => (None,None)
+              }
+
+
+            val (snvMatches,snvCheck) =
+              queryCriteria.variants.flatMap(_.simpleVariants) match  {
+                case Some(criteria) if criteria.nonEmpty =>
+                  val matches =
+                    snvMatchesOn(criteria,record.getNgsReports.flatMap(_.results.simpleVariants))
+                  Some(matches) -> Some(matches.nonEmpty)
+
+                case _ => (None,None)
+              }
+
+            val (cnvMatches,cnvCheck) =
+              queryCriteria.variants.flatMap(_.copyNumberVariants) match {
+                case Some(criteria) if criteria.nonEmpty =>
+                  val matches =
+                    cnvMatchesOn(criteria,record.getNgsReports.flatMap(_.results.copyNumberVariants))
+                  Some(matches) -> Some(matches.nonEmpty)
+
+                case _ => (None,None)
+              }
+
+            val (dnaFusionMatches,dnaFusionCheck) =
+              queryCriteria.variants.flatMap(_.dnaFusions) match {
+                case Some(criteria) if criteria.nonEmpty =>
+                  val matches =
+                    fusionMatches(criteria,record.getNgsReports.flatMap(_.results.dnaFusions))
+                  Some(matches) -> Some(matches.nonEmpty)
+
+                case _ => (None,None)
+              }
+
+            val (rnaFusionMatches,rnaFusionCheck) =
+              queryCriteria.variants.flatMap(_.rnaFusions) match {
+                case Some(criteria) if criteria.nonEmpty =>
+                  val matches =
+                    fusionMatches(criteria,record.getNgsReports.flatMap(_.results.rnaFusions))
+                  Some(matches) -> Some(matches.nonEmpty)
+
+                case _ => (None,None)
+              }
+
+            val (medicationMatches,medicationCheck) =
+              queryCriteria.medication match {
+                case Some(criteria) if criteria.drugs.nonEmpty =>
+                  val mtchs =
+                    matches(
+                      criteria,
+                      record.getCarePlans
+                        .flatMap(_.medicationRecommendations.getOrElse(List.empty))
+                        .map(_.medication),
+                      record.getTherapies
+                        .map(_.latest)
+                        .flatMap(_.medication)
+                    )
+                  Some(mtchs) -> Some(mtchs.drugs.nonEmpty)
+
+                case _ => (None,None)
+              }
+
+            val (responseMatches,responseCheck) =
+              queryCriteria.responses match {
+                case Some(criteria) if criteria.nonEmpty =>
+                  val matches = (criteria intersect record.getResponses.map(_.value).toSet)
+                  Some(matches) -> Some(matches.nonEmpty)
+
+                case _ => (None,None)
+              }
+           
+                
+            val variantOperator =
+              queryCriteria.variants.flatMap(_.operator).getOrElse(operator)
+
+            val relevant =
+              operator(
+                diagnosesCheck,
+                morphologyCheck,
+                Some(
+                  variantOperator(
+                    snvCheck,
+                    cnvCheck,
+                    dnaFusionCheck,
+                    rnaFusionCheck,
+                  )
+                ),
+                medicationCheck,
+                responseCheck
+              )
+
+
+            if (relevant)
+              Some(
+                MTBQueryCriteria(
+                  diagnosisMatches,
+                  morphologyMatches,
+                  queryCriteria.variants.map(_ =>
+                    VariantCriteria(
+                      Some(variantOperator),
+                      snvMatches,
+                      cnvMatches,
+                      dnaFusionMatches,
+                      rnaFusionMatches
+                    )
+                  ),
+                  medicationMatches,
+                  responseMatches,
+                )
+              )
+            else 
+              None
+      }
+*/
 
 
   def criteriaMatcher(
@@ -356,7 +520,8 @@ private trait MTBQueryCriteriaOps
               queryCriteria.variants.flatMap(_.operator).getOrElse(operator)
 
 
-            if (operator(checks :+ variantOperator(variantChecks)))
+//            if (operator(checks :+ variantOperator(variantChecks)))
+            if ((checks :+ variantChecks.reduceOption(variantOperator).getOrElse(true)).reduceOption(operator).getOrElse(true))
               Some(
                 MTBQueryCriteria(
                   diagnosisMatches,

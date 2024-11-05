@@ -387,19 +387,20 @@ with MTBReportingOps
     val variantCriteria =
       queryCriteria.flatMap(_.variants)
 
-    val isRelevant: Variant => Boolean = {
-      case snv: SNV          => variantCriteria.flatMap(_.simpleVariants).fold(false)(_ exists(_ matches snv))
-      case cnv: CNV          => variantCriteria.flatMap(_.copyNumberVariants).fold(false)(_ exists(_ matches cnv))
-      case fusion: DNAFusion => variantCriteria.flatMap(_.dnaFusions).fold(false)(_ exists(_ matches fusion))
-      case fusion: RNAFusion => variantCriteria.flatMap(_.rnaFusions).fold(false)(_ exists(_ matches fusion))
-      case rnaSeq            => false   // RNASeq currently not queryable
+    val score: Variant => Double = {
+      case snv: SNV          => variantCriteria.flatMap(_.simpleVariants).flatMap(_.map(_ score snv).maxOption).getOrElse(0.0)
+      case cnv: CNV          => variantCriteria.flatMap(_.copyNumberVariants).flatMap(_.map(_ score cnv).maxOption).getOrElse(0.0)
+      case fusion: DNAFusion => variantCriteria.flatMap(_.dnaFusions).flatMap(_.map(_ score fusion).maxOption).getOrElse(0.0)
+      case fusion: RNAFusion => variantCriteria.flatMap(_.rnaFusions).flatMap(_.map(_ score fusion).maxOption).getOrElse(0.0)
+      case rnaSeq            => 0.0   // RNASeq currently not queryable
     }
+
 
     patientRecords(filter)
       .foldLeft(
         Map.empty[
           DisplayLabel[Variant],
-          (Boolean, Map[Set[Coding[Medications]],(Set[Coding[Medications]],List[Coding[RECIST.Value]])])
+          (Double, Map[Set[Coding[Medications]],(Set[Coding[Medications]],List[Coding[RECIST.Value]])])
         ]
       ){
         (acc,record) =>
@@ -448,9 +449,9 @@ with MTBReportingOps
                   (acc3,variant) =>
                     acc3.updatedWith(DisplayLabel.of(variant)){
                       _.map { 
-                        case (relevant,acc4) =>
+                        case (rsv,acc4) =>
                           (
-                            relevant || isRelevant(variant),
+                            math.max(rsv,score(variant)),
                             acc4.updatedWith(medication){
                               _.map { 
                                 case (medClasses, responses) => (medClasses, responses ++ response)
@@ -460,7 +461,7 @@ with MTBReportingOps
                           )
                       }
                       .orElse(
-                        Some(isRelevant(variant) -> Map(medication -> (medicationClasses,response.toList)))
+                        Some(score(variant) -> Map(medication -> (medicationClasses,response.toList)))
                       )
                     }
 
@@ -469,9 +470,9 @@ with MTBReportingOps
       }
       .toSeq
       .sortBy {
-        case (_,(relevant,_)) => relevant 
+        case (_,(rsv,_)) => rsv 
       }(
-        Ordering[Boolean].reverse  // reverse Ordering to have relevant entries at the beginning instead of the end
+        Ordering[Double].reverse  // reverse Ordering to sort entries by decreasing relevance score
       )
       .flatMap { 
         case (supportingVariant,(_,acc)) =>

@@ -223,6 +223,7 @@ trait MTBReportingOps extends ReportingOps
     val inRelevantPeriod: MTBCarePlan => Boolean =
       cp => period.fold(true)(_ contains cp.issuedOn)
 
+/*
     val isRelevant: Variant => Boolean = {
       case snv: SNV          => criteria.flatMap(_.simpleVariants).fold(false)(_ exists(_ matches snv))
       case cnv: CNV          => criteria.flatMap(_.copyNumberVariants).fold(false)(_ exists(_ matches cnv))
@@ -230,10 +231,20 @@ trait MTBReportingOps extends ReportingOps
       case fusion: RNAFusion => criteria.flatMap(_.rnaFusions).fold(false)(_ exists(_ matches fusion))
       case rnaSeq            => false   // RNASeq currently not queryable
     }
+*/
+
+    val score: Variant => Double = {
+      case snv: SNV          => criteria.flatMap(_.simpleVariants).flatMap(_.map(_ score snv).maxOption).getOrElse(0.0)
+      case cnv: CNV          => criteria.flatMap(_.copyNumberVariants).flatMap(_.map(_ score cnv).maxOption).getOrElse(0.0)
+      case fusion: DNAFusion => criteria.flatMap(_.dnaFusions).flatMap(_.map(_ score fusion).maxOption).getOrElse(0.0)
+      case fusion: RNAFusion => criteria.flatMap(_.rnaFusions).flatMap(_.map(_ score fusion).maxOption).getOrElse(0.0)
+      case rnaSeq            => 0.0   // RNASeq currently not queryable
+    }
+
 
 
     records.foldLeft(
-      Map.empty[DisplayLabel[Variant],(Seq[Set[Coding[Medications]]],Boolean)]
+      Map.empty[DisplayLabel[Variant],(Seq[Set[Coding[Medications]]],Double)]
     ){
       (acc,record) =>
 
@@ -261,13 +272,13 @@ trait MTBReportingOps extends ReportingOps
           .foldLeft(acc){
             case (accPr,(variant,meds)) =>
               accPr.updatedWith(DisplayLabel.of(variant)){
-                case Some(medSets -> relevant) => Some((medSets :+ meds, relevant || isRelevant(variant)))
-                case None                      => Some(Seq(meds) -> isRelevant(variant))
+                case Some(medSets -> rsv) => Some((medSets :+ meds, math.max(rsv,score(variant))))
+                case None                 => Some(Seq(meds) -> score(variant))
               }
           }
     }
     .toSeq
-    .sortBy { case (_,(_,relevant)) => relevant }(Ordering[Boolean].reverse)  // reverse Ordering to have relevant entries at the beginning instead of the end
+    .sortBy { case (_,(_,rsv)) => rsv }(Ordering[Double].reverse)  // reverse Ordering to sort entries by decreasing relevance score
     .map { 
       case (variant,(meds,_)) =>
         Entry(
