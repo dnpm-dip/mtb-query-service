@@ -28,7 +28,8 @@ import de.dnpm.dip.model.{
 import de.dnpm.dip.service.Connector
 import de.dnpm.dip.connector.{
   FakeConnector,
-  HttpConnector
+  HttpConnector,
+  HttpMethod
 }
 import de.dnpm.dip.service.query.{
   BaseQueryService,
@@ -39,6 +40,8 @@ import de.dnpm.dip.service.query.{
   QueryCache,
   BaseQueryCache,
   PatientFilter,
+  PeerToPeerQuery,
+  PatientRecordRequest,
   LocalDB,
   FSBackedLocalDB,
   InMemLocalDB,
@@ -76,6 +79,8 @@ class MTBQueryServiceProviderImpl extends MTBQueryServiceProvider
 object MTBQueryServiceImpl extends Logging
 {
 
+  import HttpMethod._
+
   private val cache =
     new BaseQueryCache[MTBQueryCriteria,MTBResultSet,MTBPatientRecord]
 
@@ -85,8 +90,13 @@ object MTBQueryServiceImpl extends Logging
       case HttpConnector.Type(typ) =>
         HttpConnector(
           typ,
-          "/api/mtb/peer2peer/",
-          PartialFunction.empty
+          { 
+            case req: PeerToPeerQuery[_,_] =>
+              (POST, "/api/mtb/peer2peer/query", Map.empty)
+
+            case req: PatientRecordRequest[_] =>
+              (GET, "/api/mtb/peer2peer/patient-record", Map.empty)
+          }        
         )
 
       case _ =>
