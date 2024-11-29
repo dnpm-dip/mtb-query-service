@@ -1,49 +1,31 @@
 package de.dnpm.dip.mtb.query.impl
 
 
-import de.dnpm.dip.model.UnitOfTime
-import scala.math.round
 import cats.{
   Applicative,
   Id
 }
-import de.dnpm.dip.util.{
-  Completer,
-  DisplayLabel,
-  Tree
-}
+import de.dnpm.dip.util.DisplayLabel
 import de.dnpm.dip.coding.{
   Coding,
-  CodeSystem,
   CodeSystemProvider
 }
 import de.dnpm.dip.coding.atc.ATC
-import de.dnpm.dip.coding.UnregisteredMedication
-import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.icd.{
   ICD10GM,
   ICDO3
 }
 import de.dnpm.dip.coding.icd.ClassKinds.Category
-import de.dnpm.dip.model.{
-  Medications,
-  Snapshot
-}
+import de.dnpm.dip.model.Medications
 import de.dnpm.dip.service.query.{
   Count,
   Distribution,
   Entry,
   PatientFilter,
-  PatientMatch,
   Query,
-  ResultSet,
-  ReportingOps
 }
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
-  MTBDiagnosis,
-  MTBMedicationRecommendation,
-  MTBMedicationTherapy,
   RECIST,
   Variant,
   SNV,
@@ -80,10 +62,8 @@ with MTBReportingOps
 {
 
   import scala.util.chaining._
-  import scala.language.implicitConversions
 
   import MTBResultSet._
-  import Completer.syntax._
   import Medications._
   import de.dnpm.dip.coding.icd.ICD.extensions._
 
@@ -121,6 +101,8 @@ with MTBReportingOps
             .flatMap(_.getDiagnoses.map(_.code))
             .toSet
             .pipe(
+              // Add the parent category of each occurring entry,
+              // so that e.g. [C25.1, C25.3, ...] -> [C25, C25.1, C25.3, ...]
               icd10s => icd10s ++ icd10s.flatMap(_.parentOfKind(Category))
             )
         )
@@ -132,6 +114,8 @@ with MTBReportingOps
             .map(_.medication)
             .toSet
             .pipe(
+              // Add the medication class/group of each occurring entry,
+              // so that medications e.g. [A.1, A.2, ...] -> [A, A.1, A.2, ...]
               meds => meds ++ meds.map(_.flatMap(_.currentGroup))
             )
         )
@@ -143,6 +127,8 @@ with MTBReportingOps
             .flatMap(_.medication)
             .toSet
             .pipe(
+              // Add the medication class/group of each occurring entry,
+              // so that medications e.g. [A.1, A.2, ...] -> [A, A.1, A.2, ...]
               meds => meds ++ meds.map(_.flatMap(_.currentGroup))
             )
         )
@@ -392,7 +378,7 @@ with MTBReportingOps
       case cnv: CNV          => variantCriteria.flatMap(_.copyNumberVariants).flatMap(_.map(_ score cnv).maxOption).getOrElse(0.0)
       case fusion: DNAFusion => variantCriteria.flatMap(_.dnaFusions).flatMap(_.map(_ score fusion).maxOption).getOrElse(0.0)
       case fusion: RNAFusion => variantCriteria.flatMap(_.rnaFusions).flatMap(_.map(_ score fusion).maxOption).getOrElse(0.0)
-      case rnaSeq            => 0.0   // RNASeq currently not queryable
+      case _                 => 0.0   // RNASeq currently not queryable
     }
 
 

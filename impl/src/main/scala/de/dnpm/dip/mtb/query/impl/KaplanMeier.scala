@@ -76,7 +76,6 @@ trait KaplanMeierEstimator[F[_]]
   ): F[CohortResult] = {
 
     import cats.syntax.functor._
-    import cats.syntax.flatMap._
 
     // Median survival time defined as: min{ t | Surv(t) <= 0.5 }
     def medianSt(ts: Seq[DataPoint]): Long =
@@ -117,37 +116,6 @@ trait KaplanMeierModule[F[_]]
     implicit estimator: KaplanMeierEstimator[F],
   ): F[SurvivalStatistics]
 
-/*
-  def survivalReport(
-    cohort: Seq[Snapshot[MTBPatientRecord]],
-    timeUnit: UnitOfTime = UnitOfTime.Weeks,
-    typesAndGroupings: Seq[(SurvivalType.Value,Grouping.Value)] =
-      Seq(
-        OS  -> Ungrouped,
-        OS  -> ByTumorEntity,
-        PFS -> ByTherapy
-      )
-  )(
-    implicit
-    estimator: KaplanMeierEstimator[F],
-    F: Monad[F]
-  ): F[SurvivalReport] = {
-
-    import cats.syntax.traverse._
-    import cats.syntax.functor._
-
-    typesAndGroupings.traverse { 
-      case (survivalType,grouping) =>
-        self.survivalStatistics(
-          Some(survivalType),
-          Some(grouping),
-          cohort,
-          timeUnit
-      )
-    }
-
-  }
-*/
 
   def pfsRatioReport(
     cohort: Seq[Snapshot[MTBPatientRecord]],
@@ -166,11 +134,7 @@ class DefaultKaplanMeierModule(
 extends KaplanMeierModule[cats.Id]
 {
 
-  import ATC.extensions._
   import ICD.extensions._
-
-  private val defaultSurvivalType = PFS
-  private val defaultGrouping = ByTherapy
 
   private val defaults =
     Config.Defaults(
@@ -425,45 +389,51 @@ extends KaplanMeierModule[cats.Id]
     cohort: Seq[Snapshot[MTBPatientRecord]],
     timeUnit: UnitOfTime = UnitOfTime.Weeks
   )(
-    implicit 
-    F: Monad[cats.Id]
-  ): PFSRatio.Report = 
-    Seq(
-      Entry(
-        "Alle",
-        cohort
-          .flatMap(snp =>
-            pfsRatio(
-              snp.data,
-              UnitOfTime.chronoUnit(timeUnit)
-            )
+    implicit F: Monad[cats.Id]
+  ): PFSRatio.Report = {
+
+    val chronoUnit = UnitOfTime.chronoUnit(timeUnit)
+
+    PFSRatio.Report(
+      timeUnit,
+      cohort
+        .flatMap(snp =>
+          pfsRatio(
+            snp.data,
+            chronoUnit
           )
-          .pipe(_.sortBy(_.pfsr))
-          .pipe {
-            dataPoints =>
-
-              PFSRatio.CohortResult(
-                timeUnit,
-                dataPoints.zipWithIndex
-                  .map {
-                    case (dp,idx) => dp.copy(patient = s"Patient $idx")
-                  },
-                ReportingOps.median(dataPoints.map(_.pfsr)),
-                Count.of(
-                  n     = dataPoints.count(_.pfsr >= 1.3),
-                  total = dataPoints.size
-                )
-              )
-
-          }
-      )
+        )
+        .groupMap(_._1)(_._2)
+        .map {
+          case (entity,seq) => Entry(
+            entity,
+            seq
+              .pipe {
+                dataPoints =>
+                  PFSRatio.CohortResult(
+                    dataPoints.zipWithIndex
+                      .map {
+                        case (pt,idx) => pt.copy(patient = pt.patient.withDisplay(s"Patient $idx"))
+                      },
+                    ReportingOps.median(dataPoints.map(_.pfsRatio)),
+                    Count.of(
+                      n     = dataPoints.count(_.pfsRatio >= 1.3),
+                      total = dataPoints.size
+                    )
+                  )
+              }
+          )
+        }
+        .toSeq
     )
+
+  }
 
 
   private def pfsRatio(
     record: MTBPatientRecord,
     chronoUnit: ChronoUnit
-  ): Option[PFSRatio.DataPoint] = {
+  ): Option[(Coding[ICD10GM],PFSRatio.DataPoint)] = {
 
     def progressionTime(
       therapy: MTBMedicationTherapy,
@@ -475,9 +445,7 @@ extends KaplanMeierModule[cats.Id]
         progressionOrCensoringDate(therapy,record.patient)
 
       status match {
-        case true  =>
-          therapy.period
-            .map(p => chronoUnit.between(p.start,observationDate))
+        case true  => therapy.period.map(p => chronoUnit.between(p.start,observationDate))
         case false => None
       }
     }
@@ -490,26 +458,40 @@ extends KaplanMeierModule[cats.Id]
           case (Reference(Some(therapyId),_,_,_),responses) =>
             therapyId -> responses.maxBy(_.effectiveDate)
         }
-   
+
+    implicit val diagnoses =
+      record.getDiagnoses
+
     for {
-      pfs1 <-
-        record
-          .getGuidelineTherapies
-          .maxByOption(_.recordedOn)
-          .flatMap(progressionTime(_,record.patient))
+      th1 <- record.getGuidelineTherapies.maxByOption(_.recordedOn)
 
-      pfs2 <-
-        record
-          .getTherapies
-          .map(_.latest)             // Take latest entry of each therapy history...
-          .maxByOption(_.recordedOn) // ... then take the latest recorded therapy of all
-          .flatMap(progressionTime(_,record.patient))
+      pfs1 <- progressionTime(th1,record.patient)
 
-    } yield PFSRatio.DataPoint(
-      record.patient.id.value,  // TODO: 
-      pfs1,
-      pfs2,
-      (pfs2.toDouble/pfs1)
+      medication1 <- th1.medication
+
+      th2 <- record.getTherapies.map(_.latest).maxByOption(_.recordedOn)
+
+      pfs2 <- progressionTime(th2,record.patient)
+
+      medication2 <- th2.medication
+
+      tumorEntity <-
+        for {
+          entity2 <- th2.indication.flatMap(_.resolve).map(_.code)
+          entity1 <- th1.indication.flatMap(_.resolve).map(_.code)
+          if entity1 == entity2
+        } yield entity2
+
+    } yield (
+      tumorEntity,
+      PFSRatio.DataPoint(
+        Reference.to(record.patient),
+        medication1,
+        medication2,
+        pfs1,
+        pfs2,
+        pfs2.toDouble/pfs1
+      )
     )
           
   }

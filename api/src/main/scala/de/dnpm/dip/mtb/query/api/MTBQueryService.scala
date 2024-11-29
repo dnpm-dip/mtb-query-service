@@ -8,17 +8,12 @@ import de.dnpm.dip.util.{
   SPILoader
 }
 import de.dnpm.dip.service.query.QueryService
-import de.dnpm.dip.mtb.model.MTBPatientRecord
-
 
 
 trait MTBQueryService extends QueryService[
   Future,
   Monad[Future],
   MTBConfig
-//  MTBPatientRecord,
-//  MTBQueryCriteria,
-//  MTBResultSet
 ]
 {
   def survivalConfig: KaplanMeier.Config

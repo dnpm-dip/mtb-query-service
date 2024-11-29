@@ -1,1 +1,2 @@
 de.dnpm.dip.mtb.query.api.MedicationUsage$ProviderSPI
+#de.dnpm.dip.mtb.query.api.GeneAlterationCriteria$CopyNumberType$ProviderSPI

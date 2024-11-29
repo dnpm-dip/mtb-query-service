@@ -10,7 +10,6 @@ import cats.{
 import de.dnpm.dip.util.DisplayLabel
 import de.dnpm.dip.coding.{
   Coding,
-  CodeSystem,
   CodeSystemProvider
 }
 import de.dnpm.dip.coding.atc.ATC
@@ -23,17 +22,16 @@ import de.dnpm.dip.coding.icd.{
 import ClassKinds._
 import de.dnpm.dip.model.{
   Age,
-  Gender,
   Duration,
   Medications,
   Patient,
   Period,
-  Therapy
+  Snapshot,
+  UnitOfTime
 }
 import de.dnpm.dip.model.UnitOfTime.Weeks
 import de.dnpm.dip.service.query.{
   Count,
-  ConceptCount,
   Distribution,
   Entry,
   ReportingOps
@@ -46,7 +44,6 @@ import de.dnpm.dip.mtb.model.{
   Variant,
   SNV,
   CNV,
-  Fusion,
   DNAFusion,
   RNAFusion
 }
@@ -186,21 +183,16 @@ trait MTBReportingOps extends ReportingOps
 
 
   def recommendationDistribution(
-    records: Seq[MTBPatientRecord],
-    period: Option[Period[LocalDate]] = None
+    records: Seq[MTBPatientRecord]
   )(
     implicit
     atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
   ): Distribution[Set[Coding[Medications]]] = {
 
-    val inRelevantPeriod: MTBCarePlan => Boolean =
-      cp => period.fold(true)(_ contains cp.issuedOn)
-
     Distribution.byParent(
       records
         .flatMap(
           _.getCarePlans
-           .filter(inRelevantPeriod)
            .flatMap(_.medicationRecommendations.getOrElse(List.empty))
         )
         .map(_.medication),
@@ -211,36 +203,21 @@ trait MTBReportingOps extends ReportingOps
 
   def recommendationsBySupportingVariant(
     records: Seq[MTBPatientRecord],
-    criteria: Option[VariantCriteria] = None,
-    period: Option[Period[LocalDate]] = None
+    criteria: Option[VariantCriteria] = None
   )(
     implicit
-    atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
+    @annotation.unused atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
   ): Seq[Entry[DisplayLabel[Variant],Distribution[Set[Coding[Medications]]]]] = {
 
     import VariantCriteriaOps._
-
-    val inRelevantPeriod: MTBCarePlan => Boolean =
-      cp => period.fold(true)(_ contains cp.issuedOn)
-
-/*
-    val isRelevant: Variant => Boolean = {
-      case snv: SNV          => criteria.flatMap(_.simpleVariants).fold(false)(_ exists(_ matches snv))
-      case cnv: CNV          => criteria.flatMap(_.copyNumberVariants).fold(false)(_ exists(_ matches cnv))
-      case fusion: DNAFusion => criteria.flatMap(_.dnaFusions).fold(false)(_ exists(_ matches fusion))
-      case fusion: RNAFusion => criteria.flatMap(_.rnaFusions).fold(false)(_ exists(_ matches fusion))
-      case rnaSeq            => false   // RNASeq currently not queryable
-    }
-*/
 
     val score: Variant => Double = {
       case snv: SNV          => criteria.flatMap(_.simpleVariants).flatMap(_.map(_ score snv).maxOption).getOrElse(0.0)
       case cnv: CNV          => criteria.flatMap(_.copyNumberVariants).flatMap(_.map(_ score cnv).maxOption).getOrElse(0.0)
       case fusion: DNAFusion => criteria.flatMap(_.dnaFusions).flatMap(_.map(_ score fusion).maxOption).getOrElse(0.0)
       case fusion: RNAFusion => criteria.flatMap(_.rnaFusions).flatMap(_.map(_ score fusion).maxOption).getOrElse(0.0)
-      case rnaSeq            => 0.0   // RNASeq currently not queryable
+      case _                 => 0.0   // RNASeq currently not queryable
     }
-
 
 
     records.foldLeft(
@@ -255,7 +232,6 @@ trait MTBReportingOps extends ReportingOps
 
         record
           .getCarePlans
-          .filter(inRelevantPeriod)
           .flatMap(_.medicationRecommendations.getOrElse(List.empty))
           .flatMap(
             recommendation =>
@@ -346,9 +322,12 @@ trait MTBReportingOps extends ReportingOps
 
 
 
-import de.dnpm.dip.mtb.query.api.MTBReport
+import de.dnpm.dip.mtb.query.api.{
+  MTBReport,
+  MTBReportingCriteria
+}
 
-object ModelExtensions
+object ReportingExtensions
 {
   implicit class CarePlanOps(val cp: MTBCarePlan) extends AnyVal
   {
@@ -367,6 +346,25 @@ object ModelExtensions
     def getStudyEnrollmentRecommendations =
       cp.studyEnrollmentRecommendations.getOrElse(List.empty)
   }
+
+
+  implicit class PatientRecordOps(val record: MTBPatientRecord) extends AnyVal {
+
+     import scala.language.reflectiveCalls
+     
+     implicit def inReportingPeriod[T <: { def issuedOn: LocalDate}](
+       period: Period[LocalDate]
+     ): T => Boolean =
+       t => period contains t.issuedOn
+
+
+    def trimmed(reportingPeriod: Period[LocalDate]): MTBPatientRecord =
+      record.copy(
+        ngsReports = record.ngsReports.map(_ filter reportingPeriod),
+        carePlans = record.carePlans.map(_ filter reportingPeriod),
+      )
+  }
+
 }
 
 
@@ -374,10 +372,56 @@ trait MTBReportCompiler extends MTBReportingOps
 {
 
   import MTBReport._
-  import ModelExtensions._
+  import ReportingExtensions._
+
+  def apply(
+    seq: Seq[Snapshot[MTBPatientRecord]],
+    criteria: MTBReportingCriteria
+  )(
+    implicit
+    atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
+    kaplanMeier: KaplanMeierModule[cats.Id]
+  ): MTBReport = {
+
+    val snapshots =
+      seq.map(
+        snp => snp.copy(
+          data = snp.data.trimmed(criteria.period)
+        )
+      )
+
+    val cohort =
+      snapshots.map(_.data)
+
+    MTBReport(
+      criteria,
+      demographics(cohort.map(_.patient)),
+      Distribution.of(cohort.flatMap(_.getDiagnoses).map(_.code)),
+      processStepDurations(cohort),
+      recommendations(cohort),
+      claimResponses(cohort),
+      followUp(snapshots),
+      Distribution.of(
+        cohort.flatMap(_.getNgsReports)
+          .map(_.sequencingType)
+      )
+    )
+  }
+
+  private def durations(
+    seq: Seq[Long],
+    timeUnit: UnitOfTime
+  ): Option[Durations] =
+    for {
+      mean <- mean(seq)
+      median <- median(seq)
+    } yield Durations(
+      Duration(mean,timeUnit),
+      Duration(median,timeUnit),
+    )
 
 
-  def demographics(patients: Seq[Patient]): Demographics = {
+  private def demographics(patients: Seq[Patient]): Demographics = {
 
     val ages =
       patients.map(_.age.value)
@@ -385,20 +429,84 @@ trait MTBReportCompiler extends MTBReportingOps
     Demographics(
       Distribution.of(patients.map(_.gender)),
       Distribution.binned(ages,5),
-      Age(mean(ages).getOrElse(0.0)),
-//      Age(median(ages))
+      mean(ages).map(Age(_)),
+      median(ages).map(Age(_))
     )
   }
 
 
-  def recommendations(
+  private def processStepDurations(
     cohort: Seq[MTBPatientRecord],
-    period: Period[LocalDate]
-  )(
-    implicit
-    atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
-  ): Recommendations = {
+    timeUnit: UnitOfTime = UnitOfTime.Weeks
+  ): MTBReport.ProcessStepDurations = {
 
+    import MTBReport.ProcessStep._
+
+    val chronoUnit =
+      UnitOfTime.chronoUnit(timeUnit)
+
+
+    val refToCarePlanDurations =
+      cohort.flatMap {
+        record =>
+
+          val carePlans =
+            record.getCarePlans
+              .sortBy(_.issuedOn)
+
+          record.episodesOfCare
+            .toList
+            .map(_.period.start)
+            .flatMap(
+              start => 
+                // for lack of episode reference on CarePlan,
+                // assume the first CarePlan after the episode's start date
+                // to belong to this episode
+                carePlans.find(_.issuedOn isAfter start)
+                  .map(cp => start until (cp.issuedOn,chronoUnit))
+            )
+      }
+
+    val carePlanToTherapyDurations: Seq[Long] =
+      cohort.flatMap {
+        record => 
+
+          implicit val recommendations =
+            record.getCarePlans
+              .flatMap(_.getMedicationRecommendations)
+
+          record.getTherapies
+            // Take first therapy entry
+            .map(_.history.toList.minBy(_.recordedOn)) // TODO: Consider filtering only therapies with status != NotDone
+            .flatMap {
+              th =>
+                th.basedOn
+                  .flatMap(_.resolve)
+                  .map(_.issuedOn until (th.recordedOn,chronoUnit))
+            }
+      }
+        
+
+    Seq(
+      ReferralToCarePlan -> refToCarePlanDurations,
+//      ReferralToTherapy  ->
+      CarePlanToTherapy  -> carePlanToTherapyDurations
+    )
+    .collect { 
+      case (step,ts) if ts.nonEmpty =>
+        Entry(
+          Coding(step),
+          durations(ts,timeUnit).get
+        )
+    }
+  }
+
+
+  private def recommendations(
+    cohort: Seq[MTBPatientRecord],
+  )(
+    implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
+  ): Recommendations = {
 
     val recordsWithRecommendations =
       cohort.filter(_.getCarePlans.exists(_.hasRecommendations))
@@ -406,7 +514,7 @@ trait MTBReportCompiler extends MTBReportingOps
     val patientsCarePlans: Seq[(Patient,Seq[MTBCarePlan])] =
       cohort.map(
         record =>
-          record.patient -> record.getCarePlans.filter(cp => cp.hasRecommendations && period.contains(cp.issuedOn))
+          record.patient -> record.getCarePlans.filter(cp => cp.hasRecommendations) // && reportingPeriod.contains(cp.issuedOn))
         )
         .filter(_._2.nonEmpty)
 
@@ -437,11 +545,9 @@ trait MTBReportCompiler extends MTBReportingOps
       ),
       recommendationDistribution(
         recordsWithRecommendations,
-        Some(period)
       ),
       recommendationsBySupportingVariant(
-        records = recordsWithRecommendations,
-        period = Some(period)
+        recordsWithRecommendations,
       ),
       Distribution.of(
         patientsCarePlans.flatMap(_._2)
@@ -460,9 +566,8 @@ trait MTBReportCompiler extends MTBReportingOps
   }
 
 
-  def claimResponses(
+  private def claimResponses(
     cohort: Seq[MTBPatientRecord],
-    period: Period[LocalDate]
   ): Seq[Entry[Coding[ClaimResponse.Status.Value],ClaimResponses]] = {
 
 
@@ -471,7 +576,7 @@ trait MTBReportCompiler extends MTBReportingOps
 
     implicit val recommendations =
       cohort
-        .flatMap(_.getCarePlans.filter(cp => period.contains(cp.issuedOn)))
+        .flatMap(_.getCarePlans)
         .flatMap(_.getMedicationRecommendations)
 
     val allClaimResponses =
@@ -501,20 +606,22 @@ trait MTBReportCompiler extends MTBReportingOps
   }
 
 
-  def followUp(
-    cohort: Seq[MTBPatientRecord],
-    period: Period[LocalDate]
+  private def followUp(
+    snapshots: Seq[Snapshot[MTBPatientRecord]],
+  )(
+    implicit kaplanMeier: KaplanMeierModule[cats.Id]
   ): FollowUp = {
+
+    val cohort =
+      snapshots.map(_.data)
 
     implicit val recommendationsInPeriod =
       cohort
-        .flatMap(_.getCarePlans.filter(rec => period contains rec.issuedOn))
+        .flatMap(_.getCarePlans)
         .flatMap(_.getMedicationRecommendations)
 
     val therapies =
-      cohort.flatMap(
-        _.getTherapies.map(_.latest)
-      )
+      cohort.flatMap(_.getTherapies.map(_.latest))
 
     FollowUp(
       Count.of(
@@ -529,13 +636,12 @@ trait MTBReportCompiler extends MTBReportingOps
               status,
               Distribution.of(
                 ths.filter(_.basedOn.flatMap(_.resolve).isDefined)
-//                ths.filter(_.basedOn.flatMap(_.resolve).exists(rec => period contains rec.issuedOn))
                   .flatMap(_.statusReason)
               )
             )
         }
-        .toSeq
-
+        .toSeq,
+      kaplanMeier.pfsRatioReport(snapshots)  
     )  
 
   }

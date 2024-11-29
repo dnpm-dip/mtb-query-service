@@ -1,30 +1,13 @@
 package de.dnpm.dip.mtb.query.impl 
 
 
-
-import java.io.File
 import scala.concurrent.Future
-import scala.util.{
-  Try,
-  Failure
-}
 import cats.{
   Id,
   Applicative,
   Monad
 }
-import de.dnpm.dip.util.{
-  Completer,
-  Logging,
-  Tree
-}
-import de.dnpm.dip.model.{
-  ClosedInterval,
-  Medications,
-  Site,
-  Snapshot,
-  Patient
-}
+import de.dnpm.dip.util.Logging
 import de.dnpm.dip.service.Connector
 import de.dnpm.dip.connector.{
   FakeConnector,
@@ -33,36 +16,23 @@ import de.dnpm.dip.connector.{
 }
 import de.dnpm.dip.service.query.{
   BaseQueryService,
-  Entry,
-  Filters,
   Query,
-  Querier,
   QueryCache,
   BaseQueryCache,
-  PatientFilter,
   PeerToPeerQuery,
   PatientRecordRequest,
   LocalDB,
-  FSBackedLocalDB,
-  InMemLocalDB,
   PreparedQueryDB,
   InMemPreparedQueryDB,
 }
-import de.dnpm.dip.coding.{
-  Coding,
-  CodeSystem,
-  CodeSystemProvider
-}
+import de.dnpm.dip.coding.CodeSystemProvider
 import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.coding.icd.{
   ICD10GM,
   ICDO3
 }
 import de.dnpm.dip.coding.hgnc.HGNC
-import de.dnpm.dip.mtb.model.{
-  MTBDiagnosis,
-  MTBPatientRecord
-}
+import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.mtb.query.api._
 
 
@@ -91,10 +61,10 @@ object MTBQueryServiceImpl extends Logging
         HttpConnector(
           typ,
           { 
-            case req: PeerToPeerQuery[_,_] =>
+            case _: PeerToPeerQuery[_,_] =>
               (POST, "/api/mtb/peer2peer/query", Map.empty)
 
-            case req: PatientRecordRequest[_] =>
+            case _: PatientRecordRequest[_] =>
               (GET, "/api/mtb/peer2peer/patient-record", Map.empty)
           }        
         )

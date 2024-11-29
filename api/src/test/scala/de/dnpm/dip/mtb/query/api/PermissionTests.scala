@@ -3,7 +3,6 @@ package de.dnpm.dip.mtb.query.api
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers._
-import org.scalatest.Inspectors._
 import de.dnpm.dip.service.auth.Permissions
 
 

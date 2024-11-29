@@ -5,6 +5,7 @@ import java.time.LocalDate
 import cats.data.IorNel
 import play.api.libs.json.{
   Json,
+  OFormat,
   OWrites
 }
 import de.dnpm.dip.coding.{
@@ -12,7 +13,6 @@ import de.dnpm.dip.coding.{
   CodedEnum,
   DefaultCodeSystem
 }
-import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.util.DisplayLabel
 import de.dnpm.dip.model.{
@@ -22,16 +22,16 @@ import de.dnpm.dip.model.{
   Gender,
   Interval,
   Medications,
+  NGSReport,
   Period,
+  Site,
   Study,
   Therapy
 }
 import de.dnpm.dip.service.query.{
   Count,
-  ConceptCount,
   Distribution,
-  Entry,
-  ResultSet
+  Entry
 }
 import de.dnpm.dip.mtb.model.{
   ClaimResponse,
@@ -40,11 +40,17 @@ import de.dnpm.dip.mtb.model.{
 }
 
 
-final class MTBReportingCriteria
+final case class MTBReportingCriteria
 (
-  period: Period[LocalDate]
+  period: Period[LocalDate],
+  sites: Set[Coding[Site]]
 )
 
+object MTBReportingCriteria
+{
+  implicit val format: OFormat[MTBReportingCriteria] =
+    Json.format[MTBReportingCriteria]
+}
 
 
 import MTBReport._
@@ -52,14 +58,14 @@ import MTBReport._
 
 final case class MTBReport
 (
-//  criteria: ...
+  criteria: MTBReportingCriteria,
   demographics: Demographics,    
-  processSteps: Seq[Entry[Coding[ProcessStep.Value],Durations]],
   tumorEntities: Distribution[Coding[ICD10GM]],
+  processStepDurations: ProcessStepDurations,
   recommendations: Recommendations,
   claimResponses: Seq[Entry[Coding[ClaimResponse.Status.Value],ClaimResponses]],
-//  claimResponses: ClaimResponses,
-  followUp: FollowUp
+  followUp: FollowUp,
+  sequencingTypes: Distribution[Coding[NGSReport.SequencingType.Value]]
 )
 
 
@@ -71,13 +77,13 @@ object MTBReport
   with DefaultCodeSystem
   {
     val ReferralToCarePlan = Value("referral-to-careplan")
-    val ReferralToTherapy  = Value("referral-to-therapy")
+//    val ReferralToTherapy  = Value("referral-to-therapy")
     val CarePlanToTherapy  = Value("careplan-to-therapy")
 
     override val display =
       Map(
         ReferralToCarePlan -> "Anmeldung bis MTB-Beschluss",
-        ReferralToTherapy  -> "Anmeldung bis Therapie-Beginn",
+//        ReferralToTherapy  -> "Anmeldung bis Therapie-Beginn",
         CarePlanToTherapy  -> "MTB-Beschluss bis Therapie-Beginn"
       )
 
@@ -90,13 +96,15 @@ object MTBReport
     median: Duration
   )
 
+  type ProcessStepDurations = Seq[Entry[Coding[ProcessStep.Value],Durations]]
+
 
   final case class Demographics
   (
     genderDistribution: Distribution[Coding[Gender.Value]],
     ageDistribution: Distribution[Interval[Int]],
-    meanAge: Age,
-//    medianAge: Age
+    meanAge: Option[Age],
+    medianAge: Option[Age]
   )
 
 
@@ -136,7 +144,7 @@ object MTBReport
   (
     livePatientCount: Count,
     therapyData: Seq[Entry[Coding[Therapy.Status.Value],Distribution[Coding[Therapy.StatusReason.Value]]]],
-    //TODO: PFS-ratio, ...
+    pfsRatio: PFSRatio.Report
   )
 
 

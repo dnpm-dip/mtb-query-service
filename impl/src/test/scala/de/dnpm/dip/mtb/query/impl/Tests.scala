@@ -8,15 +8,12 @@ import org.scalatest.EitherValues._
 import org.scalatest.Inspectors._
 import scala.util.Random
 import scala.concurrent.Future
-import cats.Monad
-import de.dnpm.dip.util.Tree
 import de.dnpm.dip.model.{
   Gender,
   Site
 }
 import de.dnpm.dip.coding.{
   Code,
-  CodeSystem,
   Coding
 }
 import de.dnpm.dip.coding.atc.ATC
@@ -25,30 +22,19 @@ import de.dnpm.dip.mtb.query.api._
 import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.mtb.model.Completers._
 import de.dnpm.dip.service.query.{
-  BaseQueryCache,
   Query,
   Querier,
   PreparedQuery,
-  PreparedQueryDB,
-  InMemPreparedQueryDB
 }
 import de.dnpm.dip.service.query.PatientFilter
 import de.dnpm.dip.service.query.QueryService.Save
-import de.dnpm.dip.connector.{
-  HttpConnector,
-  FakeConnector
-}
+import de.dnpm.dip.connector.HttpConnector
 import de.ekut.tbi.generators.Gen
-import play.api.libs.json.{
-  Json,
-  Writes
-}
 
 
 class Tests extends AsyncFlatSpec
 {
 
-  import scala.util.chaining._
   import de.dnpm.dip.util.Completer.syntax._
   import de.dnpm.dip.mtb.gens.Generators._
 
@@ -137,8 +123,28 @@ class Tests extends AsyncFlatSpec
           }
 
     } yield MTBQueryCriteria(
-      Some(Set(icd10)),
+//      Some(Set(icd10)),
       None,
+      None,
+      Some(
+        GeneAlterations(
+          Some(LogicalOperator.Or),
+          snvCriteria.map(
+            crit =>
+            GeneAlterationCriteria(
+              crit.gene.get,
+              Some(
+                GeneAlterationCriteria.SNVCriteria(
+                  crit.dnaChange,
+                  crit.proteinChange
+                )
+              )
+            )
+          )
+        )
+      ),
+      None,
+/*      
       Some(
         VariantCriteria(
           Some(LogicalOperator.Or),
@@ -149,6 +155,8 @@ class Tests extends AsyncFlatSpec
         )
       ),
       medicationCriteria,
+*/    
+      None,
       None
     )
 

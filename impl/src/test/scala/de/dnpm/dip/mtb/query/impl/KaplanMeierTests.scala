@@ -1,21 +1,18 @@
 package de.dnpm.dip.mtb.query.impl
 
 
-import java.time.Instant
-import java.util.UUID.randomUUID
-import java.time.temporal.ChronoUnit.DAYS
 import scala.util.Random
 import cats.{
   Id,
   Applicative
 }
+import org.scalatest.compatible.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers._
 import org.scalatest.Inspectors._
 import de.dnpm.dip.model.{
   ClosedInterval,
-  Snapshot,
-  UnitOfTime
+  Snapshot
 }
 import de.dnpm.dip.coding.CodeSystemProvider
 import de.dnpm.dip.coding.atc.ATC
@@ -34,8 +31,6 @@ import de.dnpm.dip.mtb.gens.Generators._
 
 class KaplanMeierTests extends AnyFlatSpec
 {
-
-  import scala.util.chaining._
 
   implicit val rnd: Random =
     new Random(42)
@@ -203,18 +198,15 @@ class KaplanMeierTests extends AnyFlatSpec
     else
       identity
 
+
   private def checkResults(
     vals: Seq[Double],
     refVals: Seq[Double],
-    decimals: Int = 0
-  ): Unit = {
-    forAll(
-      refVals zip vals.map(roundOff(decimals))
-    ){ 
+    decimals: Int
+  ): Assertion =
+    forAll(refVals zip vals.map(roundOff(decimals))){ 
       case (ref,v) => ref must equal (v)
     }
-
-  }
 
 
   "DefaultKaplanMeierEstimator" must "have returned correct results for reference Data No. 0" in {

@@ -19,10 +19,6 @@ import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.coding.UnregisteredMedication
 import de.dnpm.dip.model.Medications
-import de.dnpm.dip.service.query.{
-  PatientFilter,
-  Query,
-}
 import de.dnpm.dip.mtb.model.{
   CNV,
   RECIST
@@ -32,7 +28,7 @@ import play.api.libs.json.{
   JsPath,
   Format,
   Reads,
-  Writes,
+  OWrites,
   OFormat,
   JsString
 }
@@ -48,9 +44,11 @@ object LogicalOperator extends Enumeration
     Json.formatEnum(this)
 }
 
-sealed trait Supportable
+
+sealed trait CombinableItems[T]
 {
-  val supporting: Option[Boolean]
+  val operator: Option[LogicalOperator.Value]
+  val items: Set[T]
 }
 
 
@@ -61,6 +59,12 @@ sealed trait Negatable
   def asNegated(cond: Boolean) =
     if (negated.getOrElse(false)) !cond
     else cond
+}
+
+
+sealed trait Supportable
+{
+  val supporting: Option[Boolean]
 }
 
 
@@ -109,6 +113,123 @@ final case class VariantCriteria
 
 
 
+// --------------------------------------------------------
+
+final case class GeneAlterationCriteria
+(
+  gene: Coding[HGNC],
+  variant: Option[GeneAlterationCriteria.VariantCriteria],
+  supporting: Option[Boolean] = None,
+  negated: Option[Boolean] = None
+)
+extends Supportable
+with Negatable
+
+object GeneAlterationCriteria
+{
+/*
+  object Type extends Enumeration
+  {
+    val SNV, CNV, Fusion = Value
+
+    implicit val format: Format[Value] =
+      Json.formatEnum(this)
+  }
+
+  */
+  sealed abstract class VariantCriteria
+
+  final case class SNVCriteria 
+  (
+    dnaChange: Option[Coding[HGVS.DNA]],
+    proteinChange: Option[Coding[HGVS.Protein]]
+  )
+  extends VariantCriteria
+
+/*
+  object CopyNumberType
+  extends CodedEnum("dnpm-dip/mtb/query/gene-alteration/copy-number/type")
+  with DefaultCodeSystem
+  {
+    val Amplification = Value("amplification")
+    val Deletion      = Value("deletion")
+
+    override val display =
+      Map(
+        Amplification -> "Amplification",
+        Deletion      -> "Deletion"
+      )
+
+    final class ProviderSPI extends CodeSystemProviderSPI
+    {
+      override def getInstance[F[_]]: CodeSystemProvider[Any,F,Applicative[F]] =
+        new Provider.Facade[F]
+    }
+
+  }
+*/
+
+  final case class CNVCriteria
+  (
+    copyNumberType: Option[Set[Coding[CNV.Type.Value]]],
+  )
+  extends VariantCriteria
+
+  final case class FusionCriteria
+  (
+    partner: Option[Coding[HGNC]]
+  )
+  extends VariantCriteria
+
+
+  implicit val formatSNVCriteria: OFormat[SNVCriteria] =
+    Json.format[SNVCriteria]
+
+  implicit val formatCNVCriteria: OFormat[CNVCriteria] =
+    Json.format[CNVCriteria]
+
+  implicit val formatFusionCriteria: OFormat[FusionCriteria] =
+    Json.format[FusionCriteria]
+
+  implicit val readsVariantCriteria: Reads[VariantCriteria] =
+    Reads(
+      js => (js \ "type").validate[String].flatMap {
+        case "SNV"    => Json.fromJson[SNVCriteria](js)
+        case "CNV"    => Json.fromJson[CNVCriteria](js) 
+        case "Fusion" => Json.fromJson[FusionCriteria](js)
+      }
+    )
+
+  implicit val writesVariantCriteria: OWrites[VariantCriteria] =
+   OWrites {
+     case snv: SNVCriteria       => Json.toJsObject(snv)    + ("type" -> JsString("SNV"))
+     case cnv: CNVCriteria       => Json.toJsObject(cnv)    + ("type" -> JsString("CNV"))
+     case fusion: FusionCriteria => Json.toJsObject(fusion) + ("type" -> JsString("Fusion"))
+   }
+  
+
+  implicit val format: OFormat[GeneAlterationCriteria] =
+    Json.format[GeneAlterationCriteria]
+
+}
+
+
+final case class GeneAlterations
+(
+  operator: Option[LogicalOperator.Value],
+  items: Set[GeneAlterationCriteria]
+)
+extends CombinableItems[GeneAlterationCriteria]
+
+object GeneAlterations
+{
+  implicit val format: OFormat[GeneAlterations] =
+    Json.format[GeneAlterations]
+}
+
+// --------------------------------------------------------
+
+
 object MedicationUsage
 extends CodedEnum("dnpm-dip/mtb/query/medication-usage")
 with DefaultCodeSystem
@@ -135,9 +256,10 @@ with DefaultCodeSystem
 final case class MedicationCriteria
 (
   operator: Option[LogicalOperator.Value],
-  drugs: Set[Coding[Medications]],
+  items: Set[Coding[Medications]],
   usage: Option[Set[Coding[MedicationUsage.Value]]]
 )
+extends CombinableItems[Coding[Medications]]
 {
   var expandedDrugs: Set[Tree[Coding[Medications]]] =
     Set.empty
@@ -147,7 +269,6 @@ object MedicationCriteria
 {
 
   import play.api.libs.functional.syntax._
-  import scala.util.matching.Regex
 
   val atc = "(?i)atc".r.unanchored
 
@@ -177,18 +298,12 @@ object MedicationCriteria
 }
 
 
-/*
-final case class MedicationCriteria
-(
-  recommended: Option[Set[Set[Coding[Medications]]]],
-  used: Option[Set[Set[Coding[Medications]]]]
-*/
-
 
 final case class MTBQueryCriteria
 (
   diagnoses: Option[Set[Coding[ICD10GM]]],
   tumorMorphologies: Option[Set[Coding[ICDO3.M]]],
+  geneAlterations: Option[GeneAlterations],
   variants: Option[VariantCriteria],
   medication: Option[MedicationCriteria],
   responses: Option[Set[Coding[RECIST.Value]]]

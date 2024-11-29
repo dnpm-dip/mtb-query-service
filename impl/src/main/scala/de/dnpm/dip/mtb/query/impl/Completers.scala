@@ -1,20 +1,17 @@
 package de.dnpm.dip.mtb.query.impl
 
 
-import java.time.LocalDate
 import cats.{
   Applicative,
   Id
 }
 import de.dnpm.dip.util.{
   Completer,
-  DisplayLabel,
   Tree
 }
 import de.dnpm.dip.coding.{
   Code,
   Coding,
-  CodeSystem,
   CodeSystemProvider
 }
 import de.dnpm.dip.coding.atc.ATC
@@ -26,10 +23,7 @@ import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.model.{
   BaseCompleters,
-  Medications,
-  Patient,
-  Site,
-  Reference
+  Medications
 }
 import de.dnpm.dip.mtb.query.api._
 
@@ -49,15 +43,6 @@ trait Completers extends BaseCompleters
 
   implicit val icdo3: ICDO3.Catalogs[Id,Applicative[Id]]
 
-
-/*
-  private implicit def treeCompleter[T: Completer]: Completer[Tree[T]] =
-    Completer.of(
-      t => t.copy(
-        element = t.element.complete
-      )
-    )
-*/
 
   private implicit val icdo3mCompleter: Completer[Coding[ICDO3.M]] =
     Completer.of {
@@ -80,7 +65,7 @@ trait Completers extends BaseCompleters
   private implicit val medicationCriteriaCompleter: Completer[MedicationCriteria] =
     Completer.of(
       med => med.copy(
-        drugs = med.drugs.complete,
+        items = med.items.complete,
         usage = med.usage.complete
       )
     )
@@ -124,20 +109,63 @@ trait Completers extends BaseCompleters
           fusionPartner3pr = fusion.fusionPartner3pr.complete,
         )
       )
-/*
-    implicit val medicationCriteriaCompleter: Completer[MedicationCriteria] =
+
+    implicit val alterationCriteriaCompleter: Completer[GeneAlterationCriteria] =
       Completer.of(
-        med => med.copy(
-          drugs = med.drugs.complete,
-          usage = med.usage.complete
+        alteration => alteration.copy(
+          gene = alteration.gene.complete,
+          variant  = alteration.variant.collect {
+            case snv: GeneAlterationCriteria.SNVCriteria =>
+              snv.copy(
+                dnaChange = snv.dnaChange.complete,
+                proteinChange = snv.proteinChange.complete
+              )              
+            case cnv: GeneAlterationCriteria.CNVCriteria =>
+              cnv.copy(
+                copyNumberType = cnv.copyNumberType.complete
+              )              
+            case fusion: GeneAlterationCriteria.FusionCriteria =>
+              fusion.copy(
+                partner = fusion.partner.complete
+              )
+          }         
+        )
+      )
+/*
+    implicit val alterationCriteriaCompleter: Completer[GeneAlterationCriteria] =
+      Completer.of(
+        alteration => alteration.copy(
+          gene = alteration.gene.complete,
+          snv  = alteration.snv.map(
+            crit => crit.copy(
+              dnaChange = crit.dnaChange.complete,
+              proteinChange = crit.proteinChange.complete
+            )              
+          ),
+          cnv  = alteration.cnv.map(
+            crit => crit.copy(
+              `type` = crit.`type`.complete
+            )              
+          ),
+          fusion = alteration.fusion.map(
+            crit => crit.copy(
+              partner = crit.partner.complete
+            )
+          )
         )
       )
 */
+
     Completer.of(
       criteria => criteria.copy(
         diagnoses         = criteria.diagnoses.complete,
         tumorMorphologies = criteria.tumorMorphologies.complete,
-        variants           = criteria.variants.map(
+        geneAlterations   = criteria.geneAlterations.map(
+          obj => obj.copy(
+            items = obj.items.complete
+          )
+        ),
+        variants          = criteria.variants.map(
           vs => vs.copy(
             simpleVariants     = vs.simpleVariants.complete,
             copyNumberVariants = vs.copyNumberVariants.complete,
@@ -153,7 +181,7 @@ trait Completers extends BaseCompleters
   }
 
 
-  @deprecated
+  @deprecated("-","")
   val CriteriaExpander: Completer[MTBQueryCriteria] = {
 
     implicit val icd10Expander: Completer[Set[Coding[ICD10GM]]] =
@@ -173,32 +201,6 @@ trait Completers extends BaseCompleters
        )
      )
 
-/*
-    Completer.of(
-      criteria => criteria.copy(
-        diagnoses =
-          criteria.diagnoses.complete,
-        tumorMorphologies =
-          criteria.tumorMorphologies.complete,
-        medication =
-          criteria.medication.map(
-            med => med.copy(
-              drugs = med.drugs.flatMap {
-                t => t.element.system match {
-                  case sys if sys == Coding.System[ATC].uri =>
-                    t.element
-                     .asInstanceOf[Coding[ATC]]
-                     .expand
-                     .map(_.asInstanceOf[Tree[Coding[Medications]]])
-
-                  case _ => Some(Tree(t.element.complete))
-                }
-              }
-            )
-          )
-      )
-    )
-*/
     Completer.of(
       criteria => criteria.copy(
         diagnoses =
@@ -210,7 +212,7 @@ trait Completers extends BaseCompleters
             _.complete
              .tap(mc =>
                mc.expandedDrugs =
-                 mc.drugs.flatMap {
+                 mc.items.flatMap {
                    coding => coding.system match {
                      case sys if sys == Coding.System[ATC].uri =>
                        coding.asInstanceOf[Coding[ATC]]

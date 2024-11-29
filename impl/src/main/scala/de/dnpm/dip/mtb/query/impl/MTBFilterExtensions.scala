@@ -11,18 +11,14 @@ import de.dnpm.dip.coding.{
   CodeSystemProvider
 }
 import de.dnpm.dip.coding.atc.ATC
-import de.dnpm.dip.coding.UnregisteredMedication
 import de.dnpm.dip.coding.icd.ICD10GM
-import de.dnpm.dip.service.query.PatientFilter
 import de.dnpm.dip.model.Medications
 import de.dnpm.dip.mtb.model.{
-  MTBPatientRecord,
   MTBDiagnosis,
   MTBMedicationRecommendation,
   MTBMedicationTherapy
 }
 import de.dnpm.dip.mtb.query.api.{
-  MTBFilters,
   DiagnosisFilter,
   RecommendationFilter,
   TherapyFilter

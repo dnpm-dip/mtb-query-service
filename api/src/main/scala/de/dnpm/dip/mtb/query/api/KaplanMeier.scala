@@ -2,26 +2,26 @@ package de.dnpm.dip.mtb.query.api
 
 
 import de.dnpm.dip.model.{
-  UnitOfTime,
-  ClosedInterval
+  ClosedInterval,
+  Medications,
+  Patient,
+  Reference,
+  UnitOfTime
 }
 import de.dnpm.dip.coding.{
   Coding,
   CodedEnum,
   DefaultCodeSystem
 }
+import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.service.query.{
   Count,
-  Entry,
-  Query,
-  Querier
+  Entry
 }
 import play.api.libs.json.{
   Json,
   Format,
-  OWrites,
-  Writes,
-  JsString
+  OWrites
 }
 
 
@@ -30,21 +30,35 @@ object PFSRatio
 
   final case class DataPoint
   (
-    patient: String,
+    patient: Reference[Patient],
+    medication1: Set[Coding[Medications]],
+    medication2: Set[Coding[Medications]],
     pfs1: Long,
     pfs2: Long,
-    pfsr: Double
+    pfsRatio: Double
   )
 
   final case class CohortResult
   (
-    timeUnit: UnitOfTime,
-    data: Seq[DataPoint],
-    medianPfsr: Option[Double],
-    upperSubset: Count
+    dataPoints: Seq[DataPoint],
+    median: Option[Double],
+    partAboveThreshold: Count
   )
 
-  type Report = Seq[Entry[String,CohortResult]] 
+  final case class Report
+  (
+    timeUnit: UnitOfTime,
+    cohorts: Seq[Entry[Coding[ICD10GM],CohortResult]] 
+  )
+
+  implicit val writesDataPoint: OWrites[DataPoint] =
+    Json.writes[DataPoint]
+
+  implicit val writesCohortResult: OWrites[CohortResult] =
+    Json.writes[CohortResult]
+
+  implicit val writesReport: OWrites[Report] =
+    Json.writes[Report]
 
 }
 

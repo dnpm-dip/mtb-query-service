@@ -7,12 +7,6 @@ import scala.util.Random
 import scala.util.chaining._
 import scala.concurrent.Future
 import cats.Monad
-import de.dnpm.dip.model.{
-  Id,
-  Patient,
-  Snapshot,
-  Site
-}
 import de.dnpm.dip.service.query.{
   LocalDB,
   FSBackedLocalDB,
