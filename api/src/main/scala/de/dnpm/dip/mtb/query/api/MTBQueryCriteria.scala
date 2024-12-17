@@ -127,16 +127,7 @@ with Negatable
 
 object GeneAlterationCriteria
 {
-/*
-  object Type extends Enumeration
-  {
-    val SNV, CNV, Fusion = Value
 
-    implicit val format: Format[Value] =
-      Json.formatEnum(this)
-  }
-
-  */
   sealed abstract class VariantCriteria
 
   final case class SNVCriteria 

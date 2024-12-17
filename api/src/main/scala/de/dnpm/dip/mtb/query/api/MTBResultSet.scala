@@ -18,8 +18,6 @@ import de.dnpm.dip.service.query.{
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
   Variant,
-  CNV,
-  SNV,
   RECIST
 }
 import play.api.libs.json.{
@@ -68,17 +66,11 @@ object MTBResultSet
       tumorMorphologies: Distribution[Coding[ICDO3]]
     )
 
+/*  
     final case class VariantsByTumorEntity
     (
       simpleVariants: Seq[Entry[Coding[ICD10GM],Distribution[DisplayLabel[SNV]]]],
       copyNumberVariants: Seq[Entry[Coding[ICD10GM],Distribution[DisplayLabel[CNV]]]] 
-    )
-
-/*  
-    final case class AlteredGenesByTumorEntity
-    (
-      simpleVariants: Seq[Entry[Coding[ICD10GM],Distribution[Coding[HGNC]]]],
-      copyNumberVariants: Seq[Entry[Coding[ICD10GM],Distribution[Coding[HGNC]]]]
     )
 */
 
@@ -90,7 +82,7 @@ object MTBResultSet
   final case class TumorDiagnostics
   (
     overallDistributions: TumorDiagnostics.Distributions,
-    distributionsByVariant: Seq[Entry[DisplayLabel[Variant],TumorDiagnostics.Distributions]]
+    distributionsByVariant: Seq[Entry[DisplayLabel[GeneAlteration],TumorDiagnostics.Distributions]]
   )
 
 
@@ -105,7 +97,7 @@ object MTBResultSet
     final case class Recommendations
     (
       overallDistribution: Distribution[Set[Coding[Medications]]],
-      distributionBySupportingVariant: Seq[Entry[DisplayLabel[Variant],Distribution[Set[Coding[Medications]]]]]
+      distributionBySupportingVariant: Seq[Entry[DisplayLabel[GeneAlteration],Distribution[Set[Coding[Medications]]]]]
     )
 
     final case class Therapies
@@ -155,7 +147,6 @@ object MTBResultSet
     implicit val writes: OWrites[TherapyResponses] =
       Json.writes[TherapyResponses]
   }
-
 
 
   implicit val writesTumorDiagnostics: OWrites[TumorDiagnostics] =

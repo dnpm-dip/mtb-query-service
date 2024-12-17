@@ -146,7 +146,8 @@ with MTBReportingOps
 
     TumorDiagnostics(
       overallDiagnosticDistributions(records),
-      diagnosticDistributionsByVariant(records)
+      diagnosticDistributionsByAlteration(records,queryCriteria.flatMap(_.geneAlterations))
+//      diagnosticDistributionsByVariant(records)
     )
   }
 
@@ -163,7 +164,8 @@ with MTBReportingOps
     MTBResultSet.Medication(
       MTBResultSet.Medication.Recommendations(
         recommendationDistribution(records),
-        recommendationsBySupportingVariant(records,queryCriteria.flatMap(_.variants))
+//        recommendationsBySupportingVariant(records,queryCriteria.flatMap(_.variants)),
+        recommendationsBySupportingAlteration(records,queryCriteria.flatMap(_.geneAlterations))
       ),
       MTBResultSet.Medication.Therapies(
         therapyDistribution,
@@ -186,7 +188,6 @@ with MTBReportingOps
       grouping,
       results.map(_.record)
     )
-
 
 
   import Medications._

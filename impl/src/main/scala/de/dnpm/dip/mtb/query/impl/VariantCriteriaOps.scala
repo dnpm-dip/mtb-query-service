@@ -96,12 +96,4 @@ object VariantCriteriaOps
   }
 
 
-/*
-  implicit class VariantCriteriaOps(
-    val criteria: GeneAlterationCriteria.VariantCriteria
-  )
-  extends AnyVal with RelevanceMatcher[Variant]
-  {
-    override def check(cnv: CNV): Seq[Boolean] =
-*/
 }
