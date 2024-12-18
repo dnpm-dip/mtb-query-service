@@ -172,235 +172,29 @@ private trait MTBQueryCriteriaOps
         .groupBy(_.gene.code)
 
     val fulfilled: GeneAlterationCriteria => Boolean =
-      crit =>
-        alterationsByGene.getOrElse(crit.gene.code,List.empty)
-          .exists(
-            alt => crit.asNegated(crit matches alt)
-          )
-        
-    val criteria =
+      criterion => criterion.asNegated(
+        alterationsByGene.get(criterion.gene.code)
+          .fold(false)(_.exists(criterion matches _))
+      )
+
+    val fulfilledCriteria =
       geneAlterations.items
         .map(crit => Option.when(fulfilled(crit))(crit))
 
     val operator =
       geneAlterations.operator.getOrElse(Or)
 
+
     GeneAlterations(
       Some(operator),
-      operator match { 
-        case And =>
-          if (criteria forall (_.isDefined)) criteria.flatten
-          else Set.empty
-
-        case Or => criteria.flatten
-      }
+      if (fulfilledCriteria.map(_.isDefined).reduceOption(operator).getOrElse(true))
+        fulfilledCriteria.flatten
+      else
+        Set.empty
     )
 
   }
 
-
-/*
-  private def matches(
-    geneAlterations: GeneAlterations,
-    ngsReports: List[SomaticNGSReport]
-  ): GeneAlterations = {
-
-    import HGVS.extensions._
-    import GeneAlterationCriteria._
-
-    val variantsByGene =
-      ngsReports.flatMap(_.variants)
-        .foldLeft(Map.empty[Code[HGNC],List[Variant]]){
-          (acc,variant) =>
-            variant match {
-              case snv: SNV =>
-                snv.gene.fold(acc)(
-                  gene => acc.updatedWith(gene.code)(_.map(snv :: _).orElse(Some(List(snv))))
-                )
-
-              case cnv: CNV =>
-                cnv.reportedAffectedGenes.fold(acc)(
-                  _.foldLeft(acc)(
-                    (acc2,gene) => acc2.updatedWith(gene.code)(_.map(cnv :: _).orElse(Some(List(cnv))))
-                  )
-                )
-
-              case dna: DNAFusion =>
-                Set(dna.fusionPartner5prime.gene,dna.fusionPartner3prime.gene)
-                  .foldLeft(acc)(
-                    (acc2,gene) => acc2.updatedWith(gene.code)(_.map(dna :: _).orElse(Some(List(dna))))
-                  )
-
-              case rna: RNAFusion =>
-                Set(rna.fusionPartner5prime.gene,rna.fusionPartner3prime.gene)
-                  .foldLeft(acc)(
-                    (acc2,gene) => acc2.updatedWith(gene.code)(_.map(rna :: _).orElse(Some(List(rna))))
-                  )
-
-              case _: RNASeq => acc
-            }
-        }
-
-
-    def fulfilled(alteration: GeneAlterationCriteria): Boolean =
-      variantsByGene.getOrElse(alteration.gene.code,List.empty).exists {
-
-        case snv: SNV =>
-          alteration.variant.map {
-            case SNVCriteria(dna,protein) => 
-              dna.map(c => snv.dnaChange.exists(_ matches c)).getOrElse(true) &
-              protein.map(c => snv.proteinChange.exists(_ matches c)).getOrElse(true)
-
-            case _ => false
-          }
-          .getOrElse(true)
-      
-        case cnv: CNV =>
-          alteration.variant.map {
-            case CNVCriteria(cnType) => 
-              cnType.filter(_.nonEmpty).map(_.exists(_.code == cnv.`type`.code)).getOrElse(true)
-
-            case _ => false
-          }
-          .getOrElse(true)
-
-        case fusion: DNAFusion =>
-          alteration.variant.map {
-            case FusionCriteria(partner) => 
-              partner.map(
-                gene => gene == fusion.fusionPartner5prime || gene == fusion.fusionPartner3prime
-              )
-              .getOrElse(true)
-
-            case _ => false
-          }
-          .getOrElse(true)
-
-        case fusion: RNAFusion =>
-          alteration.variant.map {
-            case FusionCriteria(partner) => 
-              partner.map(
-                gene => gene == fusion.fusionPartner5prime || gene == fusion.fusionPartner3prime
-              )
-              .getOrElse(true)
-
-            case _ => false
-          }
-          .getOrElse(true)
-
-        case _ => true
-      }
-      .pipe(alteration.asNegated)
-    
-    
-    val criteria =
-      geneAlterations.items
-        .map(crit => Option.when(fulfilled(crit))(crit))
-
-    val operator =
-      geneAlterations.operator.getOrElse(Or)
-
-    GeneAlterations(
-      Some(operator),
-      operator match { 
-        case And =>
-          if (criteria forall (_.isDefined)) criteria.flatten
-          else Set.empty
-
-        case Or => criteria.flatten
-      }
-    )
-
-  }
-
-
-  private def matches(
-    geneAlterations: GeneAlterations,
-    variants: List[Variant]
-  ): GeneAlterations = {
-
-    import HGVS.extensions._
-    import GeneAlterationCriteria._
-
-    def fulfilled(alteration: GeneAlterationCriteria): Boolean =
-      variants.exists {
-
-        case snv: SNV =>
-          snv.gene.exists(_.code == alteration.gene.code) &
-          alteration.variant.map {
-            case SNVCriteria(dna,protein) => 
-              dna.map(c => snv.dnaChange.exists(_ matches c)).getOrElse(true) &
-              protein.map(c => snv.proteinChange.exists(_ matches c)).getOrElse(true)
-
-            case _ => false
-          }
-          .getOrElse(true)
-      
-        case cnv: CNV =>
-          cnv.reportedAffectedGenes.exists(_.exists(_.code == alteration.gene.code)) &
-          alteration.variant.map {
-            case CNVCriteria(cnType) => 
-              cnType.filter(_.nonEmpty).map(_.exists(_.code == cnv.`type`.code)).getOrElse(true)
-
-            case _ => false
-          }
-          .getOrElse(true)
-
-        case fusion: DNAFusion =>
-          val fusedGenes =
-            Set(
-              fusion.fusionPartner5prime.gene,
-              fusion.fusionPartner3prime.gene
-            )
-          fusedGenes.contains(alteration.gene) &
-          alteration.variant.map {
-            case FusionCriteria(partner) => 
-              partner.map(fusedGenes.contains).getOrElse(true)
-
-            case _ => false
-          }
-          .getOrElse(true)
-
-        case fusion: RNAFusion =>
-          val fusedGenes =
-            Set(
-              fusion.fusionPartner5prime.gene,
-              fusion.fusionPartner3prime.gene
-            )
-          fusedGenes.contains(alteration.gene) &
-          alteration.variant.map {
-            case FusionCriteria(partner) => 
-              partner.map(fusedGenes.contains).getOrElse(true)
-
-            case _ => false
-          }
-          .getOrElse(true)
-
-        case _ => true
-      }
-      .pipe(alteration.asNegated)
-    
-    
-    val criteria =
-      geneAlterations.items
-        .map(crit => Option.when(fulfilled(crit))(crit))
-
-    val operator =
-      geneAlterations.operator.getOrElse(Or)
-
-    GeneAlterations(
-      Some(operator),
-      operator match { 
-        case And =>
-          if (criteria forall (_.isDefined)) criteria.flatten
-          else Set.empty
-
-        case Or => criteria.flatten
-      }
-    )
-
-  }
-*/
 
   private def matches(
     criteria: MedicationCriteria,
@@ -569,7 +363,6 @@ private trait MTBQueryCriteriaOps
                   matches(
                     alterations,
                     record.getNgsReports,
-//                    record.getNgsReports.flatMap(_.variants)
                   )
                   .tap(
                     matches => checks += matches.items.nonEmpty

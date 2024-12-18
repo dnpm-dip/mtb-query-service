@@ -6,6 +6,7 @@ import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
 
 
+
 sealed trait GeneAlteration
 {
   val gene: Coding[HGNC]
@@ -24,20 +25,36 @@ object GeneAlteration
   extends GeneAlteration
 
 
-  final case class CopyNumberVariation
+  final case class CNV
   (
     gene: Coding[HGNC],
-    `type`: CopyNumberVariation.Type.Value
+    `type`: CNV.Type.Value
   )
   extends GeneAlteration
 
 
-  object CopyNumberVariation
+  object CNV
   {
     object Type extends Enumeration
     {
       val Amplification, Deletion = Value
     }
+
+/*
+    object Type
+    extends CodedEnum("dnpm-dip/mtb/query/gene-alteration/copy-number-type")
+    with DefaultCodeSystem
+    {
+      val Amplification, Deletion = Value
+ 
+      final class ProviderSPI extends CodeSystemProviderSPI
+      {
+        override def getInstance[F[_]]: CodeSystemProvider[Any,F,Applicative[F]] =
+          new Provider.Facade[F]
+      }
+ 
+    }
+*/
   }
 
 
@@ -49,5 +66,16 @@ object GeneAlteration
   extends GeneAlteration
 
 
+
+  // "Dummy" alteration type for use as base/parent of other alteration types
+  final case class Base
+  (
+    gene: Coding[HGNC]
+  )
+  extends GeneAlteration
+
+
+  def apply(gene: Coding[HGNC]): GeneAlteration =
+    Base(gene)
 
 }

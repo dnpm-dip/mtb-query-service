@@ -56,9 +56,18 @@ sealed trait Negatable
 {
   val negated: Option[Boolean]
 
+/*
   def asNegated(cond: Boolean) =
     if (negated.getOrElse(false)) !cond
     else cond
+*/
+
+  def asNegated(cond: Boolean) =
+    negated.map {
+      case true  => !cond
+      case false => cond
+    }
+    .getOrElse(cond)
 }
 
 
@@ -137,32 +146,10 @@ object GeneAlterationCriteria
   )
   extends VariantCriteria
 
-/*
-  object CopyNumberType
-  extends CodedEnum("dnpm-dip/mtb/query/gene-alteration/copy-number/type")
-  with DefaultCodeSystem
-  {
-    val Amplification = Value("amplification")
-    val Deletion      = Value("deletion")
-
-    override val display =
-      Map(
-        Amplification -> "Amplification",
-        Deletion      -> "Deletion"
-      )
-
-    final class ProviderSPI extends CodeSystemProviderSPI
-    {
-      override def getInstance[F[_]]: CodeSystemProvider[Any,F,Applicative[F]] =
-        new Provider.Facade[F]
-    }
-
-  }
-*/
-
   final case class CNVCriteria
   (
     copyNumberType: Option[Set[Coding[CNV.Type.Value]]],
+//    copyNumberType: Option[GeneAlteration.CNV.Type.Value],
   )
   extends VariantCriteria
 

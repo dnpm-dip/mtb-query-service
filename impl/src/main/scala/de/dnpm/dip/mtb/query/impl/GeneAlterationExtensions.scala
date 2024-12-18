@@ -11,6 +11,7 @@ import de.dnpm.dip.mtb.model.{
   RNASeq,
   Variant
 }
+import CNV.Type._
 import de.dnpm.dip.mtb.query.api.{
   GeneAlteration,
   GeneAlterations,
@@ -22,15 +23,32 @@ import de.dnpm.dip.mtb.query.api.{
 object GeneAlterationExtensions
 {
 
-  import CNV.Type._
+  implicit val displays: Displays[GeneAlteration] =
+    Displays[GeneAlteration]{ 
 
-  private val cnvType: Map[Coding[CNV.Type.Value],GeneAlteration.CopyNumberVariation.Type.Value] =
+      case GeneAlteration.SNV(gene,_,proteinChange) =>
+        s"${gene.display.getOrElse(gene.code)} ${proteinChange.map(c => c.display.getOrElse(c.code.value)).getOrElse("SNV")}"
+
+      case GeneAlteration.CNV(gene,typ) =>
+        s"${gene.display.getOrElse(gene.code)} $typ"
+
+      case GeneAlteration.Fusion(gene,partner) =>
+        s"${Set(gene,partner).flatMap(_.display).mkString("-")} Fusion"
+
+      case GeneAlteration.Base(gene) =>
+        s"${gene.display.getOrElse(gene.code)}"
+
+    }
+
+
+
+  private val cnvTypeMapping: Map[Coding[CNV.Type.Value],GeneAlteration.CNV.Type.Value] =
     CNV.Type.values
       .toList
       .collect { 
-        case Loss          => Coding(Loss)          -> GeneAlteration.CopyNumberVariation.Type.Deletion
-        case LowLevelGain  => Coding(LowLevelGain)  -> GeneAlteration.CopyNumberVariation.Type.Amplification
-        case HighLevelGain => Coding(HighLevelGain) -> GeneAlteration.CopyNumberVariation.Type.Amplification
+        case Loss          => Coding(Loss)          -> GeneAlteration.CNV.Type.Deletion
+        case LowLevelGain  => Coding(LowLevelGain)  -> GeneAlteration.CNV.Type.Amplification
+        case HighLevelGain => Coding(HighLevelGain) -> GeneAlteration.CNV.Type.Amplification
       }
       .toMap
 
@@ -48,7 +66,7 @@ object GeneAlterationExtensions
           cnv.reportedAffectedGenes
             .getOrElse(Set.empty)
             .map(
-              GeneAlteration.CopyNumberVariation(_,cnvType(cnv.`type`))
+              GeneAlteration.CNV(_,cnvTypeMapping(cnv.`type`))
             )
 
         case dna: DNAFusion =>
@@ -67,22 +85,6 @@ object GeneAlterationExtensions
       }
 
   }
-
-
-  implicit val displays: Displays[GeneAlteration] =
-    Displays[GeneAlteration]{ 
-
-      case GeneAlteration.SNV(gene,_,proteinChange) =>
-        s"${gene.display.getOrElse(gene.code)} ${proteinChange.map(c => c.display.getOrElse(c.code.value)).getOrElse("SNV")}"
-
-      case GeneAlteration.CopyNumberVariation(gene,typ) =>
-        s"${gene.display.getOrElse(gene.code)} $typ"
-
-      case GeneAlteration.Fusion(gene,partner) =>
-        s"${Set(gene,partner).flatMap(_.display).mkString("-")} Fusion"
-
-    }
-
 
 
   sealed trait RelevanceMatcher[-T] extends Any {
@@ -112,7 +114,7 @@ object GeneAlterationExtensions
 
       alteration match {
         case snv: GeneAlteration.SNV =>
-          Seq(criteria.gene.code == alteration.gene.code) ++
+          Seq(criteria.gene.code == snv.gene.code) ++
             criteria.variant.map {
               case crit: GeneAlterationCriteria.SNVCriteria =>
                 crit.dnaChange.map(g => snv.dnaChange.exists(_ matches g)) ++
@@ -122,11 +124,11 @@ object GeneAlterationExtensions
             }
             .getOrElse(Seq.empty[Boolean])
 
-        case cnv: GeneAlteration.CopyNumberVariation =>
-          Seq(criteria.gene.code == alteration.gene.code) ++ 
+        case cnv: GeneAlteration.CNV =>
+          Seq(criteria.gene.code == cnv.gene.code) ++ 
             criteria.variant.map {
               case crit: GeneAlterationCriteria.CNVCriteria =>
-                crit.copyNumberType.map(_.collect(cnvType) contains cnv.`type`)
+                crit.copyNumberType.map(_.collect(cnvTypeMapping) contains cnv.`type`)
 
               case _ => Some(false) // Wrong alteration type
             }
@@ -143,6 +145,12 @@ object GeneAlterationExtensions
               case _ => Some(false) // Wrong alteration type
             }
             .getOrElse(Seq.empty[Boolean])
+
+
+        // Can't occur but needed for exhaustive pattern matching    
+        case base: GeneAlteration.Base =>
+          Seq(criteria.gene.code == base.gene.code)
+
       }
 
   }
