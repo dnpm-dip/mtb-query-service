@@ -23,7 +23,8 @@ import de.dnpm.dip.service.query.{
   PatientRecordRequest,
   LocalDB,
   PreparedQueryDB,
-  InMemPreparedQueryDB,
+//  InMemPreparedQueryDB,
+//  FSBackedPreparedQueryDB,
 }
 import de.dnpm.dip.coding.CodeSystemProvider
 import de.dnpm.dip.coding.atc.ATC
@@ -77,7 +78,7 @@ object MTBQueryServiceImpl extends Logging
 
   private[impl] lazy val instance =
     new MTBQueryServiceImpl(
-      new InMemPreparedQueryDB[Future,Monad,MTBQueryCriteria],  //TODO: change to persistent Prepared Query store
+      MTBPreparedQueryDB.instance,      
       MTBLocalDB.instance,
       connector,
       cache
