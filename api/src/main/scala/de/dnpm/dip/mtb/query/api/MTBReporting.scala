@@ -36,6 +36,7 @@ import de.dnpm.dip.service.query.{
 import de.dnpm.dip.mtb.model.{
   ClaimResponse,
   LevelOfEvidence,
+  MTBTherapy,
   Variant
 }
 
@@ -65,7 +66,7 @@ final case class MTBReport
   recommendations: Recommendations,
   claimResponses: Seq[Entry[Coding[ClaimResponse.Status.Value],ClaimResponses]],
   followUp: FollowUp,
-  sequencingTypes: Distribution[Coding[NGSReport.SequencingType.Value]]
+  sequencingTypes: Distribution[Coding[NGSReport.Type.Value]]
 )
 
 
@@ -125,7 +126,7 @@ object MTBReport
     final case class StudyRecommendations
     (
       demographics: Demographics,    
-      studies: Distribution[ExternalId[Study]]
+      studies: Distribution[ExternalId[Study,Study.Registries]]
     )
 
     implicit val formatStudyRecommendations: OWrites[StudyRecommendations] =
@@ -143,7 +144,7 @@ object MTBReport
   final case class FollowUp
   (
     livePatientCount: Count,
-    therapyData: Seq[Entry[Coding[Therapy.Status.Value],Distribution[Coding[Therapy.StatusReason.Value]]]],
+    therapyData: Seq[Entry[Coding[Therapy.Status.Value],Distribution[Coding[MTBTherapy.StatusReason.Value]]]],
     pfsRatio: PFSRatio.Report
   )
 

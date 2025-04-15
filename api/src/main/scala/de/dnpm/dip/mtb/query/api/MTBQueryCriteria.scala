@@ -80,8 +80,8 @@ sealed trait Supportable
 final case class SNVCriteria
 (
   gene: Option[Coding[HGNC]],
-  dnaChange: Option[Coding[HGVS.DNA]],
-  proteinChange: Option[Coding[HGVS.Protein]],
+  dnaChange: Option[Code[HGVS.DNA]],
+  proteinChange: Option[Code[HGVS.Protein]],
   supporting: Option[Boolean] = None,
   negated: Option[Boolean] = None
 )
@@ -141,15 +141,14 @@ object GeneAlterationCriteria
 
   final case class SNVCriteria 
   (
-    dnaChange: Option[Coding[HGVS.DNA]],
-    proteinChange: Option[Coding[HGVS.Protein]]
+    dnaChange: Option[Code[HGVS.DNA]],
+    proteinChange: Option[Code[HGVS.Protein]]
   )
   extends VariantCriteria
 
   final case class CNVCriteria
   (
     copyNumberType: Option[Set[Coding[CNV.Type.Value]]],
-//    copyNumberType: Option[GeneAlteration.CNV.Type.Value],
   )
   extends VariantCriteria
 

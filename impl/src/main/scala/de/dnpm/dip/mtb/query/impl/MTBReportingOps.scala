@@ -72,7 +72,7 @@ trait MTBReportingOps extends ReportingOps
 
     val therapies =
       records
-        .flatMap(_.getTherapies)
+        .flatMap(_.getSystemicTherapies)
         .map(_.latest)
         .filter(_.medication.isDefined)
 
@@ -109,13 +109,12 @@ trait MTBReportingOps extends ReportingOps
   ): MTBResultSet.TumorDiagnostics.Distributions = 
     MTBResultSet.TumorDiagnostics.Distributions(
       Distribution.byParent(
-        records.flatMap(_.getDiagnoses)
+        records.flatMap(_.diagnoses.toList)
           .map(_.code),
         coding => coding.parentOfKind(Category).getOrElse(coding)
       ),
       Distribution.byParent(
-        records.flatMap(_.getHistologyReports)
-          .flatMap(_.results.tumorMorphology.map(_.value)),
+        records.flatMap(_.getHistologyReports).map(_.results.tumorMorphology.value),
         coding => coding.parentOfKind(Block).getOrElse(coding)
       )
     )
@@ -130,7 +129,7 @@ trait MTBReportingOps extends ReportingOps
     icdo3: CodeSystemProvider[ICDO3,Id,Applicative[Id]]
   ): Seq[Entry[DisplayLabel[Variant],MTBResultSet.TumorDiagnostics.Distributions]] =
     records.foldLeft(
-      Map.empty[DisplayLabel[Variant],(Seq[Coding[ICD10GM]],Seq[Coding[ICDO3.M]])]
+      Map.empty[DisplayLabel[Variant],(List[Coding[ICD10GM]],List[Coding[ICDO3.M]])]
     ){
       (acc,record) =>
 
@@ -143,21 +142,19 @@ trait MTBReportingOps extends ReportingOps
                       // in cases where the patient had multiple NGS reports, thus potentially redundant occurrences of most variants
 
       val entities =
-        record.getDiagnoses
-          .map(_.code)
+        record.diagnoses.map(_.code).toList
 
       //TODO: Find a way to resolve morphologies in the same specimen the variant occurs in
       val morphologies =
         record.getHistologyReports
-          .flatMap(_.results.tumorMorphology)
-          .map(_.value)
+          .map(_.results.tumorMorphology.value)
 
 
       variants.foldLeft(acc){
         case (accPr,variant) =>
           accPr.updatedWith(variant)(
             _.map {
-               case (icd10s,icdo3ms) => (entities :++ icd10s, morphologies :++ icdo3ms)
+               case (icd10s,icdo3ms) => (icd10s ::: entities, icdo3ms ::: morphologies)
             }
             .orElse(
               Some(entities -> morphologies)
@@ -195,7 +192,18 @@ trait MTBReportingOps extends ReportingOps
     icdo3: CodeSystemProvider[ICDO3,Id,Applicative[Id]]
   ): Seq[Entry[DisplayLabel[GeneAlteration],MTBResultSet.TumorDiagnostics.Distributions]] =
     records.foldLeft(
-      Map.empty[DisplayLabel[GeneAlteration],(Seq[Coding[ICD10GM]],Seq[Coding[ICDO3.M]],Double)]
+      Map.empty[
+        DisplayLabel[GeneAlteration],
+        (
+          Seq[Coding[ICD10GM]],
+          Seq[Coding[ICDO3.M]],
+          Double,
+          Map[
+            DisplayLabel[GeneAlteration],
+            (Seq[Coding[ICD10GM]],Seq[Coding[ICDO3.M]],Double)
+          ]
+        )
+      ]
     ){
       (acc,record) =>
 
@@ -207,33 +215,56 @@ trait MTBReportingOps extends ReportingOps
                       // in cases where the patient had multiple NGS reports, thus potentially redundant occurrences of most alterations
 
       val entities =
-        record.getDiagnoses
-          .map(_.code)
+        record.diagnoses.map(_.code).toList
 
       //TODO: Find a way to resolve morphologies in the same specimen the alteration occurs in
       val morphologies =
         record.getHistologyReports
-          .flatMap(_.results.tumorMorphology)
-          .map(_.value)
+          .map(_.results.tumorMorphology.value)
 
       alterations.foldLeft(acc){
         case (accPr,alteration) =>
 
-          val altRsv = queriedAlterations.score(alteration)
+          val (base,baseScore) =
+            GeneAlteration(alteration.gene)
+              .pipe(b => DisplayLabel.of(b) -> queriedAlterations.score(b))
 
-          accPr.updatedWith(DisplayLabel.of(alteration)){
-            case Some((icd10s,icdo3ms,rsv)) => Some((entities :++ icd10s, morphologies :++ icdo3ms, max(rsv,altRsv)))
-            case None                       => Some((entities,morphologies,altRsv))
+          val alt = DisplayLabel.of(alteration)
+
+          val altScore = queriedAlterations.score(alteration)
+
+          accPr.updatedWith(base){
+            case Some((icd10s,icdo3ms,score,children)) =>
+              Some(
+                (
+                  entities :++ icd10s,
+                  morphologies :++ icdo3ms,
+                  max(score,baseScore),
+                  children.updatedWith(alt){ 
+                    case Some((chIcd10s,chIcdo3ms,chScore)) => Some((entities :++ chIcd10s, morphologies :++ chIcdo3ms, max(chScore,altScore)))
+                    case None => Some((entities,morphologies,altScore))
+                  }
+                )
+              )
+              
+            case None =>
+              Some(
+                (
+                  entities,
+                  morphologies,
+                  baseScore,
+                  Map(alt -> (entities,morphologies,altScore))
+                )
+              )
           }
       }
-
     }
     .toSeq
-    .sortBy { case (_,(_,_,rsv)) => rsv }(Ordering[Double].reverse)  // reverse Ordering to sort entries by decreasing relevance score
+    .sortBy { case (_,(_,_,score,_)) => score }(Ordering[Double].reverse)  // reverse Ordering to sort entries by decreasing relevance score
     .map {
-      case (alteration,(icd10s,icdo3ms,_)) =>
+      case (key,(icd10s,icdo3ms,_,children)) =>
         Entry(
-          alteration,
+          key,
           MTBResultSet.TumorDiagnostics.Distributions(
             Distribution.byParent(
               icd10s,
@@ -243,6 +274,27 @@ trait MTBReportingOps extends ReportingOps
               icdo3ms,
               coding => coding.parentOfKind(Block).getOrElse(coding)
             )
+          ),
+          Option.when(children.nonEmpty)(
+            children
+              .toSeq
+              .sortBy { case (_,(_,_,score)) => score }(Ordering[Double].reverse)  // reverse Ordering to sort entries by decreasing relevance score
+              .map {
+                case (chKey,(chIcd10s,chIcdo3ms,_)) =>
+                  Entry(
+                    chKey,
+                    MTBResultSet.TumorDiagnostics.Distributions(
+                      Distribution.byParent(
+                        chIcd10s,
+                        coding => coding.parentOfKind(Category).getOrElse(coding)
+                      ),
+                      Distribution.byParent(
+                        chIcdo3ms,
+                        coding => coding.parentOfKind(Block).getOrElse(coding)
+                      )
+                    )
+                  )
+              }
           )
         )
     }
@@ -304,20 +356,20 @@ trait MTBReportingOps extends ReportingOps
                   meds =>
                     recommendation
                       .supportingVariants.getOrElse(List.empty)
-                      .flatMap(_.resolve)
+                      .flatMap(_.variant.resolve)
                       .map(_ -> meds)
                 }
           )
           .foldLeft(acc){
             case (accPr,(variant,meds)) =>
               accPr.updatedWith(DisplayLabel.of(variant)){
-                case Some(medSets -> rsv) => Some((medSets :+ meds, max(rsv,score(variant))))
-                case None                 => Some(Seq(meds) -> score(variant))
+                case Some(medSets -> sc) => Some((medSets :+ meds, max(sc,score(variant))))
+                case None                => Some(Seq(meds) -> score(variant))
               }
           }
     }
     .toSeq
-    .sortBy { case (_,(_,rsv)) => rsv }(Ordering[Double].reverse)  // reverse Ordering to sort entries by decreasing relevance score
+    .sortBy { case (_,(_,score)) => score }(Ordering[Double].reverse)  // reverse Ordering to sort entries by decreasing relevance score
     .map { 
       case (variant,(meds,_)) =>
         Entry(
@@ -336,7 +388,17 @@ trait MTBReportingOps extends ReportingOps
     @annotation.unused atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
   ): Seq[Entry[DisplayLabel[GeneAlteration],Distribution[Set[Coding[Medications]]]]] = 
     records.foldLeft(
-      Map.empty[DisplayLabel[GeneAlteration],(Seq[Set[Coding[Medications]]],Double)]
+      Map.empty[
+        DisplayLabel[GeneAlteration],
+        (
+          Seq[Set[Coding[Medications]]],
+          Double,
+          Map[
+            DisplayLabel[GeneAlteration],
+            (Seq[Set[Coding[Medications]]],Double)
+          ]
+        )
+      ]
     ){
       (acc,record) =>
 
@@ -357,7 +419,7 @@ trait MTBReportingOps extends ReportingOps
                     recommendation
                       .supportingVariants.getOrElse(List.empty)
                       .flatMap(
-                        _.resolve
+                        _.variant.resolve
                          .map(_.geneAlterations)
                          .getOrElse(List.empty)
                       )
@@ -367,21 +429,48 @@ trait MTBReportingOps extends ReportingOps
           .foldLeft(acc){
             case (accPr,(alteration,meds)) =>
 
-              val altRsv = queriedAlterations.score(alteration)
+              val (base,baseScore) =
+                GeneAlteration(alteration.gene)
+                  .pipe(b => DisplayLabel.of(b) -> queriedAlterations.score(b))
 
-              accPr.updatedWith(DisplayLabel.of(alteration)){
-                case Some(medSets -> rsv) => Some((medSets :+ meds, max(rsv,altRsv)))
-                case None                 => Some(Seq(meds) -> altRsv)
+              val alt = DisplayLabel.of(alteration)
+
+              val altScore = queriedAlterations.score(alteration)
+
+              accPr.updatedWith(base){
+
+                case Some((medSets,score,children)) =>
+                  Some(
+                    (
+                      medSets :+ meds,
+                      max(score,baseScore),
+                      children.updatedWith(alt){ 
+                        case Some(chMedSets -> chScore) => Some(chMedSets -> max(chScore,altScore))
+                        case None                       => Some(Seq(meds) -> altScore)
+                      }
+                    )
+                  )
+
+                case None => Some((Seq(meds), baseScore, Map(alt -> (Seq(meds),altScore))))
               }
           }
     }
     .toSeq
-    .sortBy { case (_,(_,rsv)) => rsv }(Ordering[Double].reverse)  // reverse Ordering to sort entries by decreasing relevance score
+    .sortBy { case (_,(_,score,_)) => score }(Ordering[Double].reverse)  // reverse Ordering to sort entries by decreasing relevance score
     .map { 
-      case (variant,(meds,_)) =>
+      case (key,(meds,_,children)) =>
         Entry(
-          variant,
-          Distribution.of(meds)        
+          key,
+          Distribution.of(meds),
+          Option.when(children.nonEmpty)(
+            children
+              .toSeq
+              .sortBy { case (_,(_,score)) => score }(Ordering[Double].reverse)  // reverse Ordering to sort entries by decreasing relevance score
+              .map { 
+                case (chKey,(chMeds,_)) =>
+                  Entry(chKey,Distribution.of(chMeds))
+              }
+          )
         )
     }
 
@@ -396,7 +485,7 @@ trait MTBReportingOps extends ReportingOps
 
         val therapies =
           record
-            .getTherapies
+            .getSystemicTherapies
             .map(_.latest)
 
         record
@@ -517,14 +606,14 @@ trait MTBReportCompiler extends MTBReportingOps
     MTBReport(
       criteria,
       demographics(cohort.map(_.patient)),
-      Distribution.of(cohort.flatMap(_.getDiagnoses).map(_.code)),
+      Distribution.of(cohort.flatMap(_.diagnoses.toList).map(_.code)),
       processStepDurations(cohort),
       recommendations(cohort),
       claimResponses(cohort),
       followUp(snapshots),
       Distribution.of(
         cohort.flatMap(_.getNgsReports)
-          .map(_.sequencingType)
+          .map(_.`type`)
       )
     )
   }
@@ -596,7 +685,7 @@ trait MTBReportCompiler extends MTBReportingOps
             record.getCarePlans
               .flatMap(_.getMedicationRecommendations)
 
-          record.getTherapies
+          record.getSystemicTherapies
             // Take first therapy entry
             .map(_.history.toList.minBy(_.recordedOn)) // TODO: Consider filtering only therapies with status != NotDone
             .flatMap {
@@ -648,7 +737,7 @@ trait MTBReportCompiler extends MTBReportingOps
 
 
     implicit val diagnoses =
-      cohort.flatMap(_.getDiagnoses)
+      cohort.flatMap(_.diagnoses.toList)
 
 
     Recommendations(
@@ -661,7 +750,7 @@ trait MTBReportCompiler extends MTBReportingOps
         patientsCarePlans
           .flatMap(_._2)
           .flatMap(_.getMedicationRecommendations)
-          .flatMap(_.indication.flatMap(_.resolve))
+          .flatMap(_.reason.flatMap(_.resolve))
           .map(_.code)
       ),
       recommendationDistribution(recordsWithRecommendations),
@@ -676,7 +765,7 @@ trait MTBReportCompiler extends MTBReportingOps
         Distribution.of(
           studyEnrollmentRecommendations
             .flatten
-            .flatMap(_.studies.getOrElse(List.empty))
+            .flatMap(_.study.map(_.extId).toList)
         )
       )
     )
@@ -738,7 +827,7 @@ trait MTBReportCompiler extends MTBReportingOps
         .flatMap(_.getMedicationRecommendations)
 
     val therapies =
-      cohort.flatMap(_.getTherapies.map(_.latest))
+      cohort.flatMap(_.getSystemicTherapies.map(_.latest))
 
     FollowUp(
       Count.of(

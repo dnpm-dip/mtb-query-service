@@ -12,12 +12,8 @@ import de.dnpm.dip.model.{
   Gender,
   Site
 }
-import de.dnpm.dip.coding.{
-  Code,
-  Coding
-}
+import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.coding.atc.ATC
-import de.dnpm.dip.coding.hgvs.HGVS
 import de.dnpm.dip.mtb.query.api._
 import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.mtb.model.Completers._
@@ -67,10 +63,7 @@ class Tests extends AsyncFlatSpec
     for {
       patRec <- Gen.oneOf(dataSets)
 
-      icd10 =
-        patRec.getDiagnoses
-          .head
-          .code
+      icd10 = patRec.diagnoses.head.code
 
       ngs = 
         patRec
@@ -82,20 +75,20 @@ class Tests extends AsyncFlatSpec
           .take(2)
           .map(snv =>
             SNVCriteria(
-              snv.gene,
+              Some(snv.gene),
               None,
               snv.proteinChange
                 // Change the protein change to just a substring of the occurring one
                 // to test that matches are also returned by substring match of the protein (or DNA) change
                 .map(
                   pch => pch.copy( 
-                    code = Code[HGVS.Protein](pch.code.value.substring(2,pch.code.value.size-1))
+                    value = pch.value.substring(2,pch.value.size-1)
                   )
                 )
             )
           )
           .toSet
-
+/*
       cnv = 
         ngs.results
           .copyNumberVariants
@@ -106,10 +99,10 @@ class Tests extends AsyncFlatSpec
           Some(cnv.reportedAffectedGenes.getOrElse(Set.empty).take(1)),
           Some(cnv.`type`)
         )
-
+*/
       medicationCriteria =
         patRec
-          .getTherapies
+          .getSystemicTherapies
           .map(_.latest)
           .collectFirst {
             case th if th.medication.isDefined =>
@@ -123,8 +116,7 @@ class Tests extends AsyncFlatSpec
           }
 
     } yield MTBQueryCriteria(
-//      Some(Set(icd10)),
-      None,
+      Some(Set(icd10)),
       None,
       Some(
         GeneAlterations(
@@ -154,9 +146,8 @@ class Tests extends AsyncFlatSpec
           None
         )
       ),
-      medicationCriteria,
 */    
-      None,
+      medicationCriteria,
       None
     )
 

@@ -302,7 +302,7 @@ private trait MTBQueryCriteriaOps
               queryCriteria.diagnoses
                 .collect {
                    case criteria if criteria.nonEmpty =>
-                     (criteria intersect record.getDiagnoses.map(_.code).toSet)
+                     (criteria intersect record.diagnoses.map(_.code).toList.toSet)
                        .tap(matches => checks += matches.nonEmpty)
                 }
 
@@ -310,7 +310,7 @@ private trait MTBQueryCriteriaOps
               queryCriteria.tumorMorphologies
                 .collect {
                    case criteria if criteria.nonEmpty =>
-                     (criteria intersect record.getHistologyReports.flatMap(_.results.tumorMorphology).map(_.value).toSet)
+                     (criteria intersect record.getHistologyReports.map(_.results.tumorMorphology.value).toSet)
                        .tap(matches => checks += matches.nonEmpty)
                 }
 
@@ -378,7 +378,7 @@ private trait MTBQueryCriteriaOps
                       record.getCarePlans
                         .flatMap(_.medicationRecommendations.getOrElse(List.empty))
                         .map(_.medication),
-                      record.getTherapies
+                      record.getSystemicTherapies
                         .map(_.latest)
                         .flatMap(_.medication)
                     )

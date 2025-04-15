@@ -16,7 +16,7 @@ import de.dnpm.dip.model.Medications
 import de.dnpm.dip.mtb.model.{
   MTBDiagnosis,
   MTBMedicationRecommendation,
-  MTBMedicationTherapy
+  MTBSystemicTherapy
 }
 import de.dnpm.dip.mtb.query.api.{
   DiagnosisFilter,
@@ -99,7 +99,7 @@ object MTBFilterExtensions
   {
 
     def apply(
-      therapies: Iterable[MTBMedicationTherapy]
+      therapies: Iterable[MTBSystemicTherapy]
     )(
       implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
     ): Boolean = {

@@ -7,6 +7,7 @@ import cats.{
 }
 import de.dnpm.dip.util.DisplayLabel
 import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.coding.icd.ICDO3
 import de.dnpm.dip.model.Medications
@@ -46,10 +47,13 @@ with KaplanMeierOps[Id,Applicative[Id]]
     filter: MTBFilters
   ): Seq[MTBResultSet.TherapyResponseDistribution]
 
-
   def therapyResponsesBySupportingVariant(
     filter: MTBFilters
   ): Seq[MTBResultSet.TherapyResponses]
+
+  def alterationsByGene(
+    filter: MTBFilters
+  ): MTBResultSet.AlterationDistributions
 
 }
 
@@ -66,13 +70,6 @@ object MTBResultSet
       tumorMorphologies: Distribution[Coding[ICDO3]]
     )
 
-/*  
-    final case class VariantsByTumorEntity
-    (
-      simpleVariants: Seq[Entry[Coding[ICD10GM],Distribution[DisplayLabel[SNV]]]],
-      copyNumberVariants: Seq[Entry[Coding[ICD10GM],Distribution[DisplayLabel[CNV]]]] 
-    )
-*/
 
     implicit val writesDistributions: OWrites[Distributions] =
       Json.writes[Distributions]
@@ -83,6 +80,12 @@ object MTBResultSet
   (
     overallDistributions: TumorDiagnostics.Distributions,
     distributionsByVariant: Seq[Entry[DisplayLabel[GeneAlteration],TumorDiagnostics.Distributions]]
+  )
+
+
+  final case class AlterationDistributions
+  (
+    alterationsByGene: Seq[Entry[Coding[HGNC],Distribution[GeneAlteration]]]
   )
 
 

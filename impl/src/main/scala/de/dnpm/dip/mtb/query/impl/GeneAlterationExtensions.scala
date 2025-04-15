@@ -26,8 +26,8 @@ object GeneAlterationExtensions
   implicit val displays: Displays[GeneAlteration] =
     Displays[GeneAlteration]{ 
 
-      case GeneAlteration.SNV(gene,_,proteinChange) =>
-        s"${gene.display.getOrElse(gene.code)} ${proteinChange.map(c => c.display.getOrElse(c.code.value)).getOrElse("SNV")}"
+      case GeneAlteration.SNV(gene,proteinChange) =>
+        s"${gene.display.getOrElse(gene.code)} ${proteinChange.map(_.value).getOrElse("SNV")}"
 
       case GeneAlteration.CNV(gene,typ) =>
         s"${gene.display.getOrElse(gene.code)} $typ"
@@ -59,9 +59,10 @@ object GeneAlterationExtensions
     def geneAlterations: Iterable[GeneAlteration] = 
       variant match {
         case snv: SNV =>
-          snv.gene.map(
-            GeneAlteration.SNV(_,snv.dnaChange,snv.proteinChange)
+          Some(
+            GeneAlteration.SNV(snv.gene,snv.proteinChange)
           )
+          
         case cnv: CNV =>
           cnv.reportedAffectedGenes
             .getOrElse(Set.empty)
@@ -117,7 +118,6 @@ object GeneAlterationExtensions
           Seq(criteria.gene.code == snv.gene.code) ++
             criteria.variant.map {
               case crit: GeneAlterationCriteria.SNVCriteria =>
-                crit.dnaChange.map(g => snv.dnaChange.exists(_ matches g)) ++
                 crit.proteinChange.map(g => snv.proteinChange.exists(_ matches g))
 
               case _ => Some(false) // Wrong alteration type

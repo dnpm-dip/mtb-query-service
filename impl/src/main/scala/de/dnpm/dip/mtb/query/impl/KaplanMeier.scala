@@ -33,17 +33,17 @@ import de.dnpm.dip.model.{
   ClosedInterval,
   Patient,
   Reference,
-  Therapy,
   UnitOfTime
 }
 import de.dnpm.dip.model.Medications._
-import Therapy.StatusReason.Progression
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
-  MTBMedicationTherapy,
+  MTBTherapy,
+  MTBSystemicTherapy,
   Response,
   RECIST
 }
+import MTBTherapy.StatusReason.Progression
 import de.dnpm.dip.mtb.query.api.PFSRatio
 import de.dnpm.dip.mtb.query.api.KaplanMeier.{
   Config,
@@ -219,7 +219,7 @@ extends KaplanMeierModule[cats.Id]
         .getOrElse(
           // 1. Censoring time strategy: fall back to date of last therapy follow-up
           record
-            .getTherapies
+            .getSystemicTherapies
             .flatMap(_.history.map(_.recordedOn).toList)
             .maxOption
             // 2. Censoring time strategy: fall back to upload date
@@ -230,10 +230,10 @@ extends KaplanMeierModule[cats.Id]
 
 
   private def progressionOrCensoringDate(
-    therapy: MTBMedicationTherapy,
+    therapy: MTBSystemicTherapy,
     patient: Patient
   )(
-    implicit lastResponses: Map[Id[MTBMedicationTherapy],Response]
+    implicit lastResponses: Map[Id[MTBSystemicTherapy],Response]
   ): (LocalDate,Boolean) =
     lastResponses
       .get(therapy.id)
@@ -247,7 +247,7 @@ extends KaplanMeierModule[cats.Id]
         therapy
           .statusReason
           .collect { 
-            case Therapy.StatusReason(Progression) =>
+            case MTBTherapy.StatusReason(Progression) =>
               therapy.period
                 .flatMap(_.endOption)
                 .getOrElse(therapy.recordedOn)
@@ -270,24 +270,20 @@ extends KaplanMeierModule[cats.Id]
           val (observationDate,status) = dateOfDeathOrCensoring(snp)
         
           snp.data
-            .getDiagnoses
-            .flatMap(
+            .diagnoses
+            .map(
               diagnosis =>
-                diagnosis
-                  .recordedOn
-                  .map(
-                    diagDate =>
-                      (
-                        diagnosis.code
-                          .parentOfKind(Category)
-                          .getOrElse(diagnosis.code)
-                          .code.value,
-                        diagDate,
-                        observationDate,
-                        status
-                      )
-                    )
+                (
+                  diagnosis.code
+                    .parentOfKind(Category)
+                    .getOrElse(diagnosis.code)
+                    .code.value,
+                  diagnosis.recordedOn,
+                  observationDate,
+                  status
+                )
             )
+            .toList
 
       },
       (OS,Ungrouped) -> {
@@ -295,8 +291,9 @@ extends KaplanMeierModule[cats.Id]
           val (observationDate,status) = dateOfDeathOrCensoring(snp)
 
           snp.data
-            .getDiagnoses
-            .flatMap(_.recordedOn)
+            .diagnoses
+            .map(_.recordedOn)
+            .toList
             .minOption
             .map(
               date =>
@@ -315,13 +312,12 @@ extends KaplanMeierModule[cats.Id]
             record
               .getResponses
               .groupBy(_.therapy)
-              .collect {
-                case (Reference(Some(therapyId),_,_,_),responses) =>
-                  therapyId -> responses.maxBy(_.effectiveDate)
+              .collect { 
+                case (ref,responses) => ref.id -> responses.maxBy(_.effectiveDate)
               }
           
           record
-            .getTherapies
+            .getSystemicTherapies
             .map(_.latest)
             .flatMap {
               therapy =>
@@ -355,13 +351,12 @@ extends KaplanMeierModule[cats.Id]
             record
               .getResponses
               .groupBy(_.therapy)
-              .collect {
-                case (Reference(Some(therapyId),_,_,_),responses) =>
-                  therapyId -> responses.maxBy(_.effectiveDate)
+              .collect { 
+                case (ref,responses) => ref.id -> responses.maxBy(_.effectiveDate)
               }
           
           record
-            .getTherapies
+            .getSystemicTherapies
             .map(_.latest)
             .flatMap {
               therapy =>
@@ -436,10 +431,10 @@ extends KaplanMeierModule[cats.Id]
   ): Option[(Coding[ICD10GM],PFSRatio.DataPoint)] = {
 
     def progressionTime(
-      therapy: MTBMedicationTherapy,
+      therapy: MTBSystemicTherapy,
       patient: Patient
     )(
-      implicit lastResponses: Map[Id[MTBMedicationTherapy],Response]
+      implicit lastResponses: Map[Id[MTBSystemicTherapy],Response]
     ): Option[Long] = {
       val (observationDate,status) =
         progressionOrCensoringDate(therapy,record.patient)
@@ -454,13 +449,12 @@ extends KaplanMeierModule[cats.Id]
       record
         .getResponses
         .groupBy(_.therapy)
-        .collect {
-          case (Reference(Some(therapyId),_,_,_),responses) =>
-            therapyId -> responses.maxBy(_.effectiveDate)
+        .collect { 
+          case (ref,responses) => ref.id -> responses.maxBy(_.effectiveDate)
         }
 
     implicit val diagnoses =
-      record.getDiagnoses
+      record.diagnoses
 
     for {
       th1 <- record.getGuidelineTherapies.maxByOption(_.recordedOn)
@@ -469,7 +463,7 @@ extends KaplanMeierModule[cats.Id]
 
       medication1 <- th1.medication
 
-      th2 <- record.getTherapies.map(_.latest).maxByOption(_.recordedOn)
+      th2 <- record.getSystemicTherapies.map(_.latest).maxByOption(_.recordedOn)
 
       pfs2 <- progressionTime(th2,record.patient)
 
@@ -477,8 +471,8 @@ extends KaplanMeierModule[cats.Id]
 
       tumorEntity <-
         for {
-          entity2 <- th2.indication.flatMap(_.resolve).map(_.code)
-          entity1 <- th1.indication.flatMap(_.resolve).map(_.code)
+          entity2 <- th2.reason.flatMap(_.resolve).map(_.code)
+          entity1 <- th1.reason.flatMap(_.resolve).map(_.code)
           if entity1 == entity2
         } yield entity2
 

@@ -1,7 +1,7 @@
 package de.dnpm.dip.mtb.query.impl
 
 
-import de.dnpm.dip.model.Reference
+import de.dnpm.dip.model.GeneAlterationReference
 import de.dnpm.dip.mtb.model.{
   Variant,
   SNV,
@@ -18,7 +18,7 @@ object VariantCriteriaOps
 {
 
   private type CanHaveSupportingVariants = {
-    def supportingVariants: Option[List[Reference[Variant]]]
+    def supportingVariants: Option[List[GeneAlterationReference[Variant]]]
   }
 
   import scala.language.reflectiveCalls
@@ -32,7 +32,7 @@ object VariantCriteriaOps
     ): Boolean =
       ts.exists(
         _.supportingVariants.exists(
-          _.exists(_.id.exists(_ == variant.id))
+          _.exists(_.variant.id == variant.id)
         )
       )
 
@@ -61,8 +61,8 @@ object VariantCriteriaOps
 
     override def check(snv: SNV): Seq[Boolean] =
       Seq(
-        criteria.gene.map(g => snv.gene.exists(_.code == g.code)).getOrElse(true),
-        criteria.dnaChange.map(g => snv.dnaChange.exists(_ matches g)).getOrElse(true),
+        criteria.gene.map(g => snv.gene.code == g.code).getOrElse(true),
+        criteria.dnaChange.map(g => snv.dnaChange matches g).getOrElse(true),
         criteria.proteinChange.map(g => snv.proteinChange.exists(_ matches g)).getOrElse(true)
       )
   }

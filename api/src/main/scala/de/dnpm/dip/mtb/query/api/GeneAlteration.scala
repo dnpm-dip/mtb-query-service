@@ -1,7 +1,10 @@
 package de.dnpm.dip.mtb.query.api
 
 
-import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.{
+  Code,
+  Coding
+}
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
 
@@ -19,8 +22,7 @@ object GeneAlteration
   final case class SNV
   (
     gene: Coding[HGNC],
-    dnaChange: Option[Coding[HGVS]],
-    proteinChange: Option[Coding[HGVS]]
+    proteinChange: Option[Code[HGVS]]
   )
   extends GeneAlteration
 

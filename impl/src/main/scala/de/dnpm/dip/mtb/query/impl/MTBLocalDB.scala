@@ -68,7 +68,7 @@ object MTBLocalDB extends SPILoader[MTBLocalDBSPI]
               
                 implicit val rnd: Random = new Random
             
-                for (i <- 0 until n){
+                for (_ <- 0 until n){
                   db.save(Gen.of[MTBPatientRecord].next.complete)
                 }
               }

@@ -81,9 +81,9 @@ with MTBReportingOps
 
     record =>
       patientFilter(record.patient) &&
-      diagnosisFilter(record.getDiagnoses) &&
+      diagnosisFilter(record.diagnoses.toList) &&
       recommendationFilter(record.getCarePlans.flatMap(_.medicationRecommendations.getOrElse(List.empty))) &&
-      therapyFilter(record.getTherapies.map(_.latest))
+      therapyFilter(record.getSystemicTherapies.map(_.latest))
 
   }
 
@@ -98,7 +98,7 @@ with MTBReportingOps
       DiagnosisFilter(
         Some(
           records
-            .flatMap(_.getDiagnoses.map(_.code))
+            .flatMap(_.diagnoses.map(_.code).toList)
             .toSet
             .pipe(
               // Add the parent category of each occurring entry,
@@ -122,7 +122,7 @@ with MTBReportingOps
       ),
       TherapyFilter(
         Some(
-          records.flatMap(_.getTherapies)
+          records.flatMap(_.getSystemicTherapies)
             .map(_.latest)
             .flatMap(_.medication)
             .toSet
@@ -147,9 +147,41 @@ with MTBReportingOps
     TumorDiagnostics(
       overallDiagnosticDistributions(records),
       diagnosticDistributionsByAlteration(records,queryCriteria.flatMap(_.geneAlterations))
-//      diagnosticDistributionsByVariant(records)
     )
   }
+
+
+  override def alterationsByGene(
+    filter: MTBFilters
+  ): AlterationDistributions = {
+
+    import GeneAlterationExtensions._
+
+    val alterations =
+      for {
+        record <- patientRecords(filter)
+        ngs    <- record.getNgsReports
+        variant <- ngs.variants
+        alteration <- variant.geneAlterations
+      } yield alteration
+
+
+    AlterationDistributions(
+      alterations
+        .groupBy(_.gene)
+        .map { 
+          case (gene,alts) =>
+            Entry(
+              gene,
+              Distribution.of(alts)
+            )
+        }
+        .toSeq 
+        .sortBy(_.value.total)(Ordering[Int].reverse) //TODO: sort by relevance to query criteria?
+    )
+
+  }
+
 
   override def medication(
     filter: MTBFilters
@@ -164,7 +196,6 @@ with MTBReportingOps
     MTBResultSet.Medication(
       MTBResultSet.Medication.Recommendations(
         recommendationDistribution(records),
-//        recommendationsBySupportingVariant(records,queryCriteria.flatMap(_.variants)),
         recommendationsBySupportingAlteration(records,queryCriteria.flatMap(_.geneAlterations))
       ),
       MTBResultSet.Medication.Therapies(
@@ -196,12 +227,11 @@ with MTBReportingOps
   private val recistOrdering: Ordering[RECIST.Value] = {
     val ordinals =
       Map(
-        CR  -> 7,
-        PR  -> 6,
-        MR  -> 5,
-        SD  -> 4,
-        PD  -> 3,
-        NYA -> 2,
+        CR  -> 6,
+        PR  -> 5,
+        MR  -> 4,
+        SD  -> 3,
+        PD  -> 2,
         NA  -> 1
       )
 
@@ -287,7 +317,7 @@ with MTBReportingOps
               .flatMap(_.variants)
 
           record
-            .getTherapies
+            .getSystemicTherapies
             .map(_.latest)
             .view
             .filter(_.medication.isDefined)
@@ -308,13 +338,13 @@ with MTBReportingOps
                     .flatMap(_.resolve)
                     .flatMap(_.supportingVariants)
                     .getOrElse(List.empty)
-                    .flatMap(_.resolve)
+                    .flatMap(_.variant.resolve)
                     .map(DisplayLabel.of(_))
                     .toSet
 
                 val response =
                   record.getResponses
-                    .filter(_.therapy.id.exists(_ == therapy.id))
+                    .filter(_.therapy.id == therapy.id)
                     .maxByOption(_.effectiveDate)
                     .map(_.value)
 
@@ -403,7 +433,7 @@ with MTBReportingOps
               .flatMap(_.variants)
 
           record
-            .getTherapies
+            .getSystemicTherapies
             .map(_.latest)
             .view
             .filter(_.medication.isDefined)
@@ -424,11 +454,11 @@ with MTBReportingOps
                     .flatMap(_.resolve)
                     .flatMap(_.supportingVariants)
                     .getOrElse(List.empty)
-                    .flatMap(_.resolve)
+                    .flatMap(_.variant.resolve)
      
                 val response =
                   record.getResponses
-                    .filter(_.therapy.id.exists(_ == therapy.id))
+                    .filter(_.therapy.id == therapy.id)
                     .maxByOption(_.effectiveDate)
                     .map(_.value)
 
