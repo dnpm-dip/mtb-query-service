@@ -28,7 +28,7 @@ import de.dnpm.dip.model.{
   Study,
   Therapy
 }
-import de.dnpm.dip.service.query.{
+import de.dnpm.dip.service.{
   Count,
   Distribution,
   Entry

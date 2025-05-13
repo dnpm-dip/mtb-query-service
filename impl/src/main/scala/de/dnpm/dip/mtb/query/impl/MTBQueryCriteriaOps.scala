@@ -320,7 +320,7 @@ private trait MTBQueryCriteriaOps
                 .flatMap(_.simpleVariants)
                 .collect {
                   case criteria if criteria.nonEmpty =>
-                    snvMatchesOn(criteria,record.getNgsReports.flatMap(_.results.simpleVariants))
+                    snvMatchesOn(criteria,record.getNgsReports.flatMap(_.results.simpleVariants.getOrElse(List.empty)))
                       .tap(matches => variantChecks += matches.nonEmpty)
                 }
 
@@ -329,7 +329,7 @@ private trait MTBQueryCriteriaOps
                 .flatMap(_.copyNumberVariants)
                 .collect {
                   case criteria if criteria.nonEmpty =>
-                    cnvMatchesOn(criteria,record.getNgsReports.flatMap(_.results.copyNumberVariants))
+                    cnvMatchesOn(criteria,record.getNgsReports.flatMap(_.results.copyNumberVariants.getOrElse(List.empty)))
                       .tap(
                         matches => variantChecks += matches.nonEmpty
                       )
@@ -340,7 +340,7 @@ private trait MTBQueryCriteriaOps
                 .flatMap(_.dnaFusions)
                 .collect {
                   case criteria if criteria.nonEmpty =>
-                    fusionMatches(criteria,record.getNgsReports.flatMap(_.results.dnaFusions))
+                    fusionMatches(criteria,record.getNgsReports.flatMap(_.results.dnaFusions.getOrElse(List.empty)))
                       .tap(
                         matches => variantChecks += matches.nonEmpty
                       )
@@ -351,7 +351,7 @@ private trait MTBQueryCriteriaOps
                 .flatMap(_.rnaFusions)
                 .collect {
                   case criteria if criteria.nonEmpty =>
-                    fusionMatches(criteria,record.getNgsReports.flatMap(_.results.rnaFusions))
+                    fusionMatches(criteria,record.getNgsReports.flatMap(_.results.rnaFusions.getOrElse(List.empty)))
                       .tap(
                         matches => variantChecks += matches.nonEmpty
                       )

@@ -11,11 +11,11 @@ import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.coding.icd.ICDO3
 import de.dnpm.dip.model.Medications
-import de.dnpm.dip.service.query.{
-  ResultSet,
+import de.dnpm.dip.service.{
   Entry,
   Distribution
 }
+import de.dnpm.dip.service.query.ResultSet
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
   Variant,

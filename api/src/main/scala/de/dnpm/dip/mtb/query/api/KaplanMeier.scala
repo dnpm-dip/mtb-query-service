@@ -14,7 +14,7 @@ import de.dnpm.dip.coding.{
   DefaultCodeSystem
 }
 import de.dnpm.dip.coding.icd.ICD10GM
-import de.dnpm.dip.service.query.{
+import de.dnpm.dip.service.{
   Count,
   Entry
 }

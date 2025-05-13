@@ -22,11 +22,11 @@ import de.dnpm.dip.coding.icd.{
   ICD10GM
 }
 import de.dnpm.dip.coding.icd.ClassKinds.Category
-import de.dnpm.dip.service.query.{
+import de.dnpm.dip.service.{
   Count,
-  Entry,
-  ReportingOps
+  Entry
 }
+import de.dnpm.dip.service.query.ReportingOps
 import de.dnpm.dip.model.{
   Snapshot,
   Id,

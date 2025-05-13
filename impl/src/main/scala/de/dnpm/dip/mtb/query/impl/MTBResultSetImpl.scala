@@ -17,12 +17,14 @@ import de.dnpm.dip.coding.icd.{
 }
 import de.dnpm.dip.coding.icd.ClassKinds.Category
 import de.dnpm.dip.model.Medications
-import de.dnpm.dip.service.query.{
+import de.dnpm.dip.service.{
   Count,
   Distribution,
-  Entry,
+  Entry
+}
+import de.dnpm.dip.service.query.{
   PatientFilter,
-  Query,
+  Query
 }
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,

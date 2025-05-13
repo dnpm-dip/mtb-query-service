@@ -72,6 +72,7 @@ class Tests extends AsyncFlatSpec
       snvCriteria =
         ngs.results
           .simpleVariants
+          .get
           .take(2)
           .map(snv =>
             SNVCriteria(

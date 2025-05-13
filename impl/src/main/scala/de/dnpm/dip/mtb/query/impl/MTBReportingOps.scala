@@ -31,12 +31,12 @@ import de.dnpm.dip.model.{
   UnitOfTime
 }
 import de.dnpm.dip.model.UnitOfTime.Weeks
-import de.dnpm.dip.service.query.{
+import de.dnpm.dip.service.{
   Count,
   Distribution,
-  Entry,
-  ReportingOps
+  Entry
 }
+import de.dnpm.dip.service.query.ReportingOps
 import de.dnpm.dip.mtb.model.{
   ClaimResponse,
   MTBPatientRecord,

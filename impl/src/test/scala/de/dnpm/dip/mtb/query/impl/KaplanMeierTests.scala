@@ -23,7 +23,7 @@ import de.dnpm.dip.mtb.query.api.KaplanMeier.{
   SurvivalType,
   Grouping
 }
-import de.dnpm.dip.service.query.Entry
+import de.dnpm.dip.service.Entry
 import de.ekut.tbi.generators.Gen
 import de.dnpm.dip.mtb.gens.Generators._
 

@@ -22,9 +22,7 @@ import de.dnpm.dip.service.query.{
   PeerToPeerQuery,
   PatientRecordRequest,
   LocalDB,
-  PreparedQueryDB,
-//  InMemPreparedQueryDB,
-//  FSBackedPreparedQueryDB,
+  PreparedQueryDB
 }
 import de.dnpm.dip.coding.CodeSystemProvider
 import de.dnpm.dip.coding.atc.ATC
@@ -59,14 +57,24 @@ object MTBQueryServiceImpl extends Logging
   private lazy val connector =
     System.getProperty(HttpConnector.Type.property,"broker") match {
       case HttpConnector.Type(typ) =>
+        val baseURI = "/api/mtb/peer2peer"
         HttpConnector(
           typ,
           { 
             case _: PeerToPeerQuery[_,_] =>
-              (POST, "/api/mtb/peer2peer/query", Map.empty)
+              (POST, s"$baseURI/query", Map.empty)
 
-            case _: PatientRecordRequest[_] =>
-              (GET, "/api/mtb/peer2peer/patient-record", Map.empty)
+            case req: PatientRecordRequest[_] =>
+              val params =
+                Map(
+                  "querier" -> Seq(req.querier.value),
+                  "patient" -> Seq(req.patient.value)
+                ) ++ req.snapshot.map(
+                  snp => "snapshot" -> Seq(snp.toString)
+                )
+
+              (GET, s"$baseURI/patient-record", params)
+//              (POST, s"$baseURI/patient-record", Map.empty)
           }        
         )
 
