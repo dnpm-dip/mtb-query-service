@@ -792,7 +792,7 @@ trait MTBReportCompiler extends MTBReportingOps
       Count.total(allClaimResponses.size)
 
     allClaimResponses
-      .groupBy(_.status)
+      .groupBy(_.status.getOrElse(Coding(ClaimResponse.Status.Unknown)))
       .map { 
         case (status,crs) =>
           Entry(
