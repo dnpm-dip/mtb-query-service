@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/dnpm-dip/mtb-query-service/compare/v1.0.0...v1.0.1) (2025-08-19)
+
+
+### Bug Fixes
+
+* Updated service-base, mtb-dto-model and mtb-dto-generators dependency versions ([8827e9a](https://github.com/dnpm-dip/mtb-query-service/commit/8827e9add5afdf70db26cb76207249d3c71708c0))
+
 ## 1.0.0 (2025-08-06)
 
 
