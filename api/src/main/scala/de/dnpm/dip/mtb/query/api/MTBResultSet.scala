@@ -35,25 +35,19 @@ with KaplanMeierOps[Id,Applicative[Id]]
   type Filter = MTBFilters
 
 
-  def tumorDiagnostics(
-    filter: MTBFilters
-  ): MTBResultSet.TumorDiagnostics
+  def tumorDiagnostics(filter: MTBFilters): MTBResultSet.TumorDiagnostics
 
-  def medication(
-    filter: MTBFilters
-  ): MTBResultSet.Medication
+  def medication(filter: MTBFilters): MTBResultSet.Medication
 
-  def therapyResponses(
-    filter: MTBFilters
-  ): Seq[MTBResultSet.TherapyResponseDistribution]
+//  @deprecated("To be removed","1.0.1")
+  def therapyResponseDistributions(filter: MTBFilters): Seq[MTBResultSet.TherapyResponseDistribution]
 
-  def therapyResponsesBySupportingVariant(
-    filter: MTBFilters
-  ): Seq[MTBResultSet.TherapyResponses]
+//  @deprecated("To be removed","1.0.1")
+  def therapyResponsesBySupportingVariant(filter: MTBFilters): Seq[MTBResultSet.ObsoleteTherapyResponses]
 
-  def alterationsByGene(
-    filter: MTBFilters
-  ): MTBResultSet.AlterationDistributions
+  def therapyResponses(filter: MTBFilters): Seq[MTBResultSet.TherapyResponses]
+
+  def geneAlterations(filter: MTBFilters): Seq[MTBResultSet.GeneAlterationInfo]
 
 }
 
@@ -70,7 +64,6 @@ object MTBResultSet
       tumorMorphologies: Distribution[Coding[ICDO3]]
     )
 
-
     implicit val writesDistributions: OWrites[Distributions] =
       Json.writes[Distributions]
   }
@@ -83,10 +76,20 @@ object MTBResultSet
   )
 
 
-  final case class AlterationDistributions
+  final case class GeneAlterationInfo
   (
-    alterationsByGene: Seq[Entry[Coding[HGNC],Distribution[GeneAlteration]]]
+    entity: Coding[ICD10GM],
+    gene: Coding[HGNC],
+    alteration: DisplayLabel[GeneAlteration],
+    count: Int,
+    supporting: Boolean
   )
+
+  object GeneAlterationInfo
+  {
+    implicit val writes: OWrites[GeneAlterationInfo] =
+      Json.writes[GeneAlterationInfo]
+  }
 
 
   final case class Medication
@@ -137,12 +140,30 @@ object MTBResultSet
   }
 
 
-  final case class TherapyResponses
+  final case class ObsoleteTherapyResponses
   (
     supportingVariant: DisplayLabel[Variant],
     medicationClasses: Set[Coding[Medications]],
     medications: Set[Coding[Medications]],
     responseDistribution: Distribution[Coding[RECIST.Value]]
+  )
+
+  object ObsoleteTherapyResponses
+  {
+    implicit val writes: OWrites[ObsoleteTherapyResponses] =
+      Json.writes[ObsoleteTherapyResponses]
+  }
+
+
+  final case class TherapyResponses
+  (
+    entity: Coding[ICD10GM],
+    medications: Set[DisplayLabel[Coding[Medications]]],
+    supportingAlteration: DisplayLabel[GeneAlteration],
+    count: Int,
+    orr: Double,
+    responseDistribution: Distribution[RECIST.Value],
+    meanDuration: Double
   )
 
   object TherapyResponses

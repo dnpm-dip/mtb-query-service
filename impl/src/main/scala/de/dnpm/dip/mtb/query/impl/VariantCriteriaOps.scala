@@ -39,22 +39,6 @@ object VariantCriteriaOps
   }
 
 
-
-  sealed trait RelevanceMatcher[-T] extends Any {
-
-    def check(t: T): Seq[Boolean]
-
-    def score(t: T): Double = { 
-      val checks = check(t)
-      checks.count(_ == true).toDouble/checks.size
-    }
-
-    def matches(t: T): Boolean =
-      check(t).forall(_ == true)
-  }
-
-
-
   implicit class SNVCriteriaOps(val criteria: SNVCriteria) extends AnyVal with RelevanceMatcher[SNV]
   {
     import HGVS.extensions._
@@ -94,6 +78,5 @@ object VariantCriteriaOps
         criteria.fusionPartner3pr.map(_.code == fusion.fusionPartner3prime.gene.code).getOrElse(true)
       )
   }
-
 
 }
