@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/dnpm-dip/mtb-query-service/compare/v1.0.1...v1.1.0) (2025-10-10)
+
+
+### Features
+
+* Upgraded dependency versions ([615ab0b](https://github.com/dnpm-dip/mtb-query-service/commit/615ab0be8d3f9386c66b098d1c7b601e53e51b07))
+
 ## [1.0.1](https://github.com/dnpm-dip/mtb-query-service/compare/v1.0.0...v1.0.1) (2025-08-19)
 
 
