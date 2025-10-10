@@ -153,36 +153,10 @@ with MTBReportingOps
   }
 
 
-  override def alterationsByGene(
+  override def geneAlterations(
     filter: MTBFilters
-  ): AlterationDistributions = {
-
-    import GeneAlterationExtensions._
-
-    val alterations =
-      for {
-        record <- patientRecords(filter)
-        ngs    <- record.getNgsReports
-        variant <- ngs.variants
-        alteration <- variant.geneAlterations
-      } yield alteration
-
-
-    AlterationDistributions(
-      alterations
-        .groupBy(_.gene)
-        .map { 
-          case (gene,alts) =>
-            Entry(
-              gene,
-              Distribution.of(alts)
-            )
-        }
-        .toSeq 
-        .sortBy(_.value.total)(Ordering[Int].reverse) //TODO: sort by relevance to query criteria?
-    )
-
-  }
+  ): Seq[MTBResultSet.GeneAlterationInfo] =
+    geneAlterationInfos(patientRecords(filter))
 
 
   override def medication(
@@ -247,7 +221,7 @@ with MTBReportingOps
   }
 
 
-  val responseDistributionOrdering: Ordering[Distribution[Coding[RECIST.Value]]] =
+  private val responseDistributionOrdering: Ordering[Distribution[Coding[RECIST.Value]]] =
     new Ordering[Distribution[Coding[RECIST.Value]]]{
 
       // Project the RECIST codes with their counts 
@@ -258,7 +232,8 @@ with MTBReportingOps
       ): Seq[(RECIST.Value,Int)] =
         d.elements
          .collect { 
-           case Entry(RECIST(code),Count(n,_),_) => code -> n
+           case Entry(recist,Count(n,_),_) => recist.code.enumValue -> n
+//           case Entry(RECIST(code),Count(n,_),_) => code -> n
          }
          .toSeq
          .sortBy(_._1)(recistOrdering.reverse)
@@ -290,9 +265,10 @@ with MTBReportingOps
       }
     }
     .reverse
-  
 
-  override def therapyResponses(
+
+
+  override def therapyResponseDistributions(
     filter: MTBFilters
   ): Seq[TherapyResponseDistribution] = 
     patientRecords(filter)
@@ -380,14 +356,7 @@ with MTBReportingOps
             Distribution.of(responses)
               .pipe(
                 dist => dist.copy(
-                  elements =
-                    dist.elements.sortBy {
-                      entry =>
-                        val RECIST(r) = entry.key
-                        r
-                    }(
-                      recistOrdering.reverse
-                    )
+                  elements = dist.elements.sortBy(_.key.code.enumValue)(recistOrdering.reverse)
                 )
               )
           )
@@ -396,10 +365,9 @@ with MTBReportingOps
       .sortBy(_.responseDistribution)(responseDistributionOrdering)
 
 
-
   override def therapyResponsesBySupportingVariant(
     filter: MTBFilters
-  ): Seq[MTBResultSet.TherapyResponses] = {
+  ): Seq[MTBResultSet.ObsoleteTherapyResponses] = {
 
     import VariantCriteriaOps._
 
@@ -488,32 +456,21 @@ with MTBReportingOps
               }   
       }
       .toSeq
-      .sortBy {
-        case (_,(rsv,_)) => rsv 
-      }(
-        Ordering[Double].reverse  // reverse Ordering to sort entries by decreasing relevance score
-      )
+      .sortBy { case (_,(rsv,_)) => rsv }(Ordering[Double].reverse)  // reverse Ordering to sort entries by decreasing relevance score
       .flatMap { 
         case (supportingVariant,(_,acc)) =>
           acc
             .toSeq
             .map {
               case (medications,(medClasses,responses)) =>
-                TherapyResponses(
+                ObsoleteTherapyResponses(
                   supportingVariant,
                   medClasses,
                   medications,
                   Distribution.of(responses)
                     .pipe(
                       dist => dist.copy(
-                        elements =
-                          dist.elements.sortBy {
-                            entry =>
-                              val RECIST(r) = entry.key
-                              r
-                          }(
-                            recistOrdering.reverse
-                          )
+                        elements = dist.elements.sortBy(_.key.code.enumValue)(recistOrdering.reverse)
                       )
                     )
                 )
@@ -522,5 +479,11 @@ with MTBReportingOps
       }
 
   }
+
+
+  override def therapyResponses(
+    filter: MTBFilters
+  ): Seq[TherapyResponses] =
+    therapyResponses(patientRecords(filter))
 
 }
