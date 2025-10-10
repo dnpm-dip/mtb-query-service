@@ -6,7 +6,7 @@ import scala.util.Properties.envOrElse
 name := "mtb-query-service"
 ThisBuild / organization := "de.dnpm.dip"
 ThisBuild / scalaVersion := "2.13.16"
-ThisBuild / version      := envOrElse("VERSION","1.0.1")
+ThisBuild / version      := envOrElse("VERSION","1.1.0")
 
 val ownerRepo  = envOrElse("REPOSITORY","dnpm-dip/mtb-query-service").split("/")
 ThisBuild / githubOwner      := ownerRepo(0)
@@ -68,16 +68,16 @@ lazy val impl = project
 lazy val dependencies =
   new {
     val scalatest      = "org.scalatest"  %% "scalatest"              % "3.2.17" % Test
-    val mtb_model      = "de.dnpm.dip"    %% "mtb-dto-model"          % "1.1.0"
-    val mtb_generators = "de.dnpm.dip"    %% "mtb-dto-generators"     % "1.1.0"
-    val service_base   = "de.dnpm.dip"    %% "service-base"           % "1.0.3"
-    val connector_base = "de.dnpm.dip"    %% "connector-base"         % "1.0.0"
-    val icd10gm        = "de.dnpm.dip"    %% "icd10gm-impl"           % "1.0.0" % Test
-    val icdo3          = "de.dnpm.dip"    %% "icdo3-impl"             % "1.0.0" % Test
-    val icd_catalogs   = "de.dnpm.dip"    %% "icd-claml-packaged"     % "1.0.0" % Test
-    val atc_impl       = "de.dnpm.dip"    %% "atc-impl"               % "1.0.0" % Test
-    val atc_catalogs   = "de.dnpm.dip"    %% "atc-catalogs-packaged"  % "1.0.0" % Test
-    val hgnc_geneset   = "de.dnpm.dip"    %% "hgnc-gene-set-impl"     % "1.0.0" % Test
+    val mtb_model      = "de.dnpm.dip"    %% "mtb-dto-model"          % "1.1.1"
+    val mtb_generators = "de.dnpm.dip"    %% "mtb-dto-generators"     % "1.1.1"
+    val service_base   = "de.dnpm.dip"    %% "service-base"           % "1.1.0"
+    val connector_base = "de.dnpm.dip"    %% "connector-base"         % "1.1.0"
+    val icd10gm        = "de.dnpm.dip"    %% "icd10gm-impl"           % "1.1.1" % Test
+    val icdo3          = "de.dnpm.dip"    %% "icdo3-impl"             % "1.1.1" % Test
+    val icd_catalogs   = "de.dnpm.dip"    %% "icd-claml-packaged"     % "1.1.1" % Test
+    val atc_impl       = "de.dnpm.dip"    %% "atc-impl"               % "1.1.0" % Test
+    val atc_catalogs   = "de.dnpm.dip"    %% "atc-catalogs-packaged"  % "1.1.0" % Test
+    val hgnc_geneset   = "de.dnpm.dip"    %% "hgnc-gene-set-impl"     % "1.1.0" % Test
   }
 
 
