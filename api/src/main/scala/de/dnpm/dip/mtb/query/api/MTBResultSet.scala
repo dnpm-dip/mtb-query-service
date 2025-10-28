@@ -161,7 +161,7 @@ object MTBResultSet
     medications: Set[DisplayLabel[Coding[Medications]]],
     supportingAlteration: DisplayLabel[GeneAlteration],
     count: Int,
-    orr: Double,
+    orr: Int,  // Percent 0 - 100
     responseDistribution: Distribution[RECIST.Value],
     meanDuration: Double
   )

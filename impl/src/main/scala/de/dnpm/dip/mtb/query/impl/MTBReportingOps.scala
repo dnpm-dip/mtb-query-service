@@ -528,8 +528,8 @@ trait MTBReportingOps extends ReportingOps
 */
 
   // Overall Response Rate
-  private val ORR: Seq[RECIST.Value] => Double =
-    responses => (responses count Set(RECIST.CR,RECIST.PR)).toDouble/responses.size
+  private val ORR: Seq[RECIST.Value] => Int =
+    responses => ((responses count Set(RECIST.CR,RECIST.PR)).toDouble/responses.size * 100).toInt
 
   def therapyResponses(
     records: Seq[MTBPatientRecord],
@@ -540,7 +540,6 @@ trait MTBReportingOps extends ReportingOps
 
     records.foldLeft(
       Map.empty[
-//        (Coding[ICD10GM],Set[String],DisplayLabel[GeneAlteration]),
         (Coding[ICD10GM],Set[DisplayLabel[Coding[Medications]]],DisplayLabel[GeneAlteration]),
         (Int,Seq[RECIST.Value],Seq[Double])
       ]
@@ -572,7 +571,6 @@ trait MTBReportingOps extends ReportingOps
               } yield (recommendation, diagnosis.code)
 
             lazy val medications = therapy.medication.get.map(DisplayLabel.of(_))
-//            lazy val medications = therapy.medication.get.flatMap(_.display)
             lazy val response    = responses.get(therapy.id)
             lazy val duration    = therapy.period.flatMap(_.duration(Weeks)).map(_.value)
 
