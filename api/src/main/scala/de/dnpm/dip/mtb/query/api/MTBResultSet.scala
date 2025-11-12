@@ -18,7 +18,6 @@ import de.dnpm.dip.service.{
 import de.dnpm.dip.service.query.ResultSet
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
-  Variant,
   RECIST
 }
 import play.api.libs.json.{
@@ -38,12 +37,6 @@ with KaplanMeierOps[Id,Applicative[Id]]
   def tumorDiagnostics(filter: MTBFilters): MTBResultSet.TumorDiagnostics
 
   def medication(filter: MTBFilters): MTBResultSet.Medication
-
-//  @deprecated("To be removed","1.0.1")
-  def therapyResponseDistributions(filter: MTBFilters): Seq[MTBResultSet.TherapyResponseDistribution]
-
-//  @deprecated("To be removed","1.0.1")
-  def therapyResponsesBySupportingVariant(filter: MTBFilters): Seq[MTBResultSet.ObsoleteTherapyResponses]
 
   def therapyResponses(filter: MTBFilters): Seq[MTBResultSet.TherapyResponses]
 
@@ -125,45 +118,16 @@ object MTBResultSet
   }
 
 
-  final case class TherapyResponseDistribution
-  (
-    medicationClasses: Set[Coding[Medications]],
-    medications: Set[Coding[Medications]],
-    supportingVariants: Set[DisplayLabel[Variant]],
-    responseDistribution: Distribution[Coding[RECIST.Value]]
-  )
-
-  object TherapyResponseDistribution
-  {
-    implicit val writes: OWrites[TherapyResponseDistribution] =
-      Json.writes[TherapyResponseDistribution]
-  }
-
-
-  final case class ObsoleteTherapyResponses
-  (
-    supportingVariant: DisplayLabel[Variant],
-    medicationClasses: Set[Coding[Medications]],
-    medications: Set[Coding[Medications]],
-    responseDistribution: Distribution[Coding[RECIST.Value]]
-  )
-
-  object ObsoleteTherapyResponses
-  {
-    implicit val writes: OWrites[ObsoleteTherapyResponses] =
-      Json.writes[ObsoleteTherapyResponses]
-  }
-
-
   final case class TherapyResponses
   (
     entity: Coding[ICD10GM],
     medications: Set[DisplayLabel[Coding[Medications]]],
     supportingAlteration: DisplayLabel[GeneAlteration],
     count: Int,
-    orr: Int,  // Percent 0 - 100
+    orr: Int,  // Overall Response Rate: 0 - 100 %
     responseDistribution: Distribution[RECIST.Value],
-    meanDuration: Double
+    meanDuration: Double,
+    rsv: Double
   )
 
   object TherapyResponses

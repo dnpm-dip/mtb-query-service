@@ -18,6 +18,8 @@ import de.dnpm.dip.connector.{
   HttpConnector,
   HttpMethod
 }
+import HttpConnector.QueryParameters
+import HttpConnector.QueryParameters._
 import de.dnpm.dip.service.query.{
   BaseQueryService,
   Query,
@@ -70,10 +72,10 @@ object MTBQueryServiceImpl extends Logging
 
             case PatientRecordRequest(_,querier,patient,snapshot) =>
               (
-                GET, s"$baseURI/patient-record", Map(
-                  "querier" -> Seq(querier.value),
-                  "patient" -> Seq(patient.value)
-                ) ++ snapshot.map(snp => "snapshot" -> Seq(snp.toString))
+                GET, s"$baseURI/patient-record", QueryParameters(
+                  "querier" -> querier.value,
+                  "patient" -> patient.value
+                  ) + ("snapshot" -> snapshot.map(_.toString))
               )
           }        
         )

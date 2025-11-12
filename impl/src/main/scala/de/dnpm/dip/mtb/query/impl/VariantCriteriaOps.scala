@@ -39,7 +39,8 @@ object VariantCriteriaOps
   }
 
 
-  implicit class SNVCriteriaOps(val criteria: SNVCriteria) extends AnyVal with RelevanceMatcher[SNV]
+//  implicit class SNVCriteriaOps(val criteria: SNVCriteria) extends AnyVal with RelevanceMatcher[SNV]
+  implicit class SNVCriteriaOps(val criteria: SNVCriteria) extends BooleanRelevanceMatcher[SNV]
   {
     import HGVS.extensions._
 
@@ -52,7 +53,8 @@ object VariantCriteriaOps
   }
   
 
-  implicit class CNVCriteriaOps(val criteria: CNVCriteria) extends AnyVal with RelevanceMatcher[CNV]
+//  implicit class CNVCriteriaOps(val criteria: CNVCriteria) extends AnyVal with RelevanceMatcher[CNV]
+  implicit class CNVCriteriaOps(val criteria: CNVCriteria) extends BooleanRelevanceMatcher[CNV]
   {
     override def check(cnv: CNV): Seq[Boolean] =
       Seq(
@@ -70,7 +72,8 @@ object VariantCriteriaOps
   implicit class FusionCriteriaOps[F <: Fusion[_ <: { def gene: Coding[HGNC] }]](
     val criteria: FusionCriteria
   )
-  extends AnyVal with RelevanceMatcher[F]
+  extends BooleanRelevanceMatcher[F]
+//  extends AnyVal with RelevanceMatcher[F]
   {
     override def check(fusion: F): Seq[Boolean] =
       Seq(

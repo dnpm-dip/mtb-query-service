@@ -125,7 +125,6 @@ class Tests extends AsyncFlatSpec
           )
         )
       ),
-      None,
       medicationCriteria,
       None
     )

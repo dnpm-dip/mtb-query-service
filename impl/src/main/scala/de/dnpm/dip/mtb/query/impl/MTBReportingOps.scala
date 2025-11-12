@@ -42,6 +42,7 @@ import de.dnpm.dip.mtb.model.{
   ClaimResponse,
   MTBPatientRecord,
   MTBCarePlan,
+  MTBMedicationRecommendation,
   RECIST,
   Variant,
   SNV,
@@ -469,68 +470,118 @@ trait MTBReportingOps extends ReportingOps
               .toSeq
               .sortBy { case (_,(_,score)) => score }(Ordering[Double].reverse)  // reverse Ordering to sort entries by decreasing relevance score
               .map { 
-                case (chKey,(chMeds,_)) =>
-                  Entry(chKey,Distribution.of(chMeds))
+                case (chKey,(chMeds,_)) => Entry(chKey,Distribution.of(chMeds))
               }
           )
         )
     }
 
-/*
-  def responsesByTherapy(
-    records: Seq[MTBPatientRecord]
-  ): Seq[Entry[Set[Coding[Medications]],Distribution[Coding[RECIST.Value]]]] =
+
+  // Overall Response Rate (ratio of CR or PR responses to total),
+  // scaled up to percentage, i.e. 0 - 100
+  private val PositiveResponse = Set(RECIST.CR,RECIST.PR) 
+
+  private val ORR: Seq[RECIST.Value] => Int =
+    responses => ((responses count PositiveResponse).toDouble/responses.size * 100).toInt
+
+  def therapyResponses(
+    records: Seq[MTBPatientRecord],
+    queryCriteria: Option[MTBQueryCriteria] = None
+  ): Seq[MTBResultSet.TherapyResponses] = {
+
+    import GeneAlterationExtensions._
+
     records.foldLeft(
-      Map.empty[Set[Coding[Medications]],Seq[Coding[RECIST.Value]]]
-    ){
+      Map.empty[
+        (Coding[ICD10GM],Set[Coding[Medications]],GeneAlteration),
+        (Int,Seq[RECIST.Value],Seq[Double])
+      ]
+    ){ 
       (acc,record) =>
 
+        implicit val diagnoses = record.diagnoses
+        implicit lazy val recommendations = record.getCarePlans.flatMap(_.medicationRecommendations.getOrElse(List.empty))
+        implicit lazy val variants = record.getNgsReports.flatMap(_.variants)
+        implicit lazy val responses =
+          record.getResponses
+            .groupBy(_.therapy.id)
+            .map {
+              case (therapy,responses) => therapy -> responses.maxBy(_.effectiveDate).value.code.enumValue
+            }
+
         val therapies =
-          record
-            .getSystemicTherapies
-            .map(_.latest)
+          record.getSystemicTherapies
+            .map(_.latestBy(_.recordedOn))
+            .filter(_.medication.isDefined)
 
-        record
-          .getResponses
-          .groupBy(_.therapy)
-          .map {
-            case (_,responses) => responses.maxBy(_.effectiveDate)
-          }
-          .flatMap {
-            response =>
-              response
-                .therapy
-                .resolveOn(therapies)
-                .flatMap(
-                  _.medication
-                   .map(
-                     _ -> response.value 
-                   )
-                )              
-          }
-          .foldLeft(acc){
-            case (accPr,(meds,recist)) =>
-              accPr.updatedWith(meds){
-                _.map(_ :+ recist)
-                 .orElse(Some(Seq(recist)))
-              }
-          }    
+        therapies.foldLeft(acc){
+          (acc2,therapy) =>
 
+            val recommendationEntity: Option[(MTBMedicationRecommendation,Coding[ICD10GM])] =
+              for {
+                recommendation <- therapy.basedOn.flatMap(_.resolve)
+                diagnosis <- recommendation.reason.flatMap(_.resolve)
+              } yield (recommendation, diagnosis.code)
+
+            lazy val medications = therapy.medication.get
+            lazy val response    = responses.get(therapy.id)
+            lazy val duration    = therapy.period.flatMap(_.duration(Weeks)).map(_.value)
+
+            recommendationEntity.fold(acc2){
+              case (recommendation,entity) =>
+
+                val supportingAlterations =
+                  recommendation.supportingVariants
+                    .getOrElse(List.empty)
+                    .flatMap(_.resolveOn(variants))
+                    .flatMap(_.geneAlterations)
+                    
+               supportingAlterations.foldLeft(acc2){ 
+                  (acc3,alteration) =>
+                    acc3.updatedWith((entity,medications,alteration))(
+                      _.map {
+                        case (n,recists,durations) => (n+1, recists ++ response, durations ++ duration)
+                      }
+                      .orElse(Some((1, response.toSeq, duration.toSeq)))
+                    )
+                }    
+            }
+        }
     }
-    .map { 
-      case (meds,recists) =>
-        Entry(
-          meds,
-          Distribution.of(recists)
+    .map {
+      case ((entity,medications,alteration),(n,responses,durations)) =>
+        RankableTherapyResponses(
+          entity,
+          medications,
+          alteration,
+          n,
+          ORR(responses),
+          Distribution.of(responses),
+          mean(durations).getOrElse(0.0)
         )
     }
     .toSeq
-*/
+    .map {
+      th =>
 
-  // Overall Response Rate
-  private val ORR: Seq[RECIST.Value] => Int =
-    responses => ((responses count Set(RECIST.CR,RECIST.PR)).toDouble/responses.size * 100).toInt
+        import TherapyResponseRanking._
 
+        MTBResultSet.TherapyResponses(
+          th.entity,
+          th.medications.map(DisplayLabel.of(_)),
+          DisplayLabel.of(th.supportingAlteration),
+          th.count,
+          th.orr,
+          th.responseDistribution,
+          th.meanDuration,
+          queryCriteria.map(_ score th).getOrElse(1.0)
+        )
+    }
+
+  }
+
+
+/*
   def therapyResponses(
     records: Seq[MTBPatientRecord],
     queryCriteria: Option[MTBQueryCriteria] = None
@@ -564,7 +615,7 @@ trait MTBReportingOps extends ReportingOps
         therapies.foldLeft(acc){
           (acc2,therapy) =>
 
-            val recommendationEntity =
+            val recommendationEntity: Option[(MTBMedicationRecommendation,Coding[ICD10GM])] =
               for {
                 recommendation <- therapy.basedOn.flatMap(_.resolve)
                 diagnosis <- recommendation.reason.flatMap(_.resolve)
@@ -610,7 +661,7 @@ trait MTBReportingOps extends ReportingOps
     .toSeq
 
   }
-
+*/
 
   def geneAlterationInfos(
     records: Seq[MTBPatientRecord],
@@ -670,7 +721,6 @@ trait MTBReportingOps extends ReportingOps
   }
 
 }
-
 
 
 
