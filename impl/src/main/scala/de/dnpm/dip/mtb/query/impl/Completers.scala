@@ -75,24 +75,6 @@ trait Completers extends BaseCompleters
 
   implicit protected val criteriaCompleter: Completer[MTBQueryCriteria] = {
 
-    implicit val snvCriteriaCompleter: Completer[SNVCriteria] = 
-      snv => snv.copy(
-        gene          = snv.gene.complete,
-        proteinChange = snv.proteinChange.map(proteinChangeCompleter)
-      )
-
-    implicit val cnvCriteriaCompleter: Completer[CNVCriteria] =
-      cnv => cnv.copy(
-        affectedGenes = cnv.affectedGenes.complete,
-        `type`        = cnv.`type`.complete
-      )
-
-    implicit val fusionCriteriaCompleter: Completer[FusionCriteria] =
-      fusion => fusion.copy(
-        fusionPartner5pr = fusion.fusionPartner5pr.complete,
-        fusionPartner3pr = fusion.fusionPartner3pr.complete,
-      )
-
     implicit val alterationCriteriaCompleter: Completer[GeneAlterationCriteria] =
       alteration => alteration.copy(
         gene = alteration.gene.complete,
@@ -111,30 +93,6 @@ trait Completers extends BaseCompleters
             )
         }         
       )
-/*
-    implicit val alterationCriteriaCompleter: Completer[GeneAlterationCriteria] =
-      Completer.of(
-        alteration => alteration.copy(
-          gene = alteration.gene.complete,
-          snv  = alteration.snv.map(
-            crit => crit.copy(
-              dnaChange = crit.dnaChange.complete,
-              proteinChange = crit.proteinChange.complete
-            )              
-          ),
-          cnv  = alteration.cnv.map(
-            crit => crit.copy(
-              `type` = crit.`type`.complete
-            )              
-          ),
-          fusion = alteration.fusion.map(
-            crit => crit.copy(
-              partner = crit.partner.complete
-            )
-          )
-        )
-      )
-*/
 
     criteria => criteria.copy(
       diagnoses         = criteria.diagnoses.complete,
@@ -142,14 +100,6 @@ trait Completers extends BaseCompleters
       geneAlterations   = criteria.geneAlterations.map(
         obj => obj.copy(
           items = obj.items.complete
-        )
-      ),
-      variants          = criteria.variants.map(
-        vs => vs.copy(
-          simpleVariants     = vs.simpleVariants.complete,
-          copyNumberVariants = vs.copyNumberVariants.complete,
-          dnaFusions         = vs.dnaFusions.complete,
-          rnaFusions         = vs.rnaFusions.complete,
         )
       ),
       medication         = criteria.medication.complete,

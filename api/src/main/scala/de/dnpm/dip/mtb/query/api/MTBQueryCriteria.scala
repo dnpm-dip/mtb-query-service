@@ -281,7 +281,6 @@ final case class MTBQueryCriteria
   diagnoses: Option[Set[Coding[ICD10GM]]],
   tumorMorphologies: Option[Set[Coding[ICDO3.M]]],
   geneAlterations: Option[GeneAlterations],
-  variants: Option[VariantCriteria],
   medication: Option[MedicationCriteria],
   responses: Option[Set[Coding[RECIST.Value]]]
 )

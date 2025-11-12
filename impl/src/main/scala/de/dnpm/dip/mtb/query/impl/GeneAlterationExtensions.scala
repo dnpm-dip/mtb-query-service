@@ -88,24 +88,7 @@ object GeneAlterationExtensions
   }
 
 
-  sealed trait RelevanceMatcher[-T] extends Any {
-
-    def check(t: T): Seq[Boolean]
-
-    def score(t: T): Double = {
-      val checks = check(t)
-      checks.count(_ == true).toDouble/checks.size
-    }
-
-    def matches(t: T): Boolean =
-      check(t).forall(_ == true)
-  }
-
-
-  implicit class GeneAlterationCriteriaOps(
-    val criteria: GeneAlterationCriteria
-  )
-  extends AnyVal with RelevanceMatcher[GeneAlteration]
+  implicit class GeneAlterationCriteriaOps(val criteria: GeneAlterationCriteria) extends BooleanRelevanceMatcher[GeneAlteration]
   {
 
     import de.dnpm.dip.coding.hgvs.HGVS.extensions._
