@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/dnpm-dip/mtb-query-service/compare/v1.1.0...v1.1.1) (2025-11-19)
+
+
+### Bug Fixes
+
+* Adaptation to changed Patient.birthDate and .dateOfDeath type ([9406b54](https://github.com/dnpm-dip/mtb-query-service/commit/9406b5426c44e440a623e3c2720122ea8e8ffb51))
+* bump mtb-dto-model and mtb-dto-generators to 1.1.2, service-base to 1.2.0, connector-base to 1.1.1, icd* to 1.1.2 ([9406b54](https://github.com/dnpm-dip/mtb-query-service/commit/9406b5426c44e440a623e3c2720122ea8e8ffb51))
+
 ## [1.1.0](https://github.com/dnpm-dip/mtb-query-service/compare/v1.0.1...v1.1.0) (2025-10-10)
 
 
