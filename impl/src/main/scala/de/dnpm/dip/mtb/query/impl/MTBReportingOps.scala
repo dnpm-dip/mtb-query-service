@@ -577,6 +577,7 @@ trait MTBReportingOps extends ReportingOps
           queryCriteria.map(_ score th).getOrElse(1.0)
         )
     }
+    .sortBy(_.score)(Ordering[Double].reverse)  // Reverse ordering, i.e. from highest to lowest score
 
   }
 
