@@ -127,7 +127,7 @@ object MTBResultSet
     orr: Int,  // Overall Response Rate: 0 - 100 %
     responseDistribution: Distribution[RECIST.Value],
     meanDuration: Double,
-    rsv: Double
+    score: Double
   )
 
   object TherapyResponses

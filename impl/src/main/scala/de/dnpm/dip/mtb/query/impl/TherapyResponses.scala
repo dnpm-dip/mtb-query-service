@@ -27,16 +27,6 @@ final case class RankableTherapyResponses
 object TherapyResponseRanking
 {
 
-/*  
-final case class MTBQueryCriteria
-(
-  diagnoses: Option[Set[Coding[ICD10GM]]],
-  tumorMorphologies: Option[Set[Coding[ICDO3.M]]],
-  geneAlterations: Option[GeneAlterations],
-  medication: Option[MedicationCriteria],
-  responses: Option[Set[Coding[RECIST.Value]]]
-)
-*/
 
   implicit class TherapyResponseRanker(
     val criteria: MTBQueryCriteria
@@ -46,25 +36,51 @@ final case class MTBQueryCriteria
 
     import GeneAlterationExtensions._
 
+    private def norm(vec: Seq[Double]): Double =
+      math.sqrt(vec.map(e => e*e).sum)
+
+
+
+    // Sequence of element-wise product of query and "document" vector, as preliminary stage for vector space ranking
     override def check(th: RankableTherapyResponses): Seq[Double] = {
       Seq(
-        criteria.diagnoses.map(_ exists (_.code == th.entity.code)).getOrElse(true),
-        criteria.geneAlterations.map(_.items.exists(_ matches th.supportingAlteration)).getOrElse(true),
+        criteria.diagnoses.map(_ exists (_.code == th.entity.code)),
+        criteria.geneAlterations.map(_.items.exists(_ matches th.supportingAlteration)),
         // TODO: criteria.medication 
+        criteria.responses.map(_ exists (recist => th.responseDistribution.elements.exists(_.key == recist.code.enumValue)))
       )
       .collect { 
-        case true  => 1.0
-        case false => 0.0
+        case Some(true) => 1.0
+        case _          => 0.0
       }
     }
 
-    // Basic relevance ranking: Euclidian length of feature vector as score
-    override def score(t: RankableTherapyResponses): Double =
-      math.sqrt(check(t).map(e => e*e).sum)
+    // Vector space model reaking, i.e. weighted dot product of query and "document" vector
+    override def score(th: RankableTherapyResponses): Double = {
+
+      // Convert "criteria" into a boolean query vector, i.e. with 1.0 values for each occurring term
+      val queryVector =
+        Seq(
+          criteria.diagnoses.map(_.size),
+          criteria.geneAlterations.map(_.items.size),
+//          criteria.medications.map(_.items.size),
+          criteria.responses.map(_.size),
+        )
+        .map(_.map(Seq.fill(_)(1.0)).getOrElse(Seq.empty))
+        .flatten
+
+      // Convert "th" into a boolean document vector, i.e. with 1.0 values for each occurring term
+      val docVector =
+        Seq.fill(th.medications.size)(1.0) :++ Seq.fill(th.responseDistribution.elements.size)(1.0) :+ 1.0 :+ 1.0
+
+
+      check(th).sum/(norm(queryVector) * norm(docVector))
+    }
+
 
     override def matches(t: RankableTherapyResponses): Boolean = 
       score(t) > 0.0
+
   }
 
 }
-
