@@ -27,19 +27,3 @@ trait BooleanRelevanceMatcher[-T] extends RelevanceMatcher[T,Boolean]
     check(t).forall(_ == true)
 }
 
-
-/*
-trait RelevanceMatcher[-T] extends RelevanceMatcher[T,Boolean]
-{
-
-  def check(t: T): Seq[Boolean]
-
-  def score(t: T): Double = {
-    val checks = check(t)
-    checks.count(_ == true).toDouble/checks.size
-  }
-
-  def matches(t: T): Boolean =
-    check(t).forall(_ == true)
-}
-*/

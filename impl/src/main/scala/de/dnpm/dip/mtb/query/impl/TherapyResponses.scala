@@ -41,11 +41,13 @@ object TherapyResponseRanking
 
 
 
-    // Sequence of element-wise product of query and "document" vector, as preliminary stage for vector space ranking
+    // Sequence of element-wise product of query and "document" vector,
+    // as preliminary stage for vector space ranking
     override def check(th: RankableTherapyResponses): Seq[Double] = {
       Seq(
         criteria.diagnoses.map(_ exists (_.code == th.entity.code)),
-        criteria.geneAlterations.map(_.items.exists(_ matches th.supportingAlteration)),
+//        criteria.geneAlterations.map(_.items.exists(_ matches th.supportingAlteration)),
+        criteria.geneAlterations.map(_.items.exists(_.score(th.supportingAlteration) > 0.0)),
         // TODO: criteria.medication 
         criteria.responses.map(_ exists (recist => th.responseDistribution.elements.exists(_.key == recist.code.enumValue)))
       )
@@ -55,7 +57,7 @@ object TherapyResponseRanking
       }
     }
 
-    // Vector space model reaking, i.e. weighted dot product of query and "document" vector
+    // Vector space model ranking, i.e. weighted dot product of query and "document" vector
     override def score(th: RankableTherapyResponses): Double = {
 
       // Convert "criteria" into a boolean query vector, i.e. with 1.0 values for each occurring term
