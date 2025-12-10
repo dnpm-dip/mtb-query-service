@@ -46,8 +46,7 @@ object TherapyResponseRanking
     override def check(th: RankableTherapyResponses): Seq[Double] = {
       Seq(
         criteria.diagnoses.map(_ exists (_.code == th.entity.code)),
-//        criteria.geneAlterations.map(_.items.exists(_ matches th.supportingAlteration)),
-        criteria.geneAlterations.map(_.items.exists(_.score(th.supportingAlteration) > 0.0)),
+        criteria.geneAlterations.map(_.items exists (_.score(th.supportingAlteration) > 0.0)),
         // TODO: criteria.medication 
         criteria.responses.map(_ exists (recist => th.responseDistribution.elements.exists(_.key == recist.code.enumValue)))
       )
