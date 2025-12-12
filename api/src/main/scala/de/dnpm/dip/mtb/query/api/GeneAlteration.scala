@@ -41,22 +41,6 @@ object GeneAlteration
     {
       val Amplification, Deletion = Value
     }
-
-/*
-    object Type
-    extends CodedEnum("dnpm-dip/mtb/query/gene-alteration/copy-number-type")
-    with DefaultCodeSystem
-    {
-      val Amplification, Deletion = Value
- 
-      final class ProviderSPI extends CodeSystemProviderSPI
-      {
-        override def getInstance[F[_]]: CodeSystemProvider[Any,F,Applicative[F]] =
-          new Provider.Facade[F]
-      }
- 
-    }
-*/
   }
 
 
@@ -70,7 +54,7 @@ object GeneAlteration
 
 
   // "Dummy" alteration type for use as base/parent of other alteration types
-  final case class Base
+  final case class Unspecified
   (
     gene: Coding[HGNC]
   )
@@ -78,6 +62,6 @@ object GeneAlteration
 
 
   def apply(gene: Coding[HGNC]): GeneAlteration =
-    Base(gene)
+    Unspecified(gene)
 
 }

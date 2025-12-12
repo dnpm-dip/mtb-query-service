@@ -65,30 +65,9 @@ class Tests extends AsyncFlatSpec
 
       icd10 = patRec.diagnoses.head.code
 
-      ngs = 
-        patRec
-          .getNgsReports.head
+      ngs = patRec.getNgsReports.head
 
-      snvCriteria =
-        ngs.results
-          .simpleVariants
-          .get
-          .take(2)
-          .map(snv =>
-            SNVCriteria(
-              Some(snv.gene),
-              None,
-              snv.proteinChange
-                // Change the protein change to just a substring of the occurring one
-                // to test that matches are also returned by substring match of the protein (or DNA) change
-                .map(
-                  pch => pch.copy( 
-                    value = pch.value.substring(2,pch.value.size-1)
-                  )
-                )
-            )
-          )
-          .toSet
+      snv = ngs.results.simpleVariants.get.head
 
       medicationCriteria =
         patRec
@@ -110,16 +89,12 @@ class Tests extends AsyncFlatSpec
       None,
       Some(
         GeneAlterations(
-          Some(LogicalOperator.Or),
-          snvCriteria.map(
-            crit =>
+          None,
+          Set(
             GeneAlterationCriteria(
-              crit.gene.get,
+              snv.gene,
               Some(
-                GeneAlterationCriteria.SNVCriteria(
-                  crit.dnaChange,
-                  crit.proteinChange
-                )
+                GeneAlterationCriteria.SNVCriteria(None,snv.proteinChange)
               )
             )
           )
@@ -152,12 +127,11 @@ class Tests extends AsyncFlatSpec
   "Query ResultSet" must "contain the total number of data sets for a query without criteria" in {
 
     for {
-      result <-
-        service ! Query.Submit(
-          queryMode,
-          None,
-          None
-        )
+      result <- service ! Query.Submit(
+        queryMode,
+        None,
+        None
+      )
 
       query = result.value
 
@@ -173,12 +147,11 @@ class Tests extends AsyncFlatSpec
     import MTBQueryCriteriaOps._
 
     for {
-      result <-
-        service ! Query.Submit(
-          queryMode,
-          None,
-          Some(genCriteria.next)
-        )
+      result <- service ! Query.Submit(
+        queryMode,
+        None,
+        Some(genCriteria.next)
+      )
 
       query = result.value
 
@@ -249,6 +222,42 @@ class Tests extends AsyncFlatSpec
       query <- service ? result.head.id
 
     } yield query must be (defined)
+
+  }
+
+
+
+  "GeneAlteration matching" must "have worked" in { 
+
+    import GeneAlterationExtensions._
+
+    val snvs = dataSets.head.getNgsReports.head.results.simpleVariants.getOrElse(List.empty)
+    val cnvs = dataSets.head.getNgsReports.head.results.copyNumberVariants.getOrElse(List.empty)
+
+    forAll(snvs){ 
+      snv =>
+
+        val fullCriteria =
+          GeneAlterationCriteria(
+            gene = snv.gene,
+            variant = Some(GeneAlterationCriteria.SNVCriteria(None,snv.proteinChange))
+          )
+
+        val geneOnlyCriteria =
+          GeneAlterationCriteria(
+            gene = snv.gene,
+            variant = None
+          )
+
+        forAll(snv.geneAlterations.map(fullCriteria matches _))(_ mustBe true)
+        forAll(snv.geneAlterations.map(geneOnlyCriteria matches _))(_ mustBe true)
+
+        val (sameGeneCnvAlterations,differentGeneCnvAlterations) = cnvs.flatMap(_.geneAlterations).partition(_.gene.code == snv.gene.code)
+
+        forAll(sameGeneCnvAlterations.map(fullCriteria matches _))(_ mustBe false)
+        forAll(sameGeneCnvAlterations.map(geneOnlyCriteria matches _))(_ mustBe true)
+        forAll(differentGeneCnvAlterations.map(geneOnlyCriteria matches _))(_ mustBe false)
+    }
 
   }
 

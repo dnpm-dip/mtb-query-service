@@ -214,7 +214,7 @@ extends KaplanMeierModule[cats.Id]
     
       record
         .patient
-        .dateOfDeath.map(_.atEndOfMonth)
+        .dateOfDeath
         .map(_ -> true)
         .getOrElse(
           // 1. Censoring time strategy: fall back to date of last therapy follow-up
@@ -254,7 +254,7 @@ extends KaplanMeierModule[cats.Id]
           }
       )
       // 3. Use patient date of death as "progression" date
-      .orElse(patient.dateOfDeath.map(_.atEndOfMonth))
+      .orElse(patient.dateOfDeath)
       .map(_ -> true)
       // 4. Censoring: therapy recording date
       .getOrElse(therapy.recordedOn -> false)

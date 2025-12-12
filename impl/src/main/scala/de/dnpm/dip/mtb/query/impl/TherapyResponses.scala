@@ -28,17 +28,14 @@ object TherapyResponseRanking
 {
 
 
-  implicit class TherapyResponseRanker(
-    val criteria: MTBQueryCriteria
-  )
-  extends RelevanceMatcher[RankableTherapyResponses,Double] 
+  implicit class TherapyResponseRanker(val criteria: MTBQueryCriteria) extends RelevanceMatcher[RankableTherapyResponses,Double] 
   {
 
     import GeneAlterationExtensions._
 
+    // Euclidian norm of the vector represented as Seq[Double]
     private def norm(vec: Seq[Double]): Double =
       math.sqrt(vec.map(e => e*e).sum)
-
 
 
     // Sequence of element-wise product of query and "document" vector,
@@ -46,7 +43,7 @@ object TherapyResponseRanking
     override def check(th: RankableTherapyResponses): Seq[Double] = {
       Seq(
         criteria.diagnoses.map(_ exists (_.code == th.entity.code)),
-        criteria.geneAlterations.map(_.items exists (_.score(th.supportingAlteration) > 0.0)),
+        criteria.geneAlterations.map(_.items exists (_ matches th.supportingAlteration)),
         // TODO: criteria.medication 
         criteria.responses.map(_ exists (recist => th.responseDistribution.elements.exists(_.key == recist.code.enumValue)))
       )
@@ -70,12 +67,16 @@ object TherapyResponseRanking
         .map(_.map(Seq.fill(_)(1.0)).getOrElse(Seq.empty))
         .flatten
 
-      // Convert "th" into a boolean document vector, i.e. with 1.0 values for each occurring term
-      val docVector =
-        Seq.fill(th.medications.size)(1.0) :++ Seq.fill(th.responseDistribution.elements.size)(1.0) :+ 1.0 :+ 1.0
+      if (queryVector.isEmpty)
+        0.0
+      else {
+        // Convert "th" into a boolean document vector, i.e. with 1.0 values for each occurring term
+        val docVector =
+          Seq.fill(th.medications.size)(1.0) :++ Seq.fill(th.responseDistribution.elements.size)(1.0) :+ 1.0 :+ 1.0
 
+        check(th).sum/(norm(queryVector) * norm(docVector))
+      }
 
-      check(th).sum/(norm(queryVector) * norm(docVector))
     }
 
 

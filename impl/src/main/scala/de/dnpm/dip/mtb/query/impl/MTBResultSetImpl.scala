@@ -141,7 +141,10 @@ with MTBReportingOps
   override def geneAlterations(
     filter: MTBFilters
   ): Seq[MTBResultSet.GeneAlterationInfo] =
-    geneAlterationInfos(patientRecords(filter))
+    geneAlterationInfos(
+      patientRecords(filter),
+      queryCriteria.flatMap(_.geneAlterations)
+    )
 
 
   override def medication(
@@ -250,6 +253,9 @@ with MTBReportingOps
   override def therapyResponses(
     filter: MTBFilters
   ): Seq[TherapyResponses] =
-    therapyResponses(patientRecords(filter))
+    therapyResponses(
+      patientRecords(filter),
+      queryCriteria
+    )
 
 }

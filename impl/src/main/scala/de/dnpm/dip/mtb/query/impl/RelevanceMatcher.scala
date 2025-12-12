@@ -25,5 +25,5 @@ trait BooleanRelevanceMatcher[-T] extends RelevanceMatcher[T,Boolean]
 
   override def matches(t: T): Boolean =
     check(t).forall(_ == true)
-}
 
+}

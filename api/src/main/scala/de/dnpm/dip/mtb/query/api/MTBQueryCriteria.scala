@@ -77,51 +77,6 @@ sealed trait Supportable
 }
 
 
-final case class SNVCriteria
-(
-  gene: Option[Coding[HGNC]],
-  dnaChange: Option[Code[HGVS.DNA]],
-  proteinChange: Option[Code[HGVS.Protein]],
-  supporting: Option[Boolean] = None,
-  negated: Option[Boolean] = None
-)
-extends Supportable
-with Negatable
-
-
-final case class CNVCriteria
-(
-  affectedGenes: Option[Set[Coding[HGNC]]],
-  `type`: Option[Coding[CNV.Type.Value]],
-  supporting: Option[Boolean] = None,
-  negated: Option[Boolean] = None
-)
-extends Supportable
-with Negatable
-
-
-final case class FusionCriteria
-(
-  fusionPartner5pr: Option[Coding[HGNC]],
-  fusionPartner3pr: Option[Coding[HGNC]],
-  supporting: Option[Boolean] = None,
-  negated: Option[Boolean] = None
-)
-extends Supportable
-with Negatable
-
-
-final case class VariantCriteria
-(
-  operator: Option[LogicalOperator.Value],
-  simpleVariants: Option[Set[SNVCriteria]],
-  copyNumberVariants: Option[Set[CNVCriteria]],
-  dnaFusions: Option[Set[FusionCriteria]],
-  rnaFusions: Option[Set[FusionCriteria]],
-) 
-
-
-
 // --------------------------------------------------------
 
 final case class GeneAlterationCriteria
@@ -288,20 +243,6 @@ final case class MTBQueryCriteria
 
 object MTBQueryCriteria
 {
-
-  implicit val formatSNVCriteria: OFormat[SNVCriteria] =
-    Json.format[SNVCriteria]
-
-  implicit val formatCNVCriteria: OFormat[CNVCriteria] =
-    Json.format[CNVCriteria]
-
-  implicit val formatFusionCriteria: OFormat[FusionCriteria] =
-    Json.format[FusionCriteria]
-
-  implicit val formatVariantCriteria: OFormat[VariantCriteria] =
-    Json.format[VariantCriteria]
-
   implicit val format: OFormat[MTBQueryCriteria] =
     Json.format[MTBQueryCriteria]
-
 }

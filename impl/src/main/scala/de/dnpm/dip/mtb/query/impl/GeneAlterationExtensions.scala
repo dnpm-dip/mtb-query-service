@@ -35,7 +35,7 @@ object GeneAlterationExtensions
       case GeneAlteration.Fusion(gene,partner) =>
         s"${Set(gene,partner).flatMap(_.display).mkString("-")} Fusion"
 
-      case GeneAlteration.Base(gene) =>
+      case GeneAlteration.Unspecified(gene) =>
         s"${gene.display.getOrElse(gene.code)}"
 
     }
@@ -88,51 +88,86 @@ object GeneAlterationExtensions
   }
 
 
+/*
   implicit class GeneAlterationCriteriaOps(val criteria: GeneAlterationCriteria) extends BooleanRelevanceMatcher[GeneAlteration]
   {
 
     import de.dnpm.dip.coding.hgvs.HGVS.extensions._
 
+    override def check(alteration: GeneAlteration): Seq[Boolean] =
+
+      alteration match {
+        case snv: GeneAlteration.SNV =>
+          Seq(criteria.gene.code == snv.gene.code) :++
+            criteria.variant.collect {
+              case crit: GeneAlterationCriteria.SNVCriteria if crit.proteinChange.isDefined =>
+                crit.proteinChange.exists(g => snv.proteinChange.exists(_ matches g))
+            }
+
+        case cnv: GeneAlteration.CNV =>
+          Seq(criteria.gene.code == cnv.gene.code) :++ 
+            criteria.variant.collect {
+              case crit: GeneAlterationCriteria.CNVCriteria if crit.copyNumberType.isDefined =>
+                crit.copyNumberType.exists(_.collect(cnvTypeMapping) contains cnv.`type`)
+            }
+            
+        case fusion: GeneAlteration.Fusion =>
+          val fusionGenes = Set(fusion.gene.code,fusion.partner.code)
+
+          Seq(fusionGenes(criteria.gene.code)) :++
+            criteria.variant.collect {
+              case crit: GeneAlterationCriteria.FusionCriteria if crit.partner.isDefined =>
+                crit.partner.exists(gene => fusionGenes contains gene.code)
+            }
+
+        // Can't occur but needed for exhaustive pattern matching    
+        case x: GeneAlteration.Unspecified => Seq(criteria.gene.code == x.gene.code)
+
+      }
+
+  }
+*/
+
+
+  implicit class GeneAlterationCriteriaOps(val criteria: GeneAlterationCriteria) extends BooleanRelevanceMatcher[GeneAlteration]
+  {
+
+    import de.dnpm.dip.coding.hgvs.HGVS.extensions._
 
     override def check(alteration: GeneAlteration): Seq[Boolean] =
 
       alteration match {
         case snv: GeneAlteration.SNV =>
-          Seq(criteria.gene.code == snv.gene.code) ++
+          Seq(criteria.gene.code == snv.gene.code) :++
             criteria.variant.map {
-              case crit: GeneAlterationCriteria.SNVCriteria =>
-                crit.proteinChange.map(g => snv.proteinChange.exists(_ matches g))
+              case crit: GeneAlterationCriteria.SNVCriteria => crit.proteinChange.map(g => snv.proteinChange.exists(_ matches g))
 
               case _ => Some(false) // Wrong alteration type
             }
             .getOrElse(Seq.empty[Boolean])
 
         case cnv: GeneAlteration.CNV =>
-          Seq(criteria.gene.code == cnv.gene.code) ++ 
+          Seq(criteria.gene.code == cnv.gene.code) :++ 
             criteria.variant.map {
-              case crit: GeneAlterationCriteria.CNVCriteria =>
-                crit.copyNumberType.map(_.collect(cnvTypeMapping) contains cnv.`type`)
+              case crit: GeneAlterationCriteria.CNVCriteria => crit.copyNumberType.map(_.collect(cnvTypeMapping) contains cnv.`type`)
 
               case _ => Some(false) // Wrong alteration type
             }
             .getOrElse(Seq.empty[Boolean])
             
         case fusion: GeneAlteration.Fusion =>
-          val fusionGenes = Set(fusion.gene,fusion.partner)
+          val fusionGenes = Set(fusion.gene.code,fusion.partner.code)
 
-          Seq(fusionGenes contains fusion.gene) ++
+          Seq(fusionGenes(criteria.gene.code)) :++
             criteria.variant.map {
-              case crit: GeneAlterationCriteria.FusionCriteria =>
-                crit.partner.map(fusionGenes.contains)
+              case crit: GeneAlterationCriteria.FusionCriteria => crit.partner.map(gene => fusionGenes contains gene.code)
                 
               case _ => Some(false) // Wrong alteration type
             }
             .getOrElse(Seq.empty[Boolean])
 
-
         // Can't occur but needed for exhaustive pattern matching    
-        case base: GeneAlteration.Base =>
-          Seq(criteria.gene.code == base.gene.code)
+        case x: GeneAlteration.Unspecified => Seq(criteria.gene.code == x.gene.code)
 
       }
 
