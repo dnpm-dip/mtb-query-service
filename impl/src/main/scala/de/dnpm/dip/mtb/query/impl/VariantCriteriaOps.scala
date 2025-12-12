@@ -2,17 +2,7 @@ package de.dnpm.dip.mtb.query.impl
 
 
 import de.dnpm.dip.model.GeneAlterationReference
-import de.dnpm.dip.mtb.model.{
-  Variant,
-  SNV,
-  CNV,
-  Fusion,
-}
-import de.dnpm.dip.coding.Coding
-import de.dnpm.dip.coding.hgnc.HGNC
-import de.dnpm.dip.coding.hgvs.HGVS
-import de.dnpm.dip.mtb.query.api._
-
+import de.dnpm.dip.mtb.model.Variant
 
 object VariantCriteriaOps
 {
@@ -36,47 +26,6 @@ object VariantCriteriaOps
         )
       )
 
-  }
-
-
-  implicit class SNVCriteriaOps(val criteria: SNVCriteria) extends BooleanRelevanceMatcher[SNV]
-  {
-    import HGVS.extensions._
-
-    override def check(snv: SNV): Seq[Boolean] =
-      Seq(
-        criteria.gene.map(g => snv.gene.code == g.code).getOrElse(true),
-        criteria.dnaChange.map(g => snv.dnaChange matches g).getOrElse(true),
-        criteria.proteinChange.map(g => snv.proteinChange.exists(_ matches g)).getOrElse(true)
-      )
-  }
-  
-
-  implicit class CNVCriteriaOps(val criteria: CNVCriteria) extends BooleanRelevanceMatcher[CNV]
-  {
-    override def check(cnv: CNV): Seq[Boolean] =
-      Seq(
-        criteria.affectedGenes match {
-          case Some(queriedGenes) if queriedGenes.nonEmpty =>
-            cnv.reportedAffectedGenes.exists(cnvGenes => queriedGenes.forall(g => cnvGenes.exists(_.code == g.code)))
-
-          case _ => true
-        },
-        criteria.`type`.map(_ == cnv.`type`).getOrElse(true)
-      )
-  }
-  
-
-  implicit class FusionCriteriaOps[F <: Fusion[_ <: { def gene: Coding[HGNC] }]](
-    val criteria: FusionCriteria
-  )
-  extends BooleanRelevanceMatcher[F]
-  {
-    override def check(fusion: F): Seq[Boolean] =
-      Seq(
-        criteria.fusionPartner5pr.map(_.code == fusion.fusionPartner5prime.gene.code).getOrElse(true),
-        criteria.fusionPartner3pr.map(_.code == fusion.fusionPartner3prime.gene.code).getOrElse(true)
-      )
   }
 
 }
