@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/dnpm-dip/mtb-query-service/compare/v1.1.1...v1.1.2) (2025-12-15)
+
+
+### Bug Fixes
+
+* bump service-base to 1.2.1 ([021e578](https://github.com/dnpm-dip/mtb-query-service/commit/021e578d856c78691f246ebfbd07b3cf067c264a))
+
 ## [1.1.1](https://github.com/dnpm-dip/mtb-query-service/compare/v1.1.0...v1.1.1) (2025-11-19)
 
 
