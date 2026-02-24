@@ -108,8 +108,7 @@ trait Completers extends BaseCompleters
 
   }
 
-
-  @deprecated("-","")
+  @deprecated("","")
   val CriteriaExpander: Completer[MTBQueryCriteria] = {
 
     implicit val icd10Expander: Completer[Set[Coding[ICD10GM]]] =
@@ -128,27 +127,24 @@ trait Completers extends BaseCompleters
       )
 
     criteria => criteria.copy(
-      diagnoses =
-        criteria.diagnoses.complete,
-      tumorMorphologies =
-        criteria.tumorMorphologies.complete,
-      medication =
-        criteria.medication.map {
-          _.complete
-           .tap(mc =>
-             mc.expandedDrugs =
-               mc.items.flatMap {
-                 coding => coding.system match {
-                   case sys if sys == Coding.System[ATC].uri =>
-                     coding.asInstanceOf[Coding[ATC]]
-                      .expand
-                      .map(_.asInstanceOf[Tree[Coding[Medications]]])
+      diagnoses = criteria.diagnoses.complete,
+      tumorMorphologies = criteria.tumorMorphologies.complete,
+      medication = criteria.medication.map {
+        _.complete
+         .tap(mc =>
+           mc.expandedDrugs =
+             mc.items.flatMap {
+               coding => coding.system match {
+                 case sys if sys == Coding.System[ATC].uri =>
+                   coding.asInstanceOf[Coding[ATC]]
+                    .expand
+                    .map(_.asInstanceOf[Tree[Coding[Medications]]])
 
-                   case _ => Some(Tree(coding.complete))
-                 }
-              }
-          )
-        }
+                 case _ => Some(Tree(coding.complete))
+               }
+            }
+        )
+      }
     )
 
   }

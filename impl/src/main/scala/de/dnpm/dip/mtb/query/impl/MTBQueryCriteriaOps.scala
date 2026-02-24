@@ -7,6 +7,7 @@ import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.model.Medications
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
+  MTBMedicationRecommendation,
   SomaticNGSReport,
 }
 import de.dnpm.dip.mtb.query.api._
@@ -75,6 +76,8 @@ private trait MTBQueryCriteriaOps
   private def matches(
     geneAlterations: GeneAlterations,
     ngsReports: List[SomaticNGSReport]
+  )(
+    implicit recommendations: Seq[MTBMedicationRecommendation]
   ): GeneAlterations = {
 
     import GeneAlterationExtensions._
@@ -84,11 +87,37 @@ private trait MTBQueryCriteriaOps
         .flatMap(_.variants.flatMap(_.geneAlterations))
         .groupBy(_.gene.code)
 
-    val fulfilled: GeneAlterationCriteria => Boolean =
-      criterion => criterion.asNegated(
-        alterationsByGene.get(criterion.gene.code)
-          .fold(false)(_.exists(criterion matches _))
-      )
+
+    val fulfilled: GeneAlterationCriteria => Boolean = {
+      criterion =>
+        criterion.wildtype match {
+
+          // If the wildtype gene is queried for, then it shouldn't occur among the altered genes
+          case Some(true) => !alterationsByGene.contains(criterion.gene.code)
+
+          // Else check if a matching alteration exists for the gene...
+          case _ =>
+            alterationsByGene.get(criterion.gene.code)
+              .flatMap(_.find(criterion matches _))
+              .map { 
+                // ... and if the alteration is specifically supposed to be supporting a therapy recommendation, check this in addition
+                alteration => criterion.supporting match {
+                  case Some(true) =>
+                    recommendations.exists(
+                      _.supportingVariants.exists(
+                        _.exists(_.variant.id == alteration.variant)
+                      )
+                    )
+
+                  // If unspecified, no need to check for occurrence as supportingVariant 
+                  case _ => true
+                }
+              }
+              .getOrElse(false)
+
+        }
+    }
+
 
     val fulfilledCriteria =
       geneAlterations.items
@@ -219,6 +248,9 @@ private trait MTBQueryCriteriaOps
                      (criteria intersect record.getHistologyReports.map(_.results.tumorMorphology.value).toSet)
                        .tap(matches => checks += matches.nonEmpty)
                 }
+
+            implicit val recommendations: Seq[MTBMedicationRecommendation] =
+              record.getCarePlans.flatMap(_.medicationRecommendations.getOrElse(List.empty))
 
             val geneAlterationMatches =
               queryCriteria.geneAlterations.collect {
