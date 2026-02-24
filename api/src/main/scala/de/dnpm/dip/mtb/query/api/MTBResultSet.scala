@@ -42,6 +42,8 @@ with KaplanMeierOps[Id,Applicative[Id]]
 
   def geneAlterations(filter: MTBFilters): Seq[MTBResultSet.GeneAlterationInfo]
 
+  def alteredGeneDistributions(filter: MTBFilters): Seq[Entry[GeneAlteration.Type.Value,Distribution[DisplayLabel[Coding[HGNC]]]]]
+
 }
 
 
@@ -84,6 +86,18 @@ object MTBResultSet
       Json.writes[GeneAlterationInfo]
   }
 
+/*
+  final case class AlteredGeneDistributions
+  (
+    entries: Seq[Entry[GeneAlteration.Type.Value,Distribution[DisplayLabel[Coding[HGNC]]]]]
+  )
+
+  object AlteredGeneDistributions
+  {
+    implicit val writes: OWrites[AlteredGeneDistributions] =
+      Json.writes[AlteredGeneDistributions]
+  }
+*/
 
   final case class Medication
   (

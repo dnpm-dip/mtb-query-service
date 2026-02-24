@@ -142,11 +142,16 @@ with Completers
     new DefaultKaplanMeierModule
 
 
+  @annotation.nowarn // To suppress deprecation warning for CriteriaExpander
   override def ResultSetFrom(
     query: Query[MTBQueryCriteria],
     results: Seq[Query.Match[MTBPatientRecord,MTBQueryCriteria]]
   ) =
-    new MTBResultSetImpl(query.id,query.criteria,results)
+    new MTBResultSetImpl(
+      query.id,
+      query.criteria.map(CriteriaExpander),
+      results
+    )
 
 
   override val survivalConfig: KaplanMeier.Config =

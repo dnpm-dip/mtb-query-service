@@ -51,16 +51,10 @@ sealed trait CombinableItems[T]
   val items: Set[T]
 }
 
-
+/*
 sealed trait Negatable
 {
   val negated: Option[Boolean]
-
-/*
-  def asNegated(cond: Boolean) =
-    if (negated.getOrElse(false)) !cond
-    else cond
-*/
 
   def asNegated(cond: Boolean) =
     negated.map {
@@ -75,7 +69,7 @@ sealed trait Supportable
 {
   val supporting: Option[Boolean]
 }
-
+*/
 
 // --------------------------------------------------------
 
@@ -84,10 +78,10 @@ final case class GeneAlterationCriteria
   gene: Coding[HGNC],
   variant: Option[GeneAlterationCriteria.VariantCriteria],
   supporting: Option[Boolean] = None,
-  negated: Option[Boolean] = None
+  wildtype: Option[Boolean] = None
 )
-extends Supportable
-with Negatable
+//extends Supportable
+//with Negatable
 
 object GeneAlterationCriteria
 {

@@ -34,7 +34,7 @@ import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
   MTBMedicationRecommendation,
   RECIST,
-  Variant,
+//  Variant,
 }
 import de.dnpm.dip.mtb.query.api.{
   GeneAlteration,
@@ -106,69 +106,6 @@ trait MTBReportingOps extends ReportingOps
         coding => coding.parentOfKind(Block).getOrElse(coding)
       )
     )
-
-
-
-  def diagnosticDistributionsByVariant(
-    records: Seq[MTBPatientRecord]
-  )(
-    implicit
-    icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]],
-    icdo3: CodeSystemProvider[ICDO3,Id,Applicative[Id]]
-  ): Seq[Entry[DisplayLabel[Variant],MTBResultSet.TumorDiagnostics.Distributions]] =
-    records.foldLeft(
-      Map.empty[DisplayLabel[Variant],(List[Coding[ICD10GM]],List[Coding[ICDO3.M]])]
-    ){
-      (acc,record) =>
-
-      val variants =
-        record
-          .getNgsReports
-          .flatMap(_.variants)
-          .map(DisplayLabel.of(_))
-          .distinct   // Retain only distinct variants, to avoid duplicate counts of entities/morphologies
-                      // in cases where the patient had multiple NGS reports, thus potentially redundant occurrences of most variants
-
-      val entities =
-        record.diagnoses.map(_.code).toList
-
-      //TODO: Find a way to resolve morphologies in the same specimen the variant occurs in
-      val morphologies =
-        record.getHistologyReports
-          .map(_.results.tumorMorphology.value)
-
-
-      variants.foldLeft(acc){
-        case (accPr,variant) =>
-          accPr.updatedWith(variant)(
-            _.map {
-               case (icd10s,icdo3ms) => (icd10s ::: entities, icdo3ms ::: morphologies)
-            }
-            .orElse(
-              Some(entities -> morphologies)
-            )
-          )
-      }
-
-    }
-    .map {
-      case (variant,(icd10s,icdo3ms)) =>
-        Entry(
-          variant,
-          MTBResultSet.TumorDiagnostics.Distributions(
-            Distribution.byParent(
-              icd10s,
-              coding => coding.parentOfKind(Category).getOrElse(coding)
-            ),
-            Distribution.byParent(
-              icdo3ms,
-              coding => coding.parentOfKind(Block).getOrElse(coding)
-            )
-          )
-        )
-    }
-    .toSeq
-    .sortBy(_.key)
 
 
   def diagnosticDistributionsByAlteration(
@@ -303,70 +240,6 @@ trait MTBReportingOps extends ReportingOps
         .map(_.medication),
       _.map(coding => coding.currentGroup.getOrElse(coding))
     )
-
-/*
-  def recommendationsBySupportingVariant(
-    records: Seq[MTBPatientRecord],
-    criteria: Option[VariantCriteria] = None
-  )(
-    implicit
-    @annotation.unused atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
-  ): Seq[Entry[DisplayLabel[Variant],Distribution[Set[Coding[Medications]]]]] = {
-
-    import VariantCriteriaOps._
-
-    val score: Variant => Double = {
-      case snv: SNV          => criteria.flatMap(_.simpleVariants).flatMap(_.map(_ score snv).maxOption).getOrElse(0.0)
-      case cnv: CNV          => criteria.flatMap(_.copyNumberVariants).flatMap(_.map(_ score cnv).maxOption).getOrElse(0.0)
-      case fusion: DNAFusion => criteria.flatMap(_.dnaFusions).flatMap(_.map(_ score fusion).maxOption).getOrElse(0.0)
-      case fusion: RNAFusion => criteria.flatMap(_.rnaFusions).flatMap(_.map(_ score fusion).maxOption).getOrElse(0.0)
-      case _                 => 0.0   // RNASeq currently not queryable
-    }
-
-    records.foldLeft(
-      Map.empty[DisplayLabel[Variant],(Seq[Set[Coding[Medications]]],Double)]
-    ){
-      (acc,record) =>
-
-        implicit val variants =
-          record
-            .getNgsReports
-            .flatMap(_.variants)
-
-        record
-          .getCarePlans
-          .flatMap(_.medicationRecommendations.getOrElse(List.empty))
-          .flatMap(
-            recommendation =>
-              recommendation
-                .medication
-                .pipe { 
-                  meds =>
-                    recommendation
-                      .supportingVariants.getOrElse(List.empty)
-                      .flatMap(_.variant.resolve)
-                      .map(_ -> meds)
-                }
-          )
-          .foldLeft(acc){
-            case (accPr,(variant,meds)) =>
-              accPr.updatedWith(DisplayLabel.of(variant)){
-                case Some(medSets -> sc) => Some((medSets :+ meds, max(sc,score(variant))))
-                case None                => Some(Seq(meds) -> score(variant))
-              }
-          }
-    }
-    .toSeq
-    .sortBy { case (_,(_,score)) => score }(Ordering[Double].reverse)  // reverse Ordering to sort entries by decreasing relevance score
-    .map { 
-      case (variant,(meds,_)) =>
-        Entry(
-          variant,
-          Distribution.of(meds)        
-        )
-    }
-  }
-*/
 
 
   def recommendationsBySupportingAlteration(
@@ -625,8 +498,53 @@ trait MTBReportingOps extends ReportingOps
 
   }
 
-}
 
+
+  def alteredGeneDistributions(
+    records: Seq[MTBPatientRecord]
+  ): Seq[Entry[GeneAlteration.Type.Value,Distribution[DisplayLabel[Coding[HGNC]]]]] =
+    records.foldLeft(
+      Map.empty[GeneAlteration.Type.Value,List[DisplayLabel[Coding[HGNC]]]]
+    ){ 
+      (acc,record) =>
+        record.getNgsReports
+          .flatMap(_.variants)
+          .flatMap(_.geneAlterations)
+          .collect { 
+            case snv: GeneAlteration.SNV       => GeneAlteration.Type.SNV    -> DisplayLabel.of(snv.gene)
+            case cnv: GeneAlteration.CNV       => GeneAlteration.Type.CNV    -> DisplayLabel.of(cnv.gene)
+            case fusion: GeneAlteration.Fusion => GeneAlteration.Type.Fusion -> DisplayLabel.of(fusion.gene)
+          }
+          .foldLeft(acc){ 
+            case (acc2,(typ,gene)) => acc2.updatedWith(typ){
+              case Some(genes) => Some(gene :: genes)
+              case None        => Some(List(gene))
+            }         
+          }
+    }
+    .map { 
+      case (typ,genes) => Entry(
+        typ,
+        Distribution.of(genes)
+      )
+    }
+/*    
+    .map { 
+      case (typ,genes) =>
+        val distribution = Distribution.of(genes)
+
+        Entry(
+          typ,
+          // only retain the 'cutoff' first distribution entries (ordered in descending frequency)
+          distribution.copy(
+            elements = distribution.elements.take(cutoff)
+          )
+        )
+    }
+*/    
+    .toSeq
+
+}
 
 
 

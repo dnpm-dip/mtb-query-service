@@ -4,6 +4,7 @@ package de.dnpm.dip.mtb.query.impl
 import de.dnpm.dip.model.GeneAlterationReference
 import de.dnpm.dip.mtb.model.Variant
 
+
 object VariantCriteriaOps
 {
 

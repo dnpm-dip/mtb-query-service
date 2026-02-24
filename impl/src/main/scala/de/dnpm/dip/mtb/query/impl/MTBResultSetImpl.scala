@@ -147,6 +147,12 @@ with MTBReportingOps
     )
 
 
+  override def alteredGeneDistributions(
+    filter: MTBFilters
+  ) =
+    alteredGeneDistributions(patientRecords(filter))
+
+
   override def medication(
     filter: MTBFilters
   ): MTBResultSet.Medication = {

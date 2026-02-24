@@ -26,13 +26,13 @@ object GeneAlterationExtensions
   implicit val displays: Displays[GeneAlteration] =
     Displays[GeneAlteration]{ 
 
-      case GeneAlteration.SNV(gene,proteinChange) =>
+      case GeneAlteration.SNV(_,gene,proteinChange) =>
         s"${gene.display.getOrElse(gene.code)} ${proteinChange.map(_.value).getOrElse("SNV")}"
 
-      case GeneAlteration.CNV(gene,typ) =>
+      case GeneAlteration.CNV(_,gene,typ) =>
         s"${gene.display.getOrElse(gene.code)} $typ"
 
-      case GeneAlteration.Fusion(gene,partner) =>
+      case GeneAlteration.Fusion(_,gene,partner) =>
         s"${Set(gene,partner).flatMap(_.display).mkString("-")} Fusion"
 
       case GeneAlteration.Unspecified(gene) =>
@@ -60,26 +60,26 @@ object GeneAlterationExtensions
       variant match {
         case snv: SNV =>
           Some(
-            GeneAlteration.SNV(snv.gene,snv.proteinChange)
+            GeneAlteration.SNV(variant.id,snv.gene,snv.proteinChange)
           )
           
         case cnv: CNV =>
           cnv.reportedAffectedGenes
             .getOrElse(Set.empty)
             .map(
-              GeneAlteration.CNV(_,cnvTypeMapping(cnv.`type`))
+              GeneAlteration.CNV(variant.id,_,cnvTypeMapping(cnv.`type`))
             )
 
         case dna: DNAFusion =>
           List(
-            GeneAlteration.Fusion(dna.fusionPartner5prime.gene,dna.fusionPartner3prime.gene),
-            GeneAlteration.Fusion(dna.fusionPartner3prime.gene,dna.fusionPartner5prime.gene)
+            GeneAlteration.Fusion(variant.id,dna.fusionPartner5prime.gene,dna.fusionPartner3prime.gene),
+            GeneAlteration.Fusion(variant.id,dna.fusionPartner3prime.gene,dna.fusionPartner5prime.gene)
           )
 
         case rna: RNAFusion =>
           List(
-            GeneAlteration.Fusion(rna.fusionPartner5prime.gene,rna.fusionPartner3prime.gene),
-            GeneAlteration.Fusion(rna.fusionPartner3prime.gene,rna.fusionPartner5prime.gene)
+            GeneAlteration.Fusion(variant.id,rna.fusionPartner5prime.gene,rna.fusionPartner3prime.gene),
+            GeneAlteration.Fusion(variant.id,rna.fusionPartner3prime.gene,rna.fusionPartner5prime.gene)
           )
 
         case _: RNASeq => None
@@ -88,7 +88,6 @@ object GeneAlterationExtensions
   }
 
 
-/*
   implicit class GeneAlterationCriteriaOps(val criteria: GeneAlterationCriteria) extends BooleanRelevanceMatcher[GeneAlteration]
   {
 
@@ -99,80 +98,77 @@ object GeneAlterationExtensions
       alteration match {
         case snv: GeneAlteration.SNV =>
           Seq(criteria.gene.code == snv.gene.code) :++
-            criteria.variant.collect {
-              case crit: GeneAlterationCriteria.SNVCriteria if crit.proteinChange.isDefined =>
-                crit.proteinChange.exists(g => snv.proteinChange.exists(_ matches g))
+            criteria.variant.map {
+              case crit: GeneAlterationCriteria.SNVCriteria => crit.proteinChange.fold(true)(g => snv.proteinChange.exists(_ matches g))
+
+              case _ => false // Wrong alteration type
             }
 
         case cnv: GeneAlteration.CNV =>
           Seq(criteria.gene.code == cnv.gene.code) :++ 
-            criteria.variant.collect {
-              case crit: GeneAlterationCriteria.CNVCriteria if crit.copyNumberType.isDefined =>
-                crit.copyNumberType.exists(_.collect(cnvTypeMapping) contains cnv.`type`)
+            criteria.variant.map {
+              case crit: GeneAlterationCriteria.CNVCriteria => crit.copyNumberType.fold(true)(_.collect(cnvTypeMapping) contains cnv.`type`)
+
+              case _ => false // Wrong alteration type
             }
             
         case fusion: GeneAlteration.Fusion =>
           val fusionGenes = Set(fusion.gene.code,fusion.partner.code)
 
           Seq(fusionGenes(criteria.gene.code)) :++
-            criteria.variant.collect {
-              case crit: GeneAlterationCriteria.FusionCriteria if crit.partner.isDefined =>
-                crit.partner.exists(gene => fusionGenes contains gene.code)
+            criteria.variant.map {
+              case crit: GeneAlterationCriteria.FusionCriteria => crit.partner.fold(true)(gene => fusionGenes contains gene.code)
+                
+              case _ => false // Wrong alteration type
             }
 
         // Can't occur but needed for exhaustive pattern matching    
         case x: GeneAlteration.Unspecified => Seq(criteria.gene.code == x.gene.code)
+
+      }
+
+  }
+
+
+/*
+  implicit class GeneAlterationCriteriaVariantOps(
+    val criteria: GeneAlterationCriteria
+  )(
+    implicit supportingVariantRefs: Seq[GeneAlterationReference[Variant]]
+  )
+  extends BooleanRelevanceMatcher[Variant]
+  {
+
+    import de.dnpm.dip.coding.hgvs.HGVS.extensions._
+
+    override def check(variant: Variant): Seq[Boolean] =
+
+      val supportingFulfilled =
+        criteria.supporting.collect {
+          case true => supportingVariantRefs.exists(_.variant.id == variant.id)
+        }
+        .getOrElse(true)
+      
+
+      :++ variant match {
+        case snv: SNV =>
+          criteria.wildtype.map {
+            case true  => criteria.gene.code == snv.gene.code
+            case false => criteria.gene.code != snv.gene.code
+          }
+            ) :++ criteria.variant.map {
+            case GeneAlterationCriteria.SNV
+          }
+        )
+
+        case cnv: CNV =>
+            
+//        case fusion: GeneAlteration.Fusion =>
 
       }
 
   }
 */
-
-
-  implicit class GeneAlterationCriteriaOps(val criteria: GeneAlterationCriteria) extends BooleanRelevanceMatcher[GeneAlteration]
-  {
-
-    import de.dnpm.dip.coding.hgvs.HGVS.extensions._
-
-    override def check(alteration: GeneAlteration): Seq[Boolean] =
-
-      alteration match {
-        case snv: GeneAlteration.SNV =>
-          Seq(criteria.gene.code == snv.gene.code) :++
-            criteria.variant.map {
-              case crit: GeneAlterationCriteria.SNVCriteria => crit.proteinChange.map(g => snv.proteinChange.exists(_ matches g))
-
-              case _ => Some(false) // Wrong alteration type
-            }
-            .getOrElse(Seq.empty[Boolean])
-
-        case cnv: GeneAlteration.CNV =>
-          Seq(criteria.gene.code == cnv.gene.code) :++ 
-            criteria.variant.map {
-              case crit: GeneAlterationCriteria.CNVCriteria => crit.copyNumberType.map(_.collect(cnvTypeMapping) contains cnv.`type`)
-
-              case _ => Some(false) // Wrong alteration type
-            }
-            .getOrElse(Seq.empty[Boolean])
-            
-        case fusion: GeneAlteration.Fusion =>
-          val fusionGenes = Set(fusion.gene.code,fusion.partner.code)
-
-          Seq(fusionGenes(criteria.gene.code)) :++
-            criteria.variant.map {
-              case crit: GeneAlterationCriteria.FusionCriteria => crit.partner.map(gene => fusionGenes contains gene.code)
-                
-              case _ => Some(false) // Wrong alteration type
-            }
-            .getOrElse(Seq.empty[Boolean])
-
-        // Can't occur but needed for exhaustive pattern matching    
-        case x: GeneAlteration.Unspecified => Seq(criteria.gene.code == x.gene.code)
-
-      }
-
-  }
-
 
   implicit class GeneAlterationsOps(val queriedAlterations: Option[GeneAlterations]) extends AnyVal
   {
