@@ -16,6 +16,15 @@ import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.mtb.query.api._
 import de.dnpm.dip.mtb.model.MTBPatientRecord
+/*
+import de.dnpm.dip.mtb.model.{
+  CNV,
+  DNAFusion,
+  RNAFusion,
+  RNASeq,
+  SNV
+}
+*/
 import de.dnpm.dip.mtb.model.Completers._
 import de.dnpm.dip.service.query.{
   Query,
@@ -23,7 +32,10 @@ import de.dnpm.dip.service.query.{
   PreparedQuery,
 }
 import de.dnpm.dip.service.query.PatientFilter
-import de.dnpm.dip.service.query.QueryService.Save
+import de.dnpm.dip.service.query.QueryService.{
+  Save,
+  Saved
+}
 import de.dnpm.dip.connector.HttpConnector
 import de.ekut.tbi.generators.Gen
 
@@ -39,15 +51,12 @@ class Tests extends AsyncFlatSpec
   System.setProperty(MTBLocalDB.dataGenProp,"0")
 
 
-  implicit val rnd: Random =
-    new Random
+  implicit val rnd: Random = new Random
 
-  implicit val querier: Querier =
-    Querier("Dummy-Querier-ID")
+  implicit val querier: Querier = Querier("Dummy-Querier-ID")
 
  
-  val serviceTry =
-    MTBQueryService.getInstance
+  val serviceTry = MTBQueryService.getInstance
 
   lazy val service = serviceTry.get
 
@@ -93,9 +102,7 @@ class Tests extends AsyncFlatSpec
           Set(
             GeneAlterationCriteria(
               snv.gene,
-              Some(
-                GeneAlterationCriteria.SNVCriteria(None,snv.proteinChange)
-              )
+              Some(GeneAlterationCriteria.OnSNV(None,snv.proteinChange))
             )
           )
         )
@@ -115,23 +122,18 @@ class Tests extends AsyncFlatSpec
 
     for {
       outcomes <- Future.traverse(dataSets)(service ! Save(_))
-    } yield all (outcomes.map(_.isRight)) mustBe true 
+    } yield all (outcomes) must matchPattern { case Right(Saved(_)) => } 
     
   }
 
 
-  val queryMode =
-    Coding(Query.Mode.Local)
+  val queryMode = Coding(Query.Mode.Local)
 
 
   "Query ResultSet" must "contain the total number of data sets for a query without criteria" in {
 
     for {
-      result <- service ! Query.Submit(
-        queryMode,
-        None,
-        None
-      )
+      result <- service ! Query.Submit(queryMode,None,None)
 
       query = result.value
 
@@ -147,11 +149,7 @@ class Tests extends AsyncFlatSpec
     import MTBQueryCriteriaOps._
 
     for {
-      result <- service ! Query.Submit(
-        queryMode,
-        None,
-        Some(genCriteria.next)
-      )
+      result <- service ! Query.Submit(queryMode,None,Some(genCriteria.next))
 
       query = result.value
 
@@ -170,21 +168,65 @@ class Tests extends AsyncFlatSpec
       _ = all (matchingCriteria) must be (defined)
 
     } yield forAll(matchingCriteria){ 
-      matches => assert( (queryCriteria intersect matches.value).nonEmpty )
+      matches => assert((queryCriteria intersect matches.value).nonEmpty)
     }
 
   }
 
 
+  it must "contain the expected Patient for a query by supporting gene alteration" in { 
+    
+    // Get a MTBPatientRecord with supportingVariants
+    val record =
+      dataSets.find(
+        _.getCarePlans.exists(
+          _.medicationRecommendations.exists(
+            _.exists(_.supportingVariants.isDefined)
+          )
+        )
+      )
+      .get
+
+    val supportingAlteredGene =
+      record.getCarePlans(1)
+        .medicationRecommendations.get.head
+        .supportingVariants.get.head
+        .gene.get
+
+    val queryCriteria =
+      MTBQueryCriteria(
+        geneAlterations = Some(
+          GeneAlterations(
+            None,
+            Set(
+              GeneAlterationCriteria(
+                gene = supportingAlteredGene,
+                supporting = Some(true),
+                variant = None
+              )
+            )
+          )
+        )
+      )
+
+    for {
+
+      result <- service ! Query.Submit(queryMode,None,Some(queryCriteria))
+
+      query = result.value
+
+      resultSet <- service.resultSet(query.id).map(_.value)
+
+    } yield resultSet.patientRecord(record.id) must be (defined)
+
+  }
+
+
+
   "Filtering" must "have worked" in {
 
     for {
-      result <-
-        service ! Query.Submit(
-          queryMode,
-          None,
-          None
-        )
+      result <- service ! Query.Submit(queryMode,None,None)
 
       query = result.value
 
@@ -207,10 +249,10 @@ class Tests extends AsyncFlatSpec
 
     for {
       result <- service ! PreparedQuery.Create("Dummy Prepared Query",genCriteria.next)
-
     } yield result.isRight mustBe true 
 
   }
+
 
   it must "have been successfully retrieved" in {
 
@@ -240,7 +282,7 @@ class Tests extends AsyncFlatSpec
         val fullCriteria =
           GeneAlterationCriteria(
             gene = snv.gene,
-            variant = Some(GeneAlterationCriteria.SNVCriteria(None,snv.proteinChange))
+            variant = Some(GeneAlterationCriteria.OnSNV(None,snv.proteinChange))
           )
 
         val geneOnlyCriteria =

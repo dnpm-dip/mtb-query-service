@@ -79,18 +79,9 @@ trait Completers extends BaseCompleters
       alteration => alteration.copy(
         gene = alteration.gene.complete,
         variant  = alteration.variant.collect {
-          case snv: GeneAlterationCriteria.SNVCriteria =>
-            snv.copy(
-              proteinChange = snv.proteinChange.complete
-            )              
-          case cnv: GeneAlterationCriteria.CNVCriteria =>
-            cnv.copy(
-              copyNumberType = cnv.copyNumberType.complete
-            )              
-          case fusion: GeneAlterationCriteria.FusionCriteria =>
-            fusion.copy(
-              partner = fusion.partner.complete
-            )
+          case snv: GeneAlterationCriteria.OnSNV => snv.copy(proteinChange = snv.proteinChange.complete)              
+          case cnv: GeneAlterationCriteria.OnCNV => cnv.copy(copyNumberType = cnv.copyNumberType.complete)              
+          case fusion: GeneAlterationCriteria.OnFusion => fusion.copy(partner = fusion.partner.complete)
         }         
       )
 
