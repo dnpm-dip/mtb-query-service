@@ -25,17 +25,17 @@ private trait MTBQueryCriteriaOps
     def getResponses          = criteria.responses.getOrElse(Set.empty)
     def getDrugs              = criteria.medication.map(_.items).getOrElse(Set.empty)
 
-    def isEmpty: Boolean =
-      (
-        criteria.getDiagnoses          ++
-        criteria.getTumorMorphologies  ++
-        criteria.geneAlterations.map(_.items).getOrElse(Set.empty)  ++
-        criteria.getResponses          ++
-        criteria.getDrugs
+    def nonEmpty =
+      List(
+        criteria.diagnoses.exists(_.nonEmpty),
+        criteria.tumorMorphologies.exists(_.nonEmpty),
+        criteria.geneAlterations.map(_.items).exists(_.nonEmpty),
+        criteria.responses.exists(_.nonEmpty),
+        criteria.medication.map(_.items).exists(_.nonEmpty)
       )
-      .isEmpty
+      .exists(_ == true)
 
-    def nonEmpty = !criteria.isEmpty
+    def isEmpty: Boolean = !criteria.nonEmpty
 
     def intersect(other: MTBQueryCriteria): MTBQueryCriteria =
       MTBQueryCriteria(
@@ -51,11 +51,9 @@ private trait MTBQueryCriteriaOps
           med =>
             other.medication match {
               case Some(MedicationCriteria(_,items,_)) if items.nonEmpty => 
-                med.copy(
-                  items = med.items intersect items
-                )
-              case _ => 
-                med
+                med.copy(items = med.items intersect items)
+
+              case _ => med
             }
         ),
         criteria.responses.map(_ intersect other.getResponses),
@@ -79,7 +77,7 @@ private trait MTBQueryCriteriaOps
   )(
     implicit recommendations: Seq[MTBMedicationRecommendation]
   ): GeneAlterations = {
-
+  
     import GeneAlterationExtensions._
 
     val alterationsByGene =
@@ -90,38 +88,32 @@ private trait MTBQueryCriteriaOps
 
     val fulfilled: GeneAlterationCriteria => Boolean = {
       criterion =>
-        criterion.wildtype match {
+        // If the wildtype gene is queried for, then it shouldn't occur among the altered genes
+        if (criterion.wildtype.getOrElse(false))
 
-          // If the wildtype gene is queried for, then it shouldn't occur among the altered genes
-          case Some(true) => !alterationsByGene.contains(criterion.gene.code)
+          !(alterationsByGene contains criterion.gene.code)
 
-          // Else check if a matching alteration exists for the gene...
-          case _ =>
-            alterationsByGene.get(criterion.gene.code)
-              .flatMap(_.find(criterion matches _))
-              .map { 
-                // ... and if the alteration is specifically supposed to be supporting a therapy recommendation, check this in addition
-                alteration => criterion.supporting match {
-                  case Some(true) =>
-                    recommendations.exists(
-                      _.supportingVariants.exists(
-                        _.exists(_.variant.id == alteration.variant)
-                      )
-                    )
+        // Else check if matching alterations exist for the gene...
+        else {
+          alterationsByGene.get(criterion.gene.code)
+            .map(_ filter (criterion matches _))
+            .filter(_.nonEmpty)
+            .map( 
+              // ... and if the alteration is specifically supposed to be
+              // supporting a therapy recommendation, check this in addition
+              alterations => criterion.supporting match {
+                case Some(true) => alterations.exists(_.isSupporting)
 
-                  // If unspecified, no need to check for occurrence as supportingVariant 
-                  case _ => true
-                }
+                // If unspecified, no need to check for occurrence as supportingVariant 
+                case _ => true
               }
-              .getOrElse(false)
-
+            )
+            .getOrElse(false) // If undefined, default to not fulfilled
         }
     }
 
-
     val fulfilledCriteria =
-      geneAlterations.items
-        .map(crit => Option.when(fulfilled(crit))(crit))
+      geneAlterations.items.map(crit => Option.when(fulfilled(crit))(crit))
 
     val operator =
       geneAlterations.operator.getOrElse(Or)

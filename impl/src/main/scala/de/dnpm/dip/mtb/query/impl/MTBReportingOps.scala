@@ -444,15 +444,12 @@ trait MTBReportingOps extends ReportingOps
   def geneAlterationInfos(
     records: Seq[MTBPatientRecord],
     queriedAlterations: Option[GeneAlterations]
-  ): Seq[MTBResultSet.GeneAlterationInfo] = {
-
-    import VariantCriteriaOps._
-
+  ): Seq[MTBResultSet.GeneAlterationInfo] = 
     records.foldLeft(
       Map.empty[
         (Coding[ICD10GM],Coding[HGNC],DisplayLabel[GeneAlteration]),
         (Int,Boolean)
-        ]
+      ]
     ){
       (acc,record) =>
 
@@ -476,8 +473,8 @@ trait MTBReportingOps extends ReportingOps
                     acc4.updatedWith(
                       (entity,alteration.gene,DisplayLabel.of(alteration))
                     ){
-                      case Some(n -> supporting) => Some(n+1 -> (supporting || variant.isSupporting))
-                      case None                  => Some(1   -> variant.isSupporting)
+                      case Some(n -> supporting) => Some(n+1 -> (supporting || alteration.isSupporting))
+                      case None                  => Some(1   -> alteration.isSupporting)
                     }
                 }
             }
@@ -495,8 +492,7 @@ trait MTBReportingOps extends ReportingOps
         )
     }
     .toSeq
-
-  }
+  
 
 
 

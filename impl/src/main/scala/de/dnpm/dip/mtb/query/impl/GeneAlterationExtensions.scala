@@ -7,6 +7,7 @@ import de.dnpm.dip.mtb.model.{
   CNV,
   SNV,
   DNAFusion,
+  MTBMedicationRecommendation,
   RNAFusion,
   RNASeq,
   Variant
@@ -40,6 +41,21 @@ object GeneAlterationExtensions
 
     }
 
+
+  implicit class GeneAlterationSupportingOps(val alteration: GeneAlteration) extends AnyVal 
+  {
+    // Check whether the alteration supports a therapy recommendation,
+    // i.e. if the variant it represents/belongs to is referenced from a MTBMedicationRecommendation
+    def isSupporting(
+      implicit recommendations: Seq[MTBMedicationRecommendation]
+    ): Boolean =
+      recommendations.exists(
+        _.supportingVariants.exists(
+          _.exists(_.variant.id == alteration.variant)
+        )
+      )
+
+  }
 
 
   private val cnvTypeMapping: Map[Coding[CNV.Type.Value],GeneAlteration.CNV.Type.Value] =
@@ -99,7 +115,7 @@ object GeneAlterationExtensions
         case snv: GeneAlteration.SNV =>
           Seq(criteria.gene.code == snv.gene.code) :++
             criteria.variant.map {
-              case crit: GeneAlterationCriteria.SNVCriteria => crit.proteinChange.fold(true)(g => snv.proteinChange.exists(_ matches g))
+              case crit: GeneAlterationCriteria.OnSNV => crit.proteinChange.fold(true)(g => snv.proteinChange.exists(_ matches g))
 
               case _ => false // Wrong alteration type
             }
@@ -107,7 +123,7 @@ object GeneAlterationExtensions
         case cnv: GeneAlteration.CNV =>
           Seq(criteria.gene.code == cnv.gene.code) :++ 
             criteria.variant.map {
-              case crit: GeneAlterationCriteria.CNVCriteria => crit.copyNumberType.fold(true)(_.collect(cnvTypeMapping) contains cnv.`type`)
+              case crit: GeneAlterationCriteria.OnCNV => crit.copyNumberType.fold(true)(_.collect(cnvTypeMapping) contains cnv.`type`)
 
               case _ => false // Wrong alteration type
             }
@@ -117,7 +133,7 @@ object GeneAlterationExtensions
 
           Seq(fusionGenes(criteria.gene.code)) :++
             criteria.variant.map {
-              case crit: GeneAlterationCriteria.FusionCriteria => crit.partner.fold(true)(gene => fusionGenes contains gene.code)
+              case crit: GeneAlterationCriteria.OnFusion => crit.partner.fold(true)(gene => fusionGenes contains gene.code)
                 
               case _ => false // Wrong alteration type
             }
@@ -129,46 +145,6 @@ object GeneAlterationExtensions
 
   }
 
-
-/*
-  implicit class GeneAlterationCriteriaVariantOps(
-    val criteria: GeneAlterationCriteria
-  )(
-    implicit supportingVariantRefs: Seq[GeneAlterationReference[Variant]]
-  )
-  extends BooleanRelevanceMatcher[Variant]
-  {
-
-    import de.dnpm.dip.coding.hgvs.HGVS.extensions._
-
-    override def check(variant: Variant): Seq[Boolean] =
-
-      val supportingFulfilled =
-        criteria.supporting.collect {
-          case true => supportingVariantRefs.exists(_.variant.id == variant.id)
-        }
-        .getOrElse(true)
-      
-
-      :++ variant match {
-        case snv: SNV =>
-          criteria.wildtype.map {
-            case true  => criteria.gene.code == snv.gene.code
-            case false => criteria.gene.code != snv.gene.code
-          }
-            ) :++ criteria.variant.map {
-            case GeneAlterationCriteria.SNV
-          }
-        )
-
-        case cnv: CNV =>
-            
-//        case fusion: GeneAlteration.Fusion =>
-
-      }
-
-  }
-*/
 
   implicit class GeneAlterationsOps(val queriedAlterations: Option[GeneAlterations]) extends AnyVal
   {
