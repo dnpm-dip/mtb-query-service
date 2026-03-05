@@ -16,15 +16,6 @@ import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.coding.atc.ATC
 import de.dnpm.dip.mtb.query.api._
 import de.dnpm.dip.mtb.model.MTBPatientRecord
-/*
-import de.dnpm.dip.mtb.model.{
-  CNV,
-  DNAFusion,
-  RNAFusion,
-  RNASeq,
-  SNV
-}
-*/
 import de.dnpm.dip.mtb.model.Completers._
 import de.dnpm.dip.service.query.{
   Query,
@@ -94,11 +85,9 @@ class Tests extends AsyncFlatSpec
           }
 
     } yield MTBQueryCriteria(
-      Some(Set(icd10)),
-      None,
-      Some(
+      diagnoses = Some(Set(icd10)),
+      geneAlterations = Some(
         GeneAlterations(
-          None,
           Set(
             GeneAlterationCriteria(
               snv.gene,
@@ -107,8 +96,7 @@ class Tests extends AsyncFlatSpec
           )
         )
       ),
-      medicationCriteria,
-      None
+      medication = medicationCriteria,
     )
 
 
@@ -197,7 +185,6 @@ class Tests extends AsyncFlatSpec
       MTBQueryCriteria(
         geneAlterations = Some(
           GeneAlterations(
-            None,
             Set(
               GeneAlterationCriteria(
                 gene = supportingAlteredGene,
@@ -222,7 +209,6 @@ class Tests extends AsyncFlatSpec
   }
 
 
-
   "Filtering" must "have worked" in {
 
     for {
@@ -241,6 +227,51 @@ class Tests extends AsyncFlatSpec
       patientMatches = resultSet.patientMatches(filter)
 
     } yield patientMatches.size must be < (dataSets.size)
+
+  }
+
+
+  "Relevance ranking" must "have worked on GeneAlterationInfo" in { 
+
+    val record = dataSets.head
+
+    val queriedEntity = record.diagnoses.head.code
+
+    val queriedAlteredGene = record.ngsReports.get.head.results.simpleVariants.get.head.gene
+
+    val queryCriteria =
+      MTBQueryCriteria(
+        diagnoses = Some(Set(queriedEntity)),
+        geneAlterations = Some(
+          GeneAlterations(
+            Set(
+              GeneAlterationCriteria(gene = queriedAlteredGene)
+            )
+          )
+        )
+      )
+
+    for {
+
+      result <- service ! Query.Submit(queryMode,None,Some(queryCriteria))
+
+      query = result.value
+
+      resultSet <- service.resultSet(query.id).map(_.value)
+
+      geneAlterationsInfos = resultSet.geneAlterations(MTBFilters.empty)
+
+      // The first entrie(s) must match the queried attributes and have a non-zero ranking score
+      _ = geneAlterationsInfos.takeWhile(r =>
+        r.resource.entity == queriedEntity &&
+        r.resource.gene == queriedAlteredGene &&
+        r.score > 0.0
+      ) must not be (empty) 
+
+      // Entries must be sorted in descending order of ranking score 
+      _ = geneAlterationsInfos.map(_.score).reverse mustBe sorted
+
+    } yield succeed
 
   }
 

@@ -40,7 +40,8 @@ import de.dnpm.dip.mtb.query.api.{
   GeneAlteration,
   GeneAlterations,
   MTBResultSet,
-  MTBQueryCriteria
+  MTBQueryCriteria,
+  Ranked
 }
 
 
@@ -346,9 +347,16 @@ trait MTBReportingOps extends ReportingOps
   def therapyResponses(
     records: Seq[MTBPatientRecord],
     queryCriteria: Option[MTBQueryCriteria]
-  ): Seq[MTBResultSet.TherapyResponses] = {
+  ): Seq[Ranked[MTBResultSet.TherapyResponses]] = {
 
     import GeneAlterationExtensions._
+    import Ranker.syntax._
+    import Rankers._
+
+    implicit val ranker =
+      queryCriteria.map(TherapyResponsesRanker(_))
+        .getOrElse(Ranker.unranked[MTBResultSet.TherapyResponses])
+
 
     records.foldLeft(
       Map.empty[
@@ -409,6 +417,23 @@ trait MTBReportingOps extends ReportingOps
     }
     .map {
       case ((entity,medications,alteration),(n,responses,durations)) =>
+        MTBResultSet.TherapyResponses(
+          entity,
+          medications,
+          alteration,
+          n,
+          ORR(responses),
+          Distribution.of(responses),
+          mean(durations).getOrElse(0.0)
+        )
+        .ranked
+    }
+    .toSeq
+    .sorted  // Reverse ordering implicit for Ranked[_]
+
+/*    
+    .map {
+      case ((entity,medications,alteration),(n,responses,durations)) =>
         RankableTherapyResponses(
           entity,
           medications,
@@ -418,36 +443,43 @@ trait MTBReportingOps extends ReportingOps
           Distribution.of(responses),
           mean(durations).getOrElse(0.0)
         )
+        .ranked
     }
     .toSeq
     .map {
-      th =>
-
-        import TherapyResponseRanking._
-
-        MTBResultSet.TherapyResponses(
-          th.entity,
-          th.medications.map(DisplayLabel.of(_)),
-          DisplayLabel.of(th.supportingAlteration),
-          th.count,
-          th.orr,
-          th.responseDistribution,
-          th.meanDuration,
-          queryCriteria.map(_ score th).getOrElse(0.0)
+      case ranked @ Ranked(th,_) =>
+        ranked.copy(
+          resource = MTBResultSet.TherapyResponses(
+            th.entity,
+            th.medications.map(DisplayLabel.of(_)),
+            DisplayLabel.of(th.supportingAlteration),
+            th.count,
+            th.orr,
+            th.responseDistribution,
+            th.meanDuration
+          )
         )
     }
-    .sortBy(_.score)(Ordering[Double].reverse)  // Reverse ordering, i.e. from highest to lowest score
-
+*/    
   }
 
 
   def geneAlterationInfos(
     records: Seq[MTBPatientRecord],
-    queriedAlterations: Option[GeneAlterations]
-  ): Seq[MTBResultSet.GeneAlterationInfo] = 
+    queryCriteria: Option[MTBQueryCriteria]
+  ): Seq[Ranked[MTBResultSet.GeneAlterationInfo]] = {
+
+    import Ranker.syntax._
+    import Rankers._
+
+    implicit val ranker =
+      queryCriteria.map(GeneAlterationInfoRanker(_))
+        .getOrElse(Ranker.unranked[MTBResultSet.GeneAlterationInfo])
+
+
     records.foldLeft(
       Map.empty[
-        (Coding[ICD10GM],Coding[HGNC],DisplayLabel[GeneAlteration]),
+        (Coding[ICD10GM],Coding[HGNC],GeneAlteration),
         (Int,Boolean)
       ]
     ){
@@ -471,14 +503,13 @@ trait MTBReportingOps extends ReportingOps
                 variant.geneAlterations.foldLeft(acc3){
                   (acc4,alteration) =>
                     acc4.updatedWith(
-                      (entity,alteration.gene,DisplayLabel.of(alteration))
+                      (entity,alteration.gene,alteration)
                     ){
                       case Some(n -> supporting) => Some(n+1 -> (supporting || alteration.isSupporting))
                       case None                  => Some(1   -> alteration.isSupporting)
                     }
                 }
             }
-
         }
     }
     .map { 
@@ -490,10 +521,12 @@ trait MTBReportingOps extends ReportingOps
           n,
           supporting
         )
+        .ranked
     }
     .toSeq
+    .sorted
   
-
+  }
 
 
   def alteredGeneDistributions(
@@ -524,6 +557,7 @@ trait MTBReportingOps extends ReportingOps
         Distribution.of(genes)
       )
     }
+    .toSeq
 /*    
     .map { 
       case (typ,genes) =>
@@ -538,7 +572,6 @@ trait MTBReportingOps extends ReportingOps
         )
     }
 */    
-    .toSeq
 
 }
 

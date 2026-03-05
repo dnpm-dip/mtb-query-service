@@ -21,13 +21,14 @@ import de.dnpm.dip.service.query.{
 }
 import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.mtb.query.api.{
+  DiagnosisFilter,
+  KaplanMeier,
   MTBQueryCriteria,
   MTBFilters,
-  DiagnosisFilter,
-  RecommendationFilter,
-  TherapyFilter,
   MTBResultSet,
-  KaplanMeier
+  Ranked,
+  RecommendationFilter,
+  TherapyFilter
 }
 
 
@@ -140,10 +141,10 @@ with MTBReportingOps
 
   override def geneAlterations(
     filter: MTBFilters
-  ): Seq[MTBResultSet.GeneAlterationInfo] =
+  ): Seq[Ranked[MTBResultSet.GeneAlterationInfo]] =
     geneAlterationInfos(
       patientRecords(filter),
-      queryCriteria.flatMap(_.geneAlterations)
+      queryCriteria
     )
 
 
@@ -258,7 +259,7 @@ with MTBReportingOps
 
   override def therapyResponses(
     filter: MTBFilters
-  ): Seq[TherapyResponses] =
+  ): Seq[Ranked[TherapyResponses]] =
     therapyResponses(
       patientRecords(filter),
       queryCriteria
