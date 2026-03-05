@@ -56,7 +56,7 @@ sealed trait CombinableItems[T]
 final case class GeneAlterationCriteria
 (
   gene: Coding[HGNC],
-  variant: Option[GeneAlterationCriteria.OnVariant],
+  variant: Option[GeneAlterationCriteria.OnVariant] = None,
   supporting: Option[Boolean] = None,
   wildtype: Option[Boolean] = None
 )
@@ -122,8 +122,8 @@ object GeneAlterationCriteria
 
 final case class GeneAlterations
 (
-  operator: Option[LogicalOperator.Value],
-  items: Set[GeneAlterationCriteria]
+  items: Set[GeneAlterationCriteria],
+  operator: Option[LogicalOperator.Value] = None,
 )
 extends CombinableItems[GeneAlterationCriteria]
 

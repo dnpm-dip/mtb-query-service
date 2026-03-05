@@ -38,9 +38,9 @@ with KaplanMeierOps[Id,Applicative[Id]]
 
   def medication(filter: MTBFilters): MTBResultSet.Medication
 
-  def therapyResponses(filter: MTBFilters): Seq[MTBResultSet.TherapyResponses]
+  def therapyResponses(filter: MTBFilters): Seq[Ranked[MTBResultSet.TherapyResponses]]
 
-  def geneAlterations(filter: MTBFilters): Seq[MTBResultSet.GeneAlterationInfo]
+  def geneAlterations(filter: MTBFilters): Seq[Ranked[MTBResultSet.GeneAlterationInfo]]
 
   def alteredGeneDistributions(filter: MTBFilters): Seq[Entry[GeneAlteration.Type.Value,Distribution[DisplayLabel[Coding[HGNC]]]]]
 
@@ -75,29 +75,16 @@ object MTBResultSet
   (
     entity: Coding[ICD10GM],
     gene: Coding[HGNC],
-    alteration: DisplayLabel[GeneAlteration],
+    alteration: GeneAlteration,
     count: Int,
     supporting: Boolean
   )
-
   object GeneAlterationInfo
   {
     implicit val writes: OWrites[GeneAlterationInfo] =
       Json.writes[GeneAlterationInfo]
   }
 
-/*
-  final case class AlteredGeneDistributions
-  (
-    entries: Seq[Entry[GeneAlteration.Type.Value,Distribution[DisplayLabel[Coding[HGNC]]]]]
-  )
-
-  object AlteredGeneDistributions
-  {
-    implicit val writes: OWrites[AlteredGeneDistributions] =
-      Json.writes[AlteredGeneDistributions]
-  }
-*/
 
   final case class Medication
   (
@@ -135,14 +122,14 @@ object MTBResultSet
   final case class TherapyResponses
   (
     entity: Coding[ICD10GM],
-    medications: Set[DisplayLabel[Coding[Medications]]],
-    supportingAlteration: DisplayLabel[GeneAlteration],
+    medications: Set[Coding[Medications]],
+    supportingAlteration: GeneAlteration,
     count: Int,
     orr: Int,  // Overall Response Rate: 0 - 100 %
     responseDistribution: Distribution[RECIST.Value],
     meanDuration: Double,
-    score: Double
   )
+
 
   object TherapyResponses
   {

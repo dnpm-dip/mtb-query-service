@@ -43,8 +43,8 @@ private trait MTBQueryCriteriaOps
         criteria.tumorMorphologies.map(_ intersect other.getTumorMorphologies),
         criteria.geneAlterations.map(
           alterations => GeneAlterations(
-            alterations.operator,
-            alterations.items intersect other.geneAlterations.map(_.items).getOrElse(Set.empty)
+            alterations.items intersect other.geneAlterations.map(_.items).getOrElse(Set.empty),
+            alterations.operator
           )
         ),
         criteria.medication.map(
@@ -120,11 +120,11 @@ private trait MTBQueryCriteriaOps
 
 
     GeneAlterations(
-      Some(operator),
       if (fulfilledCriteria.map(_.isDefined).reduceOption(operator).getOrElse(true))
         fulfilledCriteria.flatten
       else
-        Set.empty
+        Set.empty,
+      Some(operator)
     )
 
   }
