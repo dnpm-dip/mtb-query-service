@@ -34,15 +34,15 @@ with KaplanMeierOps[Id,Applicative[Id]]
   type Filter = MTBFilters
 
 
-  def tumorDiagnostics(filter: MTBFilters): MTBResultSet.TumorDiagnostics
+  def tumorDiagnostics(filter: MTBFilters = MTBFilters.empty): MTBResultSet.TumorDiagnostics
 
-  def medication(filter: MTBFilters): MTBResultSet.Medication
+  def medication(filter: MTBFilters = MTBFilters.empty): MTBResultSet.Medication
 
-  def therapyResponses(filter: MTBFilters): Seq[Ranked[MTBResultSet.TherapyResponses]]
+  def therapyResponses(filter: MTBFilters = MTBFilters.empty): Seq[Ranked[MTBResultSet.TherapyResponses]]
 
-  def geneAlterations(filter: MTBFilters): Seq[Ranked[MTBResultSet.GeneAlterationInfo]]
+  def geneAlterations(filter: MTBFilters = MTBFilters.empty): Seq[Ranked[MTBResultSet.GeneAlterationInfo]]
 
-  def alteredGeneDistributions(filter: MTBFilters): Seq[Entry[GeneAlteration.Type.Value,Distribution[DisplayLabel[Coding[HGNC]]]]]
+  def alteredGeneDistributions(filter: MTBFilters = MTBFilters.empty): Seq[Entry[GeneAlteration.Type.Value,Distribution[DisplayLabel[Coding[HGNC]]]]]
 
 }
 

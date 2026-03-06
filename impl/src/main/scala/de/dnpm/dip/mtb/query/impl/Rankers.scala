@@ -11,6 +11,11 @@ import de.dnpm.dip.mtb.query.api.MTBResultSet.{
 trait Rankers
 {
 
+  /**
+   * Convert MTBQueryCriteria into a "bag of words" representation for relevance ranking
+   * @param criteria Structured query criteria
+   * @return "bag of words" representation of query criteria
+   */
   implicit def queryVector(criteria: MTBQueryCriteria): Set[Any] =
     criteria.diagnoses.getOrElse(Set.empty).map(_.code) ++
     criteria.geneAlterations.map(_.items).getOrElse(Set.empty).map(_.gene.code) ++
@@ -18,6 +23,9 @@ trait Rankers
     criteria.responses.getOrElse(Set.empty).map(_.code.enumValue)
 
 
+  /**
+   * Converter of GeneAlterationInfo object into a "bag of words" representation for relevance ranking
+   */
   lazy val GeneAlterationInfoRanker =
     Ranker.of[GeneAlterationInfo,Any]{
       case GeneAlterationInfo(entity,gene,alteration,_,_) =>
@@ -28,6 +36,9 @@ trait Rankers
         )
     }
 
+  /**
+   * Converter of TherapyResponses object into a "bag of words" representation for relevance ranking
+   */
   lazy val TherapyResponsesRanker =
     Ranker.of[TherapyResponses,Any]{
       th =>
