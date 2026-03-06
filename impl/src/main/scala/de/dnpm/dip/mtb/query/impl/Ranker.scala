@@ -34,7 +34,7 @@ object Ranker
    * q and d are here represented as "bag of words", i.e. Set[Term]. 
    * Taking this to be equivalent to a sparse vector representation of boolean values (0,1) for each dimension/term,
    * the cosine computation thus becomes equivalent to:
-   * (q intersect d)/sqrt(q.size)*sqrt(d.size)
+   * (q intersect d).size/sqrt(q.size)*sqrt(d.size)
    *
    * @param queryVector "bag of words" representation of query vector
    * @param docVector Function to map a Doc to a "bag of words" representation
