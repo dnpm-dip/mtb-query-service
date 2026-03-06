@@ -431,36 +431,6 @@ trait MTBReportingOps extends ReportingOps
     .toSeq
     .sorted  // Reverse ordering implicit for Ranked[_]
 
-/*    
-    .map {
-      case ((entity,medications,alteration),(n,responses,durations)) =>
-        RankableTherapyResponses(
-          entity,
-          medications,
-          alteration,
-          n,
-          ORR(responses),
-          Distribution.of(responses),
-          mean(durations).getOrElse(0.0)
-        )
-        .ranked
-    }
-    .toSeq
-    .map {
-      case ranked @ Ranked(th,_) =>
-        ranked.copy(
-          resource = MTBResultSet.TherapyResponses(
-            th.entity,
-            th.medications.map(DisplayLabel.of(_)),
-            DisplayLabel.of(th.supportingAlteration),
-            th.count,
-            th.orr,
-            th.responseDistribution,
-            th.meanDuration
-          )
-        )
-    }
-*/    
   }
 
 

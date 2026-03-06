@@ -231,13 +231,26 @@ class Tests extends AsyncFlatSpec
   }
 
 
-  "Relevance ranking" must "have worked on GeneAlterationInfo" in { 
+  "Relevance ranking" must "have worked on GeneAlterationInfo and TherapyResponses" in { 
 
-    val record = dataSets.head
+    // Get a MTBPatientRecord with supportingVariants
+    val record =
+      dataSets.find(
+        _.getCarePlans.exists(
+          _.medicationRecommendations.exists(
+            _.exists(_.supportingVariants.isDefined)
+          )
+        )
+      )
+      .get
 
     val queriedEntity = record.diagnoses.head.code
 
-    val queriedAlteredGene = record.ngsReports.get.head.results.simpleVariants.get.head.gene
+    val queriedAlteredGene =
+      record.getCarePlans(1)
+        .medicationRecommendations.get.head
+        .supportingVariants.get.head
+        .gene.get
 
     val queryCriteria =
       MTBQueryCriteria(
@@ -245,7 +258,10 @@ class Tests extends AsyncFlatSpec
         geneAlterations = Some(
           GeneAlterations(
             Set(
-              GeneAlterationCriteria(gene = queriedAlteredGene)
+              GeneAlterationCriteria(
+                gene = queriedAlteredGene,
+                supporting = Some(true)
+              )
             )
           )
         )
@@ -259,19 +275,30 @@ class Tests extends AsyncFlatSpec
 
       resultSet <- service.resultSet(query.id).map(_.value)
 
-      geneAlterationsInfos = resultSet.geneAlterations(MTBFilters.empty)
+      geneAlterationsInfos = resultSet.geneAlterations()
+
+      therapyResponses = resultSet.therapyResponses()
 
       // The first entrie(s) must match the queried attributes and have a non-zero ranking score
       _ = geneAlterationsInfos.takeWhile(r =>
         r.resource.entity == queriedEntity &&
         r.resource.gene == queriedAlteredGene &&
+        r.resource.alteration.gene == queriedAlteredGene &&
+        r.score > 0.0
+      ) must not be (empty) 
+
+      _ = therapyResponses.takeWhile(r =>
+        r.resource.entity == queriedEntity &&
+        r.resource.supportingAlteration.gene == queriedAlteredGene &&
         r.score > 0.0
       ) must not be (empty) 
 
       // Entries must be sorted in descending order of ranking score 
       _ = geneAlterationsInfos.map(_.score).reverse mustBe sorted
 
-    } yield succeed
+      _ = therapyResponses.map(_.score).reverse mustBe sorted
+
+    } yield succeed // If this point is reached, test passed
 
   }
 
