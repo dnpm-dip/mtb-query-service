@@ -449,7 +449,7 @@ trait MTBReportingOps extends ReportingOps
 
     records.foldLeft(
       Map.empty[
-        (Coding[ICD10GM],Coding[HGNC],GeneAlteration),
+        (Coding[ICD10GM],GeneAlteration),
         (Int,Boolean)
       ]
     ){
@@ -473,7 +473,7 @@ trait MTBReportingOps extends ReportingOps
                 variant.geneAlterations.foldLeft(acc3){
                   (acc4,alteration) =>
                     acc4.updatedWith(
-                      (entity,alteration.gene,alteration)
+                      (entity,alteration)
                     ){
                       case Some(n -> supporting) => Some(n+1 -> (supporting || alteration.isSupporting))
                       case None                  => Some(1   -> alteration.isSupporting)
@@ -483,10 +483,9 @@ trait MTBReportingOps extends ReportingOps
         }
     }
     .map { 
-      case ((entity,gene,alteration),(n,supporting)) =>
+      case ((entity,alteration),(n,supporting)) =>
         MTBResultSet.GeneAlterationInfo(
           entity,
-          gene,
           alteration,
           n,
           supporting

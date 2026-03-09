@@ -85,7 +85,7 @@ class Tests extends AsyncFlatSpec
           }
 
     } yield MTBQueryCriteria(
-      diagnoses = Some(Set(icd10)),
+      tumorEntities = Some(Set(icd10)),
       geneAlterations = Some(
         GeneAlterations(
           Set(
@@ -189,7 +189,7 @@ class Tests extends AsyncFlatSpec
               GeneAlterationCriteria(
                 gene = supportingAlteredGene,
                 supporting = Some(true),
-                variant = None
+                alteration = None
               )
             )
           )
@@ -254,7 +254,7 @@ class Tests extends AsyncFlatSpec
 
     val queryCriteria =
       MTBQueryCriteria(
-        diagnoses = Some(Set(queriedEntity)),
+        tumorEntities = Some(Set(queriedEntity)),
         geneAlterations = Some(
           GeneAlterations(
             Set(
@@ -281,14 +281,13 @@ class Tests extends AsyncFlatSpec
 
       // The first entrie(s) must match the queried attributes and have a non-zero ranking score
       _ = geneAlterationsInfos.takeWhile(r =>
-        r.resource.entity == queriedEntity &&
-        r.resource.gene == queriedAlteredGene &&
+        r.resource.tumorEntity == queriedEntity &&
         r.resource.alteration.gene == queriedAlteredGene &&
         r.score > 0.0
       ) must not be (empty) 
 
       _ = therapyResponses.takeWhile(r =>
-        r.resource.entity == queriedEntity &&
+        r.resource.tumorEntity == queriedEntity &&
         r.resource.supportingAlteration.gene == queriedAlteredGene &&
         r.score > 0.0
       ) must not be (empty) 
@@ -340,13 +339,13 @@ class Tests extends AsyncFlatSpec
         val fullCriteria =
           GeneAlterationCriteria(
             gene = snv.gene,
-            variant = Some(GeneAlterationCriteria.OnSNV(None,snv.proteinChange))
+            alteration = Some(GeneAlterationCriteria.OnSNV(None,snv.proteinChange))
           )
 
         val geneOnlyCriteria =
           GeneAlterationCriteria(
             gene = snv.gene,
-            variant = None
+            alteration = None
           )
 
         forAll(snv.geneAlterations.map(fullCriteria matches _))(_ mustBe true)

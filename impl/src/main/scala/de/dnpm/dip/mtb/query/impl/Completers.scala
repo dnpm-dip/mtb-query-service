@@ -76,9 +76,9 @@ trait Completers extends BaseCompleters
   implicit protected val criteriaCompleter: Completer[MTBQueryCriteria] = {
 
     implicit val alterationCriteriaCompleter: Completer[GeneAlterationCriteria] =
-      alteration => alteration.copy(
-        gene = alteration.gene.complete,
-        variant  = alteration.variant.collect {
+      criteria => criteria.copy(
+        gene = criteria.gene.complete,
+        alteration  = criteria.alteration.collect {
           case snv: GeneAlterationCriteria.OnSNV => snv.copy(proteinChange = snv.proteinChange.complete)              
           case cnv: GeneAlterationCriteria.OnCNV => cnv.copy(copyNumberType = cnv.copyNumberType.complete)              
           case fusion: GeneAlterationCriteria.OnFusion => fusion.copy(partner = fusion.partner.complete)
@@ -86,7 +86,7 @@ trait Completers extends BaseCompleters
       )
 
     criteria => criteria.copy(
-      diagnoses         = criteria.diagnoses.complete,
+      tumorEntities     = criteria.tumorEntities.complete,
       tumorMorphologies = criteria.tumorMorphologies.complete,
       geneAlterations   = criteria.geneAlterations.map(
         obj => obj.copy(
@@ -118,7 +118,7 @@ trait Completers extends BaseCompleters
       )
 
     criteria => criteria.copy(
-      diagnoses = criteria.diagnoses.complete,
+      tumorEntities = criteria.tumorEntities.complete,
       tumorMorphologies = criteria.tumorMorphologies.complete,
       medication = criteria.medication.map {
         _.complete

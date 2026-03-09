@@ -20,7 +20,7 @@ object Ranker
 
   def unranked[T]: Ranker[T] =
     new Ranker[T]{
-      override def rank(t: T) = 1.0
+      override def rank(t: T) = 0.0
     }
 
 
@@ -46,7 +46,7 @@ object Ranker
   )
   extends Ranker[Doc]
   {
-    override def rank(doc: Doc): Double = { 
+    override def rank(doc: Doc): Double = {
 
       val document = docVector(doc)
 
@@ -56,12 +56,15 @@ object Ranker
   }
 
   /**
-   * Partially applied function to serve as Builder of VectorSpaceRanker[Term,Doc]
+   * Partially applied function to serve as Builder of Ranker[Doc], guarding against division by zero in case 
+   * NOTE that document cannot be empty by design, only queryVector in case of empty query criteria.
    *
    * @param docVector Function to map a Doc to a "bag of words" representation
    */
   def of[Doc,Term](docVector: Doc => Set[Term]): Set[Term] => Ranker[Doc] =
-    new VectorSpaceRanker[Term,Doc](_,docVector)
+    queryVector => 
+      if (queryVector.nonEmpty) new VectorSpaceRanker[Term,Doc](queryVector,docVector)
+      else unranked[Doc]
 
 
   object syntax

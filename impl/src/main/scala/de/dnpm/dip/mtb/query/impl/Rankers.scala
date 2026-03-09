@@ -17,7 +17,7 @@ trait Rankers
    * @return "bag of words" representation of query criteria
    */
   implicit def queryVector(criteria: MTBQueryCriteria): Set[Any] =
-    criteria.diagnoses.getOrElse(Set.empty).map(_.code) ++
+    criteria.tumorEntities.getOrElse(Set.empty).map(_.code) ++
     criteria.geneAlterations.map(_.items).getOrElse(Set.empty).map(_.gene.code) ++
     criteria.medication.map(_.items).getOrElse(Set.empty).flatMap(_.display.map(_.toLowerCase)) ++
     criteria.responses.getOrElse(Set.empty).map(_.code.enumValue)
@@ -28,11 +28,10 @@ trait Rankers
    */
   lazy val GeneAlterationInfoRanker =
     Ranker.of[GeneAlterationInfo,Any]{
-      case GeneAlterationInfo(entity,gene,alteration,_,_) =>
+      case GeneAlterationInfo(entity,alteration,_,_) =>
         Set(
           entity.code,
-          gene.code,
-          alteration
+          alteration.gene.code
         )
     }
 
@@ -43,7 +42,7 @@ trait Rankers
     Ranker.of[TherapyResponses,Any]{
       th =>
         Set(
-          th.entity.code,
+          th.tumorEntity.code,
           th.supportingAlteration.gene.code
         ) ++
         th.medications.flatMap(_.display.map(_.toLowerCase)) ++
