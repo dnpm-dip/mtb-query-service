@@ -114,7 +114,7 @@ object GeneAlterationExtensions
       alteration match {
         case snv: GeneAlteration.SNV =>
           Seq(criteria.gene.code == snv.gene.code) :++
-            criteria.variant.map {
+            criteria.alteration.map {
               case crit: GeneAlterationCriteria.OnSNV => crit.proteinChange.fold(true)(g => snv.proteinChange.exists(_ matches g))
 
               case _ => false // Wrong alteration type
@@ -122,7 +122,7 @@ object GeneAlterationExtensions
 
         case cnv: GeneAlteration.CNV =>
           Seq(criteria.gene.code == cnv.gene.code) :++ 
-            criteria.variant.map {
+            criteria.alteration.map {
               case crit: GeneAlterationCriteria.OnCNV => crit.copyNumberType.fold(true)(_.collect(cnvTypeMapping) contains cnv.`type`)
 
               case _ => false // Wrong alteration type
@@ -132,7 +132,7 @@ object GeneAlterationExtensions
           val fusionGenes = Set(fusion.gene.code,fusion.partner.code)
 
           Seq(fusionGenes(criteria.gene.code)) :++
-            criteria.variant.map {
+            criteria.alteration.map {
               case crit: GeneAlterationCriteria.OnFusion => crit.partner.fold(true)(gene => fusionGenes contains gene.code)
                 
               case _ => false // Wrong alteration type

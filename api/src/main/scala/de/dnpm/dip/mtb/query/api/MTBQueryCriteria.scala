@@ -56,7 +56,7 @@ sealed trait CombinableItems[T]
 final case class GeneAlterationCriteria
 (
   gene: Coding[HGNC],
-  variant: Option[GeneAlterationCriteria.OnVariant] = None,
+  alteration: Option[GeneAlterationCriteria.OnVariant] = None,
   supporting: Option[Boolean] = None,
   wildtype: Option[Boolean] = None
 )
@@ -207,7 +207,7 @@ object MedicationCriteria
 
 final case class MTBQueryCriteria
 (
-  diagnoses: Option[Set[Coding[ICD10GM]]] = None,
+  tumorEntities: Option[Set[Coding[ICD10GM]]] = None,
   tumorMorphologies: Option[Set[Coding[ICDO3.M]]] = None,
   geneAlterations: Option[GeneAlterations] = None,
   medication: Option[MedicationCriteria] = None,

@@ -73,8 +73,7 @@ object MTBResultSet
 
   final case class GeneAlterationInfo
   (
-    entity: Coding[ICD10GM],
-    gene: Coding[HGNC],
+    tumorEntity: Coding[ICD10GM],
     alteration: GeneAlteration,
     count: Int,
     supporting: Boolean
@@ -121,7 +120,7 @@ object MTBResultSet
 
   final case class TherapyResponses
   (
-    entity: Coding[ICD10GM],
+    tumorEntity: Coding[ICD10GM],
     medications: Set[Coding[Medications]],
     supportingAlteration: GeneAlteration,
     count: Int,

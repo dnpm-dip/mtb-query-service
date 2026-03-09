@@ -132,7 +132,7 @@ object GeneAlteration
       cnv => Json.obj(
         "type" -> Type.CNV,
         "gene" -> cnv.gene,
-        "cnvType" -> cnv.`type`
+        "copyNumberType" -> cnv.`type`
       )
     )
 

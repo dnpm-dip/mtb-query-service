@@ -20,14 +20,14 @@ private trait MTBQueryCriteriaOps
 
   private[impl] implicit class Extensions(criteria: MTBQueryCriteria){
 
-    def getDiagnoses          = criteria.diagnoses.getOrElse(Set.empty)
+    def getTumorEntities      = criteria.tumorEntities.getOrElse(Set.empty)
     def getTumorMorphologies  = criteria.tumorMorphologies.getOrElse(Set.empty)
     def getResponses          = criteria.responses.getOrElse(Set.empty)
     def getDrugs              = criteria.medication.map(_.items).getOrElse(Set.empty)
 
     def nonEmpty =
       List(
-        criteria.diagnoses.exists(_.nonEmpty),
+        criteria.tumorEntities.exists(_.nonEmpty),
         criteria.tumorMorphologies.exists(_.nonEmpty),
         criteria.geneAlterations.map(_.items).exists(_.nonEmpty),
         criteria.responses.exists(_.nonEmpty),
@@ -39,7 +39,7 @@ private trait MTBQueryCriteriaOps
 
     def intersect(other: MTBQueryCriteria): MTBQueryCriteria =
       MTBQueryCriteria(
-        criteria.diagnoses.map(_ intersect other.getDiagnoses),
+        criteria.tumorEntities.map(_ intersect other.getTumorEntities),
         criteria.tumorMorphologies.map(_ intersect other.getTumorMorphologies),
         criteria.geneAlterations.map(
           alterations => GeneAlterations(
@@ -226,7 +226,7 @@ private trait MTBQueryCriteriaOps
             val checks = new Stack[Boolean]
 
             val diagnosisMatches =
-              queryCriteria.diagnoses
+              queryCriteria.tumorEntities
                 .collect {
                    case criteria if criteria.nonEmpty =>
                      (criteria intersect record.diagnoses.map(_.code).toList.toSet)
