@@ -82,8 +82,8 @@ private trait MTBQueryCriteriaOps
 
     val alterationsByGene =
       ngsReports
-        .flatMap(_.variants.flatMap(_.geneAlterations))
-        .groupBy(_.gene.code)
+        .flatMap(_.variants.flatMap(variant => variant.geneAlterations.map(variant.id -> _)))
+        .groupBy(_._2.gene.code)
 
 
     val fulfilled: GeneAlterationCriteria => Boolean = {

@@ -3,6 +3,7 @@ package de.dnpm.dip.mtb.query.impl
 
 import de.dnpm.dip.util.Displays
 import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.model.Id
 import de.dnpm.dip.mtb.model.{
   CNV,
   SNV,
@@ -20,20 +21,19 @@ import de.dnpm.dip.mtb.query.api.{
 }
 
 
-
 object GeneAlterationExtensions
 {
 
   implicit val displays: Displays[GeneAlteration] =
     Displays[GeneAlteration]{ 
 
-      case GeneAlteration.SNV(_,gene,proteinChange) =>
+      case GeneAlteration.SNV(gene,proteinChange) =>
         s"${gene.display.getOrElse(gene.code)} ${proteinChange.map(_.value).getOrElse("SNV")}"
 
-      case GeneAlteration.CNV(_,gene,typ) =>
+      case GeneAlteration.CNV(gene,typ) =>
         s"${gene.display.getOrElse(gene.code)} $typ"
 
-      case GeneAlteration.Fusion(_,gene,partner) =>
+      case GeneAlteration.Fusion(gene,partner) =>
         s"${Set(gene,partner).flatMap(_.display).mkString("-")} Fusion"
 
       case GeneAlteration.Unspecified(gene) =>
@@ -42,18 +42,37 @@ object GeneAlterationExtensions
     }
 
 
-  implicit class GeneAlterationSupportingOps(val alteration: GeneAlteration) extends AnyVal 
+  type LinkedGeneAlteration = (Id[Variant],GeneAlteration)
+
+
+  implicit def toAlteration(linkedAlteration: (Id[Variant],GeneAlteration)): GeneAlteration =
+    linkedAlteration._2
+
+
+  implicit class GeneAlterationSupportingOps(val linkedAlteration: (Id[Variant],GeneAlteration)) extends AnyVal 
   {
-    // Check whether the alteration supports a therapy recommendation,
-    // i.e. if the variant it represents/belongs to is referenced from a MTBMedicationRecommendation
+    /**
+     * Check whether the alteration supports a therapy recommendation, i.e.
+     * - if the variant it belongs to is referenced from a MTBMedicationRecommendation
+     * - if the gene is specified on the GeneAlterationReference, ensure it matches the GeneAlteration
+     * The latter is relevant esp. for CNVs, which can affect mutliple genes, (e.g. Genes A, B, ..., H),
+     * but the supporting GeneAlterationReference might refenrece specifically Gene B as the one relevant for the recommendation.
+     */
     def isSupporting(
       implicit recommendations: Seq[MTBMedicationRecommendation]
-    ): Boolean =
+    ): Boolean = {
+
+      val (variantId,alteration) = linkedAlteration
+
       recommendations.exists(
         _.supportingVariants.exists(
-          _.exists(_.variant.id == alteration.variant)
+          _.exists(ref => 
+            ref.variant.id == variantId &&
+            ref.gene.fold(true)(_ == alteration.gene)
+          )
         )
       )
+    }
 
   }
 
@@ -75,27 +94,23 @@ object GeneAlterationExtensions
     def geneAlterations: Iterable[GeneAlteration] = 
       variant match {
         case snv: SNV =>
-          Some(
-            GeneAlteration.SNV(variant.id,snv.gene,snv.proteinChange)
-          )
+          Some(GeneAlteration.SNV(snv.gene,snv.proteinChange))
           
         case cnv: CNV =>
           cnv.reportedAffectedGenes
             .getOrElse(Set.empty)
-            .map(
-              GeneAlteration.CNV(variant.id,_,cnvTypeMapping(cnv.`type`))
-            )
+            .map(GeneAlteration.CNV(_,cnvTypeMapping(cnv.`type`)))
 
         case dna: DNAFusion =>
           List(
-            GeneAlteration.Fusion(variant.id,dna.fusionPartner5prime.gene,dna.fusionPartner3prime.gene),
-            GeneAlteration.Fusion(variant.id,dna.fusionPartner3prime.gene,dna.fusionPartner5prime.gene)
+            GeneAlteration.Fusion(dna.fusionPartner5prime.gene,dna.fusionPartner3prime.gene),
+            GeneAlteration.Fusion(dna.fusionPartner3prime.gene,dna.fusionPartner5prime.gene)
           )
 
         case rna: RNAFusion =>
           List(
-            GeneAlteration.Fusion(variant.id,rna.fusionPartner5prime.gene,rna.fusionPartner3prime.gene),
-            GeneAlteration.Fusion(variant.id,rna.fusionPartner3prime.gene,rna.fusionPartner5prime.gene)
+            GeneAlteration.Fusion(rna.fusionPartner5prime.gene,rna.fusionPartner3prime.gene),
+            GeneAlteration.Fusion(rna.fusionPartner3prime.gene,rna.fusionPartner5prime.gene)
           )
 
         case _: RNASeq => None
@@ -123,7 +138,7 @@ object GeneAlterationExtensions
         case cnv: GeneAlteration.CNV =>
           Seq(criteria.gene.code == cnv.gene.code) :++ 
             criteria.alteration.map {
-              case crit: GeneAlterationCriteria.OnCNV => crit.copyNumberType.fold(true)(_.collect(cnvTypeMapping) contains cnv.`type`)
+              case crit: GeneAlterationCriteria.OnCNV => crit.copyNumberType.fold(true)(_.collect(cnvTypeMapping) contains cnv.copyNumberType)
 
               case _ => false // Wrong alteration type
             }

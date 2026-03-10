@@ -475,8 +475,8 @@ trait MTBReportingOps extends ReportingOps
                     acc4.updatedWith(
                       (entity,alteration)
                     ){
-                      case Some(n -> supporting) => Some(n+1 -> (supporting || alteration.isSupporting))
-                      case None                  => Some(1   -> alteration.isSupporting)
+                      case Some(n -> supporting) => Some(n+1 -> (supporting || (variant.id,alteration).isSupporting))
+                      case None                  => Some(1   -> (variant.id,alteration).isSupporting)
                     }
                 }
             }

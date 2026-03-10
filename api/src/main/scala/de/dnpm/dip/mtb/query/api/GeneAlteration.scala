@@ -5,12 +5,11 @@ import de.dnpm.dip.coding.{
   Code,
   Coding
 }
-import de.dnpm.dip.model.Id
-import de.dnpm.dip.mtb.model.Variant
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.hgvs.HGVS
 import play.api.libs.json.{
   Json,
+  JsObject,
   Format,
   OWrites
 }
@@ -18,36 +17,7 @@ import play.api.libs.json.{
 
 sealed trait GeneAlteration
 {
-  val variant: Id[Variant]
   val gene: Coding[HGNC]
-
-
-  import GeneAlteration.{SNV,CNV,Fusion,Unspecified}
-
-  /**
-   * Override equals to exclude "variant" from comparison: This is used for internal reference only,
-   * but 2 GeneAlteration instance of the same type should be equal if their actual attributes are equal,
-   * irrespective of the Variant object they stem from
-   */ 
-  override def equals(that: Any): Boolean =
-    (this,that) match {
-      case (left: SNV,right: SNV)                  => (left.gene,left.proteinChange) == (right.gene,right.proteinChange)
-      case (left: CNV,right: CNV)                  => (left.gene,left.`type`) == (right.gene,right.`type`)
-      case (left: Fusion,right: Fusion)            => (left.gene,left.partner) == (right.gene,right.partner)
-      case (left: Unspecified, right: Unspecified) => left.gene == right.gene
-      case _ => false
-    }
-
-  /**
-   * Override hashCode to exclude "variant" (see above for equals)
-   */ 
-  override def hashCode: Int =
-    this match {
-      case SNV(_,gene,proteinChange) => (gene,proteinChange).hashCode
-      case CNV(_,gene,typ) => (gene,typ).hashCode 
-      case Fusion(_,gene,partner) => (gene,partner).hashCode
-      case Unspecified(gene) => gene.hashCode
-    }
 }
 
 
@@ -66,7 +36,6 @@ object GeneAlteration
 
   final case class SNV
   (
-    variant: Id[Variant],
     gene: Coding[HGNC],
     proteinChange: Option[Code[HGVS]]
   )
@@ -74,9 +43,8 @@ object GeneAlteration
 
   final case class CNV
   (
-    variant: Id[Variant],
     gene: Coding[HGNC],
-    `type`: CNV.Type.Value
+    copyNumberType: CNV.Type.Value
   )
   extends GeneAlteration
 
@@ -92,7 +60,6 @@ object GeneAlteration
 
   final case class Fusion
   (
-    variant: Id[Variant],
     gene: Coding[HGNC],
     partner: Coding[HGNC]
   )
@@ -101,48 +68,27 @@ object GeneAlteration
 
 
   // "Dummy" alteration type for use as base/parent of other alteration types
-  final case class Unspecified
-  (
-    gene: Coding[HGNC]
-  )
-  extends GeneAlteration
-  {
-    val variant = Id("") // Dummy
-  }
+  final case class Unspecified(gene: Coding[HGNC]) extends GeneAlteration
 
   def apply(gene: Coding[HGNC]): GeneAlteration = Unspecified(gene)
 
 
   /**
-   * Custom OWrites required:
-   * - append "type" attribute
-   * - ignore GeneAlteration.variant because only internally relevant
+   * Custom OWrites to append "type" attribute
    */ 
   implicit val writesSNV: OWrites[SNV] = 
-    OWrites(
-      snv => Json.obj(
-        "type" -> Type.SNV,
-        "gene" -> snv.gene,
-        "proteinChange" -> snv.proteinChange
-      )
+    Json.writes[SNV].transform(
+      (json: JsObject) => json +  ("type" -> Json.toJson(Type.SNV))
     )
 
   implicit val writesCNV: OWrites[CNV] =
-    OWrites(
-      cnv => Json.obj(
-        "type" -> Type.CNV,
-        "gene" -> cnv.gene,
-        "copyNumberType" -> cnv.`type`
-      )
+    Json.writes[CNV].transform(
+      (json: JsObject) => json +  ("type" -> Json.toJson(Type.CNV))
     )
 
   implicit val writesFusion: OWrites[Fusion] =
-    OWrites(
-      fusion => Json.obj(
-        "type" -> Type.Fusion,
-        "gene" -> fusion.gene,
-        "partner" -> fusion.partner
-      )
+    Json.writes[Fusion].transform(
+      (json: JsObject) => json +  ("type" -> Json.toJson(Type.Fusion))
     )
 
   implicit val writes: OWrites[GeneAlteration] =
