@@ -85,8 +85,8 @@ object GeneAlterationCriteria
   )
   extends OnVariant
 
-  implicit val formatGeneAlterationType: Format[GeneAlteration.Type.Value] =
-    Json.formatEnum(GeneAlteration.Type)
+//  implicit val formatGeneAlterationType: Format[GeneAlteration.Type.Value] =
+//    Json.formatEnum(GeneAlteration.Type)
 
   implicit val formatOnSNV: OFormat[OnSNV] =
     Json.format[OnSNV]

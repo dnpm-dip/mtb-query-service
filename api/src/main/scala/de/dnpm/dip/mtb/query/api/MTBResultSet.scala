@@ -126,7 +126,7 @@ object MTBResultSet
     count: Int,
     orr: Int,  // Overall Response Rate: 0 - 100 %
     responseDistribution: Distribution[RECIST.Value],
-    meanDuration: Double,
+    meanDuration: Double,  // In weeks
   )
 
 
