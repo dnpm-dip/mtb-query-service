@@ -33,7 +33,7 @@ private trait MTBQueryCriteriaOps
         criteria.responses.exists(_.nonEmpty),
         criteria.medication.map(_.items).exists(_.nonEmpty)
       )
-      .exists(_ == true)
+      .contains(true)
 
     def isEmpty: Boolean = !criteria.nonEmpty
 
