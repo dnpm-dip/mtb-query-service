@@ -88,7 +88,11 @@ object VariantExtensions
 
       import de.dnpm.dip.coding.hgvs.HGVS.extensions._
 
-      (criteria.alteration,variant) match {
+      // If the gene is specified to be wild-type, the variant mustn't affect it
+      if (criteria.wildtype contains true) !variant.affectedGenes.contains(criteria.gene)
+
+      // Else check whether the alteration criteria match the variant, if specified
+      else (criteria.alteration,variant) match {
 
         case (None,anyVariant) => anyVariant.affectedGenes.contains(criteria.gene) 
 
