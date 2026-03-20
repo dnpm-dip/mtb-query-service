@@ -80,6 +80,7 @@ private trait MTBQueryCriteriaOps
   
     import GeneAlterationExtensions._
 
+/*    
     val alterationsByGene =
       ngsReports
         .flatMap(_.variants.flatMap(variant => variant.geneAlterations.map(variant.id -> _)))
@@ -111,6 +112,23 @@ private trait MTBQueryCriteriaOps
             .getOrElse(false) // If undefined, default to not fulfilled
         }
     }
+*/
+
+    val variants = ngsReports.flatMap(_.variants)
+
+    val fulfilled: GeneAlterationCriteria => Boolean = 
+      criterion => variants.exists(
+        variant => variant.matches(criterion) && (
+          criterion.supporting match {
+            // If the alteration is specifically supposed to be
+            // supporting a therapy recommendation, check this in addition
+            case Some(true) => variant.isSupporting
+
+            // If unspecified, no need to check for occurrence as supportingVariant 
+            case _ => true
+          }
+        )
+    )
 
     val fulfilledCriteria =
       geneAlterations.items.map(crit => Option.when(fulfilled(crit))(crit))
