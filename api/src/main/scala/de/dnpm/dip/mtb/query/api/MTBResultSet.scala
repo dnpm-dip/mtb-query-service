@@ -67,7 +67,7 @@ object MTBResultSet
   final case class TumorDiagnostics
   (
     overallDistributions: TumorDiagnostics.Distributions,
-    distributionsByVariant: Seq[Entry[DisplayLabel[GeneAlteration],TumorDiagnostics.Distributions]]
+    distributionsByVariant: Seq[Entry[GeneAlteration,TumorDiagnostics.Distributions]]
   )
 
 
@@ -96,7 +96,7 @@ object MTBResultSet
     final case class Recommendations
     (
       overallDistribution: Distribution[Set[Coding[Medications]]],
-      distributionBySupportingVariant: Seq[Entry[DisplayLabel[GeneAlteration],Distribution[Set[Coding[Medications]]]]]
+      distributionBySupportingVariant: Seq[Entry[GeneAlteration,Distribution[Set[Coding[Medications]]]]]
     )
 
     final case class Therapies

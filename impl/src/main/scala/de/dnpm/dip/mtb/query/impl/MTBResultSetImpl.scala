@@ -78,8 +78,7 @@ with MTBReportingOps
 
   override lazy val defaultFilter: MTBFilters = {
 
-    val records =
-      patientRecords(_ => true)
+    val records = patientRecords(_ => true)
 
     MTBFilters(
       PatientFilter.on(records),
@@ -129,8 +128,7 @@ with MTBReportingOps
     filter: MTBFilters
   ): TumorDiagnostics = {
 
-    val records =
-      patientRecords(filter)
+    val records = patientRecords(filter)
 
     TumorDiagnostics(
       overallDiagnosticDistributions(records),

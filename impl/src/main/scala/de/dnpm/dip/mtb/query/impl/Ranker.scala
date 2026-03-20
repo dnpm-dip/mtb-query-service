@@ -5,6 +5,16 @@ import scala.math.sqrt
 import de.dnpm.dip.mtb.query.api.Ranked
 
 
+final case class RelevanceScore(value: Double) extends AnyVal
+
+object RelevanceScore
+{
+  // Sorting by RelevanceScore should be by decreasing score value, hence .reverse
+  implicit val ordering: Ordering[RelevanceScore] =
+    Ordering[Double].on[RelevanceScore](_.value).reverse
+}
+
+
 /**
  * Abstraction to compute a relevance score (a.k.a retrieval status value)
  * for relevance ranking of T instances
@@ -71,11 +81,18 @@ object Ranker
   {
 
     implicit class RankingOps[T](val t: T) extends AnyVal
-    { 
+    {
+      def relevanceScore(implicit ranker: Ranker[T]) =
+        RelevanceScore(ranker.rank(t))
 
+      def relevanceScoreOf[U](u: T => U)(implicit ranker: Ranker[U]) =
+        RelevanceScore(ranker.rank(u(t)))
+
+      //TODO: deprecate
       def ranked(implicit ranker: Ranker[T]) =
         Ranked(t,ranker.rank(t))
 
+      //TODO: deprecate
       def rankedBy[U](u: T => U)(implicit ranker: Ranker[U]) =
         Ranked(t,ranker.rank(u(t)))
 
