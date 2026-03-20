@@ -371,6 +371,7 @@ trait MTBReportingOps extends ReportingOps
                     .getOrElse(List.empty)
                     .flatMap(_.resolveOn(variants))
                     .flatMap(_.geneAlterations)
+                    .distinct
                     
                supportingAlterations.foldLeft(acc2){ 
                   (acc3,alteration) =>

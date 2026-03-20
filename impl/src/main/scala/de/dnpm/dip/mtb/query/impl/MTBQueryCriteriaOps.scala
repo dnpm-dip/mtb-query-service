@@ -83,18 +83,16 @@ private trait MTBQueryCriteriaOps
     val variants = ngsReports.flatMap(_.variants)
 
     val fulfilled: GeneAlterationCriteria => Boolean = 
-      criterion => variants.exists(
-        variant => variant.matches(criterion) && (
-          criterion.supporting match {
+      criteria => 
+        variants.exists(
+          variant => variant.matches(criteria) && (
             // If the alteration is specifically supposed to be
             // supporting a therapy recommendation, check this in addition
-            case Some(true) => variant.isSupporting
-
+            if (criteria.supporting contains true) variant.isSupporting
             // If unspecified, no need to check for occurrence as supportingVariant 
-            case _ => true
-          }
+            else true 
+          )
         )
-    )
 
     val fulfilledCriteria =
       geneAlterations.items.map(crit => Option.when(fulfilled(crit))(crit))
