@@ -3,14 +3,16 @@ package de.dnpm.dip.mtb.query.impl
 
 import de.dnpm.dip.util.Displays
 import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.model.Id
 import de.dnpm.dip.mtb.model.{
   CNV,
-  SNV,
   DNAFusion,
+  Fusion,
   MTBMedicationRecommendation,
   RNAFusion,
   RNASeq,
+  SNV,
   Variant
 }
 import CNV.Type._
@@ -49,7 +51,7 @@ object GeneAlterationExtensions
     linkedAlteration._2
 
 
-  implicit class GeneAlterationSupportingOps(val linkedAlteration: (Id[Variant],GeneAlteration)) extends AnyVal 
+  implicit class LinkedGeneAlterationOps(val linkedAlteration: (Id[Variant],GeneAlteration)) extends AnyVal 
   {
     /**
      * Check whether the alteration supports a therapy recommendation, i.e.
@@ -88,7 +90,7 @@ object GeneAlterationExtensions
       .toMap
 
 
-  implicit class VariantGeneAlterationOps(val variant: Variant) extends AnyVal
+  implicit class VariantExtensions(val variant: Variant) extends AnyVal
   {
 
     def geneAlterations: Iterable[GeneAlteration] = 
@@ -102,24 +104,74 @@ object GeneAlterationExtensions
             .map(GeneAlteration.CNV(_,cnvTypeMapping(cnv.`type`)))
 
         case dna: DNAFusion =>
-          List(
+          Some(
             GeneAlteration.Fusion(dna.fusionPartner5prime.gene,dna.fusionPartner3prime.gene),
-            GeneAlteration.Fusion(dna.fusionPartner3prime.gene,dna.fusionPartner5prime.gene)
           )
 
         case rna: RNAFusion =>
-          List(
+          Some(
             GeneAlteration.Fusion(rna.fusionPartner5prime.gene,rna.fusionPartner3prime.gene),
-            GeneAlteration.Fusion(rna.fusionPartner3prime.gene,rna.fusionPartner5prime.gene)
           )
 
         case _: RNASeq => None
       }
 
+
+    def affectedGenes: Set[Coding[HGNC]] =
+      variant match { 
+        case snv: SNV => Set(snv.gene)
+
+        case cnv: CNV => cnv.reportedAffectedGenes.getOrElse(Set.empty)
+
+        case dna: DNAFusion => Set(dna.fusionPartner5prime.gene,dna.fusionPartner3prime.gene)
+
+        case rna: RNAFusion => Set(rna.fusionPartner5prime.gene,rna.fusionPartner3prime.gene)
+
+        case rnaSeq: RNASeq => rnaSeq.gene.toSet
+      }
+
+
+    def isSupporting(
+      implicit recommendations: Seq[MTBMedicationRecommendation]
+    ): Boolean =
+      recommendations.exists(
+        _.supportingVariants.exists(
+          _.exists(_.variant.id == variant.id)
+        )
+      )
+
+    def matches(criteria: GeneAlterationCriteria): Boolean = {
+
+      import de.dnpm.dip.coding.hgvs.HGVS.extensions._
+
+      (criteria.alteration,variant) match {
+
+        case (None,anyVariant) => anyVariant.affectedGenes.contains(criteria.gene) 
+
+        case (Some(crit: GeneAlterationCriteria.OnSNV),snv: SNV) =>
+          (criteria.gene.code == snv.gene.code) && 
+          crit.proteinChange.fold(true)(pattern => snv.proteinChange.exists(_ matches pattern)) &&
+          crit.dnaChange.fold(true)(snv.dnaChange matches _)
+        
+        case (Some(crit: GeneAlterationCriteria.OnCNV),cnv: CNV) =>
+          cnv.reportedAffectedGenes.exists(_.exists(_.code == criteria.gene.code)) &&
+          crit.copyNumberType.fold(true)(_.exists(_.code == cnv.`type`.code))
+
+        case (Some(crit: GeneAlterationCriteria.OnFusion),fusion: Fusion[_]) =>
+          val fusionGenes = fusion.affectedGenes
+
+          fusionGenes(criteria.gene) &&
+          crit.partner.fold(true)(gene => fusionGenes contains gene)
+          
+        case _ => false // Wrong alteration type
+      }
+
+    }
+
   }
 
 
-  implicit class GeneAlterationCriteriaOps(val criteria: GeneAlterationCriteria) extends BooleanRelevanceMatcher[GeneAlteration]
+  implicit class GeneAlterationCriteriaMatcher(val criteria: GeneAlterationCriteria) extends BooleanRelevanceMatcher[GeneAlteration]
   {
 
     import de.dnpm.dip.coding.hgvs.HGVS.extensions._
@@ -160,7 +212,7 @@ object GeneAlterationExtensions
 
   }
 
-
+  //TODO: Remove by refactoring raking of "diagnosticDistributionsByAlteration"
   implicit class GeneAlterationsOps(val queriedAlterations: Option[GeneAlterations]) extends AnyVal
   {
     def score(alteration: GeneAlteration): Double =
