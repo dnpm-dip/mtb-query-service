@@ -7,6 +7,7 @@ import play.api.libs.json.{
 }
 
 
+//TODO: deprecate
 final case class Ranked[T]
 (
   resource: T,

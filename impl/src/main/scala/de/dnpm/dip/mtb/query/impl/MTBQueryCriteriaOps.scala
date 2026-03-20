@@ -78,41 +78,7 @@ private trait MTBQueryCriteriaOps
     implicit recommendations: Seq[MTBMedicationRecommendation]
   ): GeneAlterations = {
   
-    import GeneAlterationExtensions._
-
-/*    
-    val alterationsByGene =
-      ngsReports
-        .flatMap(_.variants.flatMap(variant => variant.geneAlterations.map(variant.id -> _)))
-        .groupBy(_._2.gene.code)
-
-
-    val fulfilled: GeneAlterationCriteria => Boolean = {
-      criterion =>
-        // If the wildtype gene is queried for, then it shouldn't occur among the altered genes
-        if (criterion.wildtype.getOrElse(false))
-
-          !(alterationsByGene contains criterion.gene.code)
-
-        // Else check if matching alterations exist for the gene...
-        else {
-          alterationsByGene.get(criterion.gene.code)
-            .map(_ filter (criterion matches _))
-            .filter(_.nonEmpty)
-            .map( 
-              // ... and if the alteration is specifically supposed to be
-              // supporting a therapy recommendation, check this in addition
-              alterations => criterion.supporting match {
-                case Some(true) => alterations.exists(_.isSupporting)
-
-                // If unspecified, no need to check for occurrence as supportingVariant 
-                case _ => true
-              }
-            )
-            .getOrElse(false) // If undefined, default to not fulfilled
-        }
-    }
-*/
+    import VariantExtensions._
 
     val variants = ngsReports.flatMap(_.variants)
 

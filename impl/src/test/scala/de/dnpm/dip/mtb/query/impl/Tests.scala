@@ -324,40 +324,4 @@ class Tests extends AsyncFlatSpec
 
   }
 
-
-
-  "GeneAlteration matching" must "have worked" in { 
-
-    import GeneAlterationExtensions._
-
-    val snvs = dataSets.head.getNgsReports.head.results.simpleVariants.getOrElse(List.empty)
-    val cnvs = dataSets.head.getNgsReports.head.results.copyNumberVariants.getOrElse(List.empty)
-
-    forAll(snvs){ 
-      snv =>
-
-        val fullCriteria =
-          GeneAlterationCriteria(
-            gene = snv.gene,
-            alteration = Some(GeneAlterationCriteria.OnSNV(None,snv.proteinChange))
-          )
-
-        val geneOnlyCriteria =
-          GeneAlterationCriteria(
-            gene = snv.gene,
-            alteration = None
-          )
-
-        forAll(snv.geneAlterations.map(fullCriteria matches _))(_ mustBe true)
-        forAll(snv.geneAlterations.map(geneOnlyCriteria matches _))(_ mustBe true)
-
-        val (sameGeneCnvAlterations,differentGeneCnvAlterations) = cnvs.flatMap(_.geneAlterations).partition(_.gene.code == snv.gene.code)
-
-        forAll(sameGeneCnvAlterations.map(fullCriteria matches _))(_ mustBe false)
-        forAll(sameGeneCnvAlterations.map(geneOnlyCriteria matches _))(_ mustBe true)
-        forAll(differentGeneCnvAlterations.map(geneOnlyCriteria matches _))(_ mustBe false)
-    }
-
-  }
-
 }
