@@ -26,7 +26,6 @@ import de.dnpm.dip.mtb.query.api.{
   MTBQueryCriteria,
   MTBFilters,
   MTBResultSet,
-  Ranked,
   RecommendationFilter,
   TherapyFilter
 }
@@ -139,7 +138,7 @@ with MTBReportingOps
 
   override def geneAlterations(
     filter: MTBFilters
-  ): Seq[Ranked[MTBResultSet.GeneAlterationInfo]] =
+  ): Seq[MTBResultSet.GeneAlterationInfo] =
     geneAlterationInfos(
       patientRecords(filter),
       queryCriteria
@@ -190,7 +189,7 @@ with MTBReportingOps
 
   override def therapyResponses(
     filter: MTBFilters
-  ): Seq[Ranked[TherapyResponses]] =
+  ): Seq[TherapyResponses] =
     therapyResponses(
       patientRecords(filter),
       queryCriteria

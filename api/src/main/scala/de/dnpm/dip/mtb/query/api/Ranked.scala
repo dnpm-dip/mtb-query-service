@@ -7,7 +7,7 @@ import play.api.libs.json.{
 }
 
 
-//TODO: deprecate
+@deprecated("To be removed","asap")
 final case class Ranked[T]
 (
   resource: T,
@@ -15,6 +15,7 @@ final case class Ranked[T]
 )
 
 
+@deprecated("To be removed","asap")
 object Ranked
 { 
 
