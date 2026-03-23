@@ -38,9 +38,9 @@ with KaplanMeierOps[Id,Applicative[Id]]
 
   def medication(filter: MTBFilters = MTBFilters.empty): MTBResultSet.Medication
 
-  def therapyResponses(filter: MTBFilters = MTBFilters.empty): Seq[Ranked[MTBResultSet.TherapyResponses]]
+  def therapyResponses(filter: MTBFilters = MTBFilters.empty): Seq[MTBResultSet.TherapyResponses]
 
-  def geneAlterations(filter: MTBFilters = MTBFilters.empty): Seq[Ranked[MTBResultSet.GeneAlterationInfo]]
+  def geneAlterations(filter: MTBFilters = MTBFilters.empty): Seq[MTBResultSet.GeneAlterationInfo]
 
   def alteredGeneDistributions(filter: MTBFilters = MTBFilters.empty): Seq[Entry[GeneAlteration.Type.Value,Distribution[DisplayLabel[Coding[HGNC]]]]]
 

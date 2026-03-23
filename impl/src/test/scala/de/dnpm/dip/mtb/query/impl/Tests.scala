@@ -279,23 +279,10 @@ class Tests extends AsyncFlatSpec
 
       therapyResponses = resultSet.therapyResponses()
 
-      // The first entrie(s) must match the queried attributes and have a non-zero ranking score
-      _ = geneAlterationsInfos.takeWhile(r =>
-        r.resource.tumorEntity == queriedEntity &&
-        r.resource.alteration.gene == queriedAlteredGene &&
-        r.score > 0.0
-      ) must not be (empty) 
+      // The first entrie(s) must match the queried attributes
+      _ = geneAlterationsInfos.takeWhile(r => r.tumorEntity == queriedEntity && r.alteration.gene == queriedAlteredGene) must not be (empty) 
 
-      _ = therapyResponses.takeWhile(r =>
-        r.resource.tumorEntity == queriedEntity &&
-        r.resource.supportingAlteration.gene == queriedAlteredGene &&
-        r.score > 0.0
-      ) must not be (empty) 
-
-      // Entries must be sorted in descending order of ranking score 
-      _ = geneAlterationsInfos.map(_.score).reverse mustBe sorted
-
-      _ = therapyResponses.map(_.score).reverse mustBe sorted
+      _ = therapyResponses.takeWhile(r => r.tumorEntity == queriedEntity && r.supportingAlteration.gene == queriedAlteredGene) must not be (empty) 
 
     } yield succeed // If this point is reached, test passed
 

@@ -1,7 +1,6 @@
 package de.dnpm.dip.mtb.query.impl
 
 
-//import math.max
 import scala.util.chaining._
 import cats.{
   Applicative,
@@ -39,8 +38,7 @@ import de.dnpm.dip.mtb.query.api.{
   GeneAlteration,
   GeneAlterations,
   MTBResultSet,
-  MTBQueryCriteria,
-  Ranked
+  MTBQueryCriteria
 }
 
 
@@ -320,7 +318,7 @@ trait MTBReportingOps extends ReportingOps
   def therapyResponses(
     records: Seq[MTBPatientRecord],
     queryCriteria: Option[MTBQueryCriteria]
-  ): Seq[Ranked[MTBResultSet.TherapyResponses]] = {
+  ): Seq[MTBResultSet.TherapyResponses] = {
 
     implicit val ranker =
       queryCriteria.map(TherapyResponsesRanker(_))
@@ -396,18 +394,16 @@ trait MTBReportingOps extends ReportingOps
           Distribution.of(responses),
           mean(durations).getOrElse(0.0)
         )
-        .ranked
     }
     .toSeq
-    .sorted  // Reverse ordering implicit for Ranked[_]
-
+    .sortBy(_.relevanceScore)
   }
 
 
   def geneAlterationInfos(
     records: Seq[MTBPatientRecord],
     queryCriteria: Option[MTBQueryCriteria]
-  ): Seq[Ranked[MTBResultSet.GeneAlterationInfo]] = {
+  ): Seq[MTBResultSet.GeneAlterationInfo] = {
 
     implicit val ranker =
       queryCriteria.map(GeneAlterationInfoRanker(_))
@@ -453,11 +449,9 @@ trait MTBReportingOps extends ReportingOps
           n,
           supporting
         )
-        .ranked
     }
     .toSeq
-    .sorted
-  
+    .sortBy(_.relevanceScore)
   }
 
 
