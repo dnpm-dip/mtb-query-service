@@ -61,6 +61,10 @@ object VariantExtensions
       }
 
 
+    def geneAlteration(relevantGene: Coding[HGNC]): Option[GeneAlteration] = 
+      geneAlterations.find(_.gene == relevantGene)
+
+
     def affectedGenes: Set[Coding[HGNC]] =
       variant match { 
         case snv: SNV => Set(snv.gene)

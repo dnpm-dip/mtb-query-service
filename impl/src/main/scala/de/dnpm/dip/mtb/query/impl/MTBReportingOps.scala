@@ -243,9 +243,7 @@ trait MTBReportingOps extends ReportingOps
       (acc,record) =>
 
         implicit val variants =
-          record
-            .getNgsReports
-            .flatMap(_.variants)
+          record.getNgsReports.flatMap(_.variants)
 
         record
           .getCarePlans
@@ -259,9 +257,13 @@ trait MTBReportingOps extends ReportingOps
                     recommendation
                       .supportingVariants.getOrElse(List.empty)
                       .flatMap(
-                        _.variant.resolve
-                         .map(_.geneAlterations)
-                         .getOrElse(List.empty)
+                        ref => ref.variant.resolve.map(
+                          variant => ref.gene match {
+                            case Some(relevantGene) => variant.geneAlteration(relevantGene)
+                            case None               => variant.geneAlterations
+                          }
+                        )
+                        .getOrElse(List.empty)
                       )
                       .map(_ -> meds)
                 }
@@ -360,11 +362,18 @@ trait MTBReportingOps extends ReportingOps
                 val supportingAlterations =
                   recommendation.supportingVariants
                     .getOrElse(List.empty)
-                    .flatMap(_.resolveOn(variants))
-                    .flatMap(_.geneAlterations)
+                    .flatMap(
+                      ref => ref.resolveOn(variants).map(
+                        variant => ref.gene match {
+                          case Some(relevantGene) => variant.geneAlteration(relevantGene)
+                          case None               => variant.geneAlterations
+                        }
+                      )
+                      .getOrElse(List.empty)
+                    )
                     .distinct
-                    
-               supportingAlterations.foldLeft(acc2){ 
+
+                supportingAlterations.foldLeft(acc2){ 
                   (acc3,alteration) =>
                     acc3.updatedWith((entity,medications,alteration))(
                       _.map {
