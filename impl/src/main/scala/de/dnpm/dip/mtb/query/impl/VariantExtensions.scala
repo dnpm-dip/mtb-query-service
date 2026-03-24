@@ -50,13 +50,11 @@ object VariantExtensions
         case dna: DNAFusion =>
           Set(
             GeneAlteration.Fusion(dna.fusionPartner5prime.gene,dna.fusionPartner3prime.gene),
-//            GeneAlteration.Fusion(dna.fusionPartner3prime.gene,dna.fusionPartner5prime.gene)
           )
 
         case rna: RNAFusion =>
           Set(
             GeneAlteration.Fusion(rna.fusionPartner5prime.gene,rna.fusionPartner3prime.gene),
-//            GeneAlteration.Fusion(rna.fusionPartner3prime.gene,rna.fusionPartner5prime.gene)
           )
 
         case _: RNASeq => None
@@ -100,19 +98,18 @@ object VariantExtensions
         // If no alteration type is specified, just check if the variant affects the queried gene 
         case (None,_) => variant.affectedGenes contains criteria.gene
 
-        case (Some(crit: GeneAlterationCriteria.OnSNV), snv: SNV) =>
+        case (Some(GeneAlterationCriteria.OnSNV(dnaChange,proteinChange)), snv: SNV) =>
           (criteria.gene.code == snv.gene.code) && 
-          crit.proteinChange.fold(true)(pattern => snv.proteinChange.exists(_ matches pattern)) &&
-          crit.dnaChange.fold(true)(snv.dnaChange matches _)
+          proteinChange.fold(true)(pattern => snv.proteinChange.exists(_ matches pattern)) &&
+          dnaChange.fold(true)(snv.dnaChange matches _)
         
-        case (Some(crit: GeneAlterationCriteria.OnCNV), cnv: CNV) =>
+        case (Some(GeneAlterationCriteria.OnCNV(copyNumberType)), cnv: CNV) =>
           cnv.reportedAffectedGenes.exists(_.exists(_.code == criteria.gene.code)) &&
-          crit.copyNumberType.fold(true)(_.exists(_.code == cnv.`type`.code))
+          copyNumberType.fold(true)(_.exists(_.code == cnv.`type`.code))
 
-        case (Some(crit: GeneAlterationCriteria.OnFusion), fusion: Fusion[_]) =>
+        case (Some(GeneAlterationCriteria.OnFusion(partner)), fusion: Fusion[_]) =>
           val fusionGenes = fusion.affectedGenes
-          fusionGenes(criteria.gene) &&
-          crit.partner.fold(true)(gene => fusionGenes contains gene)
+          fusionGenes(criteria.gene) && partner.fold(true)(gene => fusionGenes contains gene)
           
         case _ => false // Wrong alteration type
 
