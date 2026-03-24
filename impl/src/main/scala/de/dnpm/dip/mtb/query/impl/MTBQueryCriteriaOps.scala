@@ -82,9 +82,13 @@ private trait MTBQueryCriteriaOps
 
     val variants = ngsReports.flatMap(_.variants)
 
+    lazy val alteredGenes = variants.flatMap(_.affectedGenes)
+
     val fulfilled: GeneAlterationCriteria => Boolean = 
-      criteria => 
-        variants.exists(
+      criteria =>
+        // If the gene is specified to be wild-type, no variant must affect it
+        if (criteria.wildtype contains true) !(alteredGenes contains criteria.gene)
+        else variants.exists(
           variant => variant.matches(criteria) && (
             // If the alteration is specifically supposed to be
             // supporting a therapy recommendation, check this in addition
