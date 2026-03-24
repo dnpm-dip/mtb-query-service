@@ -25,7 +25,7 @@ trait Rankers
    */
   implicit def toQueryVector(criteria: MTBQueryCriteria): Set[Any] =
     criteria.tumorEntities.getOrElse(Set.empty).map(_.code) ++
-    criteria.geneAlterations.map(toQueryVector).getOrElse(Set.empty) ++ //.map(_.items).getOrElse(Set.empty).map(_.gene.code) ++
+    criteria.geneAlterations.map(toQueryVector).getOrElse(Set.empty) ++
     criteria.medication.map(_.items).getOrElse(Set.empty).flatMap(_.display.map(_.toLowerCase)) ++
     criteria.responses.getOrElse(Set.empty).map(_.code.enumValue)
 
@@ -68,7 +68,6 @@ trait Rankers
         th.responseDistribution.elements.map(_.key)
     }
 
-  
 
 }
 
