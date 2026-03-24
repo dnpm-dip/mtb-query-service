@@ -99,7 +99,7 @@ object VariantExtensions
       else (criteria.alteration,variant) match {
 
         // If no alteration type is specified, just check if the variant affects the queried gene 
-        case (None,_) => variant.affectedGenes contains criteria.gene
+        case (None,_) => variant.geneAlterations.exists(_.gene == criteria.gene)
 
         case (Some(crit: GeneAlterationCriteria.OnSNV), snv: SNV) =>
           (criteria.gene.code == snv.gene.code) && 
