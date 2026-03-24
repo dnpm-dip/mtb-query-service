@@ -4,15 +4,7 @@ package de.dnpm.dip.mtb.query.impl
 import scala.math.sqrt
 
 
-final case class RelevanceScore(value: Double) extends AnyVal
-
-object RelevanceScore
-{
-  // Sorting by RelevanceScore should be by decreasing score value, hence .reverse
-  implicit val ordering: Ordering[RelevanceScore] =
-    Ordering[Double].on[RelevanceScore](_.value).reverse
-}
-
+//TODO: consider factoring out into separate module/library
 
 /**
  * Abstraction to compute a relevance score (a.k.a retrieval status value)
@@ -65,31 +57,41 @@ object Ranker
   }
 
   /**
-   * Partially applied function to serve as Builder of Ranker[Doc], guarding against division by zero in case 
-   * NOTE that document cannot be empty by design, only queryVector in case of empty query criteria.
+   * Partially applied function to serve as Builder of Ranker[Doc],
+   * guarding against division by zero in case in case of empty query criteria.
+   * NOTE that document cannot be empty by design, only queryVector
    *
    * @param docVector Function to map a Doc to a "bag of words" representation
    */
-  def of[Doc,Term](docVector: Doc => Set[Term]): Set[Term] => Ranker[Doc] =
+  def of[Doc,Term](docVector: Doc => Set[Term]): Set[Term] => Option[Ranker[Doc]] =
     queryVector => 
-      if (queryVector.nonEmpty) new VectorSpaceRanker[Term,Doc](queryVector,docVector)
-      else unranked[Doc]
+      Option.when(queryVector.nonEmpty)(new VectorSpaceRanker[Term,Doc](queryVector,docVector))
+
+
+  // Sorting by RelevanceScore should be by decreasing score value, hence .reverse
+  private val relevanceOrdering = Ordering[Double].reverse
 
 
   object syntax
   {
 
-    implicit class RankingOps[T](val t: T) extends AnyVal
+    implicit class SeqRankingOps[T](val ts: Seq[T]) extends AnyVal
     {
 
-      def relevanceScore(implicit ranker: Ranker[T]) =
-        RelevanceScore(ranker.rank(t))
+      def ranked(implicit ranker: Ranker[T]) =
+        ts.sortBy(ranker.rank)(relevanceOrdering)
 
-      def relevanceScoreOf[U](u: T => U)(implicit ranker: Ranker[U]) =
-        RelevanceScore(ranker.rank(u(t)))
+      def rankedBy[U](u: T => U)(implicit ranker: Ranker[U]) =
+        ts.sortBy(t => ranker.rank(u(t)))(relevanceOrdering)
+
+
+      def optRanked(implicit ranker: Option[Ranker[T]]) =
+        ranker.fold(ts)(implicit r => ts.ranked)
+
+      def optRankedBy[U](u: T => U)(implicit ranker: Option[Ranker[U]]) =
+        ranker.fold(ts)(implicit r => ts.rankedBy(u))
 
     }
-
   }
 
 }

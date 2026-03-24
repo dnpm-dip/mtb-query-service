@@ -119,9 +119,7 @@ trait MTBReportingOps extends ReportingOps
     icdo3: CodeSystemProvider[ICDO3,Id,Applicative[Id]]
   ): Seq[Entry[GeneAlteration,MTBResultSet.TumorDiagnostics.Distributions]] = {
    
-    implicit val ranker =
-      queriedAlterations.map(GeneAlterationRanker(_))
-        .getOrElse(Ranker.unranked[GeneAlteration])
+    implicit val ranker = queriedAlterations.flatMap(GeneAlterationRanker(_))
 
     records.foldLeft(
       Map.empty[
@@ -177,7 +175,7 @@ trait MTBReportingOps extends ReportingOps
       }
     }
     .toSeq
-    .sortBy(_.relevanceScoreOf(_._1))
+    .optRankedBy(_._1)
     .map {
       case (alteration,(icd10s,icdo3ms,children)) =>
         Entry(
@@ -189,7 +187,7 @@ trait MTBReportingOps extends ReportingOps
           Option.when(children.nonEmpty)(
             children
               .toSeq
-              .sortBy(_.relevanceScoreOf(_._1))
+              .optRankedBy(_._1)
               .map {
                 case (childAlteration,(chIcd10s,chIcdo3ms)) =>
                   Entry(
@@ -231,9 +229,7 @@ trait MTBReportingOps extends ReportingOps
     @annotation.unused atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
   ): Seq[Entry[GeneAlteration,Distribution[Set[Coding[Medications]]]]] = {
 
-    implicit val ranker =
-      queriedAlterations.map(GeneAlterationRanker(_))
-        .getOrElse(Ranker.unranked[GeneAlteration])
+    implicit val ranker = queriedAlterations.flatMap(GeneAlterationRanker(_))
 
     records.foldLeft(
       Map.empty[
@@ -289,7 +285,7 @@ trait MTBReportingOps extends ReportingOps
           }
     }
     .toSeq
-    .sortBy(_.relevanceScoreOf(_._1))
+    .optRankedBy(_._1)
     .map { 
       case (baseAlteration,(meds,children)) =>
         Entry(
@@ -298,7 +294,7 @@ trait MTBReportingOps extends ReportingOps
           Option.when(children.nonEmpty)(
             children
               .toSeq
-              .sortBy(_.relevanceScoreOf(_._1))
+              .optRankedBy(_._1)
               .map { 
                 case (alteration,chMeds) => Entry(alteration,Distribution.of(chMeds))
               }
@@ -320,10 +316,7 @@ trait MTBReportingOps extends ReportingOps
     queryCriteria: Option[MTBQueryCriteria]
   ): Seq[MTBResultSet.TherapyResponses] = {
 
-    implicit val ranker =
-      queryCriteria.map(TherapyResponsesRanker(_))
-        .getOrElse(Ranker.unranked[MTBResultSet.TherapyResponses])
-
+    implicit val ranker = queryCriteria.flatMap(TherapyResponsesRanker(_))
 
     records.foldLeft(
       Map.empty[
@@ -396,7 +389,7 @@ trait MTBReportingOps extends ReportingOps
         )
     }
     .toSeq
-    .sortBy(_.relevanceScore)
+    .optRanked
   }
 
 
@@ -405,9 +398,7 @@ trait MTBReportingOps extends ReportingOps
     queryCriteria: Option[MTBQueryCriteria]
   ): Seq[MTBResultSet.GeneAlterationInfo] = {
 
-    implicit val ranker =
-      queryCriteria.map(GeneAlterationInfoRanker(_))
-        .getOrElse(Ranker.unranked[MTBResultSet.GeneAlterationInfo])
+    implicit val ranker = queryCriteria.flatMap(GeneAlterationInfoRanker(_))
 
     records.foldLeft(
       Map.empty[(Coding[ICD10GM],GeneAlteration),(Int,Boolean)]
@@ -451,7 +442,7 @@ trait MTBReportingOps extends ReportingOps
         )
     }
     .toSeq
-    .sortBy(_.relevanceScore)
+    .optRanked
   }
 
 
