@@ -48,13 +48,15 @@ object VariantExtensions
             .map(GeneAlteration.CNV(_,cnvTypeMapping(cnv.`type`)))
 
         case dna: DNAFusion =>
-          Some(
+          Set(
             GeneAlteration.Fusion(dna.fusionPartner5prime.gene,dna.fusionPartner3prime.gene),
+//            GeneAlteration.Fusion(dna.fusionPartner3prime.gene,dna.fusionPartner5prime.gene)
           )
 
         case rna: RNAFusion =>
-          Some(
+          Set(
             GeneAlteration.Fusion(rna.fusionPartner5prime.gene,rna.fusionPartner3prime.gene),
+//            GeneAlteration.Fusion(rna.fusionPartner3prime.gene,rna.fusionPartner5prime.gene)
           )
 
         case _: RNASeq => None
@@ -92,14 +94,11 @@ object VariantExtensions
 
       import de.dnpm.dip.coding.hgvs.HGVS.extensions._
 
-      // If the gene is specified to be wild-type, the variant mustn't affect it
-      if (criteria.wildtype contains true) !(variant.affectedGenes contains criteria.gene)
-
-      // Else check whether the alteration criteria match the variant, if specified
-      else (criteria.alteration,variant) match {
+      // check whether the alteration criteria match the variant, if specified
+      (criteria.alteration,variant) match {
 
         // If no alteration type is specified, just check if the variant affects the queried gene 
-        case (None,_) => variant.geneAlterations.exists(_.gene == criteria.gene)
+        case (None,_) => variant.affectedGenes contains criteria.gene
 
         case (Some(crit: GeneAlterationCriteria.OnSNV), snv: SNV) =>
           (criteria.gene.code == snv.gene.code) && 
@@ -116,6 +115,7 @@ object VariantExtensions
           crit.partner.fold(true)(gene => fusionGenes contains gene)
           
         case _ => false // Wrong alteration type
+
       }
 
     }
