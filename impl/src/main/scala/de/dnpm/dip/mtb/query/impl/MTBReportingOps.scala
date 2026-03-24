@@ -311,7 +311,9 @@ trait MTBReportingOps extends ReportingOps
   private val PositiveResponse = Set(RECIST.CR,RECIST.PR) 
 
   private val ORR: Seq[RECIST.Value] => Int =
-    responses => ((responses count PositiveResponse).toDouble/responses.size * 100).toInt
+    responses =>
+      if (responses.nonEmpty) ((responses count PositiveResponse).toDouble/responses.size * 100).toInt
+      else 0
 
   def therapyResponses(
     records: Seq[MTBPatientRecord],
