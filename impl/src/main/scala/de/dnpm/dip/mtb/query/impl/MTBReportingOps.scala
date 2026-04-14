@@ -58,7 +58,8 @@ trait MTBReportingOps extends ReportingOps
     records: Seq[MTBPatientRecord]
   )(
     implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
-  ): (Distribution[Set[Coding[Medications]]],Seq[Entry[Set[Coding[Medications]],Double]]) = {
+  ): (Distribution[Set[Coding[Medications]]],Seq[Entry[Set[Coding[Medications]],Seq[Entry[Set[Coding[Medications]],Double]]]]) = {
+//  ): (Distribution[Set[Coding[Medications]]],Seq[Entry[Set[Coding[Medications]],Double]]) = {
 
     val therapies =
       records
@@ -74,6 +75,30 @@ trait MTBReportingOps extends ReportingOps
 
     val meanDurations =
       therapies
+        .groupBy(_.medication.get) // first group therapies by medication (i.e. substances: ATC level 5 entries)...
+        .groupBy {                 // then group again by medication group/class (ATC level 4 entries)
+          case (meds,_) => meds.map(coding => coding.currentGroup.getOrElse(coding))
+        }
+        .map {
+          case (medicationGroups,therapiesByMedication) =>
+            Entry(
+              medicationGroups,
+              therapiesByMedication.map {
+                case (meds,ths) =>
+                  Entry(
+                    meds,
+                    ths.flatMap(_.period.flatMap(_.duration(Weeks).map(_.value)))
+                      .pipe(mean(_).getOrElse(0.0))
+                  )
+              }
+              .toSeq
+            )
+        }
+        .toSeq
+
+/*
+    val meanDurations =
+      therapies
         .groupBy(_.medication.get)
         .map {
           case (meds,ths) =>
@@ -84,7 +109,7 @@ trait MTBReportingOps extends ReportingOps
             )
         }
         .toSeq
-
+*/
     therapyDistribution -> meanDurations
 
   }
@@ -407,12 +432,14 @@ trait MTBReportingOps extends ReportingOps
   def geneAlterationInfos(
     records: Seq[MTBPatientRecord],
     queryCriteria: Option[MTBQueryCriteria]
+  )(
+    implicit icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]]
   ): Seq[MTBResultSet.GeneAlterationInfo] = {
 
     implicit val ranker = queryCriteria.flatMap(GeneAlterationInfoRanker(_))
 
     records.foldLeft(
-      Map.empty[(Coding[ICD10GM],GeneAlteration),(Int,Boolean)]
+      Map.empty[(Coding[ICD10GM],GeneAlteration),(Set[Coding[ICD10GM]],Int,Boolean)]
     ){
       (acc,record) =>
 
@@ -423,37 +450,38 @@ trait MTBReportingOps extends ReportingOps
         record.getNgsReports.foldLeft(acc){
           (acc2,report) =>
 
-            val entity =
+            val entity: Coding[ICD10GM] =
               report.specimen.resolve
                 .flatMap(_.diagnosis.resolve)
                 .get  // safe here, as referential integrity is checked upon import
                 .code
 
+            // Resolve each entity code (ICD-10) to its parent category, e.g. C71.1 -> C71      
+            val entityCategory = entity.parentOfKind(Category).getOrElse(entity)
+
             report.variants.foldLeft(acc2){
               (acc3,variant) =>
                 variant.geneAlterations.foldLeft(acc3){
-                  (acc4,alteration) =>
-                    acc4.updatedWith(
-                      (entity,alteration)
-                    ){
-                      case Some(n -> supporting) => Some(n+1 -> (supporting || (variant.id,alteration).isSupporting))
-                      case None                  => Some(1   -> (variant.id,alteration).isSupporting)
-                    }
+
+                  // Accumulate by "entityCategory" as key part, but keep track of
+                  // the original occurring entity code in Set "entities" for use below in relevance ranking
+                  (acc4,alteration) => acc4.updatedWith(
+                    (entityCategory,alteration)
+                  ){
+                    case Some((entities,n,supporting)) => Some((entities + entity, n+1, supporting || (variant.id,alteration).isSupporting))
+                    case None                          => Some((Set(entity), 1, (variant.id,alteration).isSupporting))
+                  }
                 }
             }
         }
     }
     .map { 
-      case ((entity,alteration),(n,supporting)) =>
-        MTBResultSet.GeneAlterationInfo(
-          entity,
-          alteration,
-          n,
-          supporting
-        )
+      case ((entity,alteration),(entities,n,supporting)) =>
+        MTBResultSet.GeneAlterationInfo(entity,alteration,n,supporting) -> entities
     }
     .toSeq
     .optRanked
+    .map(_._1) // Discard the Set[Coding[ICD10GM]] of original entity codes used in ranking
   }
 
 

@@ -8,12 +8,19 @@ import org.scalatest.EitherValues._
 import org.scalatest.Inspectors._
 import scala.util.Random
 import scala.concurrent.Future
+import cats.Applicative
 import de.dnpm.dip.model.{
   Gender,
   Site
 }
-import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.{
+  Coding,
+  CodeSystemProvider
+}
 import de.dnpm.dip.coding.atc.ATC
+import de.dnpm.dip.coding.icd.ICD10GM
+import de.dnpm.dip.coding.icd.ClassKinds.Category
+import de.dnpm.dip.coding.icd.ICD.extensions._
 import de.dnpm.dip.mtb.query.api._
 import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.mtb.model.Completers._
@@ -46,6 +53,10 @@ class Tests extends AsyncFlatSpec
 
   implicit val querier: Querier = Querier("Dummy-Querier-ID")
 
+  implicit lazy val icd10gm: CodeSystemProvider[ICD10GM,cats.Id,Applicative[cats.Id]] =
+    ICD10GM.Catalogs
+      .getInstance[cats.Id]
+      .get
  
   val serviceTry = MTBQueryService.getInstance
 
@@ -77,9 +88,7 @@ class Tests extends AsyncFlatSpec
             case th if th.medication.isDefined =>
               MedicationCriteria(
                 Some(LogicalOperator.And),
-                th.medication
-                  .get
-                  .map(_.asInstanceOf[Coding[ATC]]),
+                th.medication.get.map(_.asInstanceOf[Coding[ATC]]),
                 Some(Set(Coding(MedicationUsage.Used)))
              )
           }
@@ -246,6 +255,9 @@ class Tests extends AsyncFlatSpec
 
     val queriedEntity = record.diagnoses.head.code
 
+    // Resolve the ICD-10 catgeory of the entity code
+    val queriedEntityCategory = queriedEntity.parentOfKind(Category).getOrElse(queriedEntity)
+
     val queriedAlteredGene =
       record.getCarePlans(1)
         .medicationRecommendations.get.head
@@ -254,7 +266,7 @@ class Tests extends AsyncFlatSpec
 
     val queryCriteria =
       MTBQueryCriteria(
-        tumorEntities = Some(Set(queriedEntity)),
+        tumorEntities = Some(Set(queriedEntityCategory)),
         geneAlterations = Some(
           GeneAlterations(
             Set(
@@ -280,7 +292,7 @@ class Tests extends AsyncFlatSpec
       therapyResponses = resultSet.therapyResponses()
 
       // The first entrie(s) must match the queried attributes
-      _ = geneAlterationsInfos.takeWhile(r => r.tumorEntity == queriedEntity && r.alteration.gene == queriedAlteredGene) must not be (empty) 
+      _ = geneAlterationsInfos.takeWhile(r => r.tumorEntity == queriedEntityCategory && r.alteration.gene == queriedAlteredGene) must not be (empty) 
 
       _ = therapyResponses.takeWhile(r => r.tumorEntity == queriedEntity && r.supportingAlteration.gene == queriedAlteredGene) must not be (empty) 
 
