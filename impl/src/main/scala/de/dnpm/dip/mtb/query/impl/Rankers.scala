@@ -10,6 +10,8 @@ import de.dnpm.dip.mtb.query.api.MTBResultSet.{
   GeneAlterationInfo,
   TherapyResponses
 }
+import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.icd.ICD10GM
 
 
 trait Rankers
@@ -17,6 +19,10 @@ trait Rankers
 
   implicit def toQueryVector(geneAlterations: GeneAlterations): Set[Any] =
     geneAlterations.items.map(_.gene.code)
+
+
+//  implicit val icd10gm: CodeSystemProvider[ICD10GM,cats.Id,Applicative[cats.Id]]
+
 
   /**
    * Convert MTBQueryCriteria into a "bag of words" representation for relevance ranking
@@ -44,15 +50,17 @@ trait Rankers
 
   /**
    * Converter of GeneAlterationInfo object into a "bag of words" representation for relevance ranking
+   *
+   * NOTE: The associated Set[Coding[ICD10GM]] contains the original ICD-10 codes
+   * which occurred, but were resolved to the parent category code in GeneAlterationInfo,
+   * e.g. GeneAlterationInfo(C71,...), Set(C71.1, C71.2)
    */
   lazy val GeneAlterationInfoRanker =
-    Ranker.of[GeneAlterationInfo,Any]{
-      case GeneAlterationInfo(entity,alteration,_,_) =>
-        Set(
-          entity.code,
-          alteration.gene.code
-        )
+    Ranker.of[(GeneAlterationInfo,Set[Coding[ICD10GM]]),Any]{
+      case GeneAlterationInfo(entity,alteration,_,_) -> entities =>
+        entities.map[Any](_.code) + entity.code + alteration.gene.code
     }
+
 
   /**
    * Converter of TherapyResponses object into a "bag of words" representation for relevance ranking
