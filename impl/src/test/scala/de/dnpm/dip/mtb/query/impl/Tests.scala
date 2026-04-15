@@ -262,7 +262,7 @@ class Tests extends AsyncFlatSpec
       record.getCarePlans(1)
         .medicationRecommendations.get.head
         .supportingVariants.get.head
-        .gene.get
+        .gene.get    
 
     val queryCriteria =
       MTBQueryCriteria(
@@ -291,9 +291,12 @@ class Tests extends AsyncFlatSpec
 
       therapyResponses = resultSet.therapyResponses()
 
-      // The first entrie(s) must match the queried attributes
+      // The first entrie(s) must match the queried attributes:
+
+      // Here, check for identity with queriedEntityCategory because in GeneAlterationInfos, ICD-10 codes are resolved to their parent category
       _ = geneAlterationsInfos.takeWhile(r => r.tumorEntity == queriedEntityCategory && r.alteration.gene == queriedAlteredGene) must not be (empty) 
 
+      // But here, compare explicitly with queriedEntity, because ICD-10 codes are retained "as is" in TherapyResponses
       _ = therapyResponses.takeWhile(r => r.tumorEntity == queriedEntity && r.supportingAlteration.gene == queriedAlteredGene) must not be (empty) 
 
     } yield succeed // If this point is reached, test passed
