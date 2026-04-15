@@ -1,0 +1,369 @@
+/*
+package de.dnpm.dip.mtb.query.impl
+
+
+import scala.util.chaining._
+import cats.{
+  Applicative,
+  Id
+}
+import de.dnpm.dip.util.DisplayLabel
+import de.dnpm.dip.coding.{
+  Coding,
+  CodeSystemProvider
+}
+import de.dnpm.dip.coding.atc.ATC
+import de.dnpm.dip.coding.hgnc.HGNC
+import de.dnpm.dip.coding.icd.{
+  ClassKinds,
+  ICD,
+  ICD10GM,
+  ICDO3
+}
+import ClassKinds._
+import de.dnpm.dip.model.{
+  Medications,
+}
+import de.dnpm.dip.model.UnitOfTime.Weeks
+import de.dnpm.dip.service.{
+  Distribution,
+  Entry
+}
+import de.dnpm.dip.service.query.ReportingOps
+import de.dnpm.dip.mtb.model.{
+  MTBPatientRecord,
+  MTBMedicationRecommendation,
+  RECIST,
+}
+import de.dnpm.dip.mtb.query.api.{
+  GeneAlteration,
+  GeneAlterations,
+  MTBResultSet,
+  MTBQueryCriteria
+}
+
+
+// Reporting Summaries/Evaluations (Draft)
+
+import de.dnpm.dip.mtb.query.api.{
+  MTBReport,
+  MTBReportingCriteria
+}
+
+object ReportingExtensions
+{
+  implicit class CarePlanOps(val cp: MTBCarePlan) extends AnyVal
+  {
+    def hasMedicationRecommendations =
+      cp.medicationRecommendations.exists(_.nonEmpty)
+
+    def hasStudyEnrollmentRecommendations =
+      cp.studyEnrollmentRecommendations.exists(_.nonEmpty)
+
+    def hasRecommendations =
+      hasMedicationRecommendations || hasStudyEnrollmentRecommendations
+
+    def getMedicationRecommendations =
+      cp.medicationRecommendations.getOrElse(List.empty)
+
+    def getStudyEnrollmentRecommendations =
+      cp.studyEnrollmentRecommendations.getOrElse(List.empty)
+  }
+
+
+  implicit class PatientRecordOps(val record: MTBPatientRecord) extends AnyVal {
+
+     import scala.language.reflectiveCalls
+     
+     implicit def inReportingPeriod[T <: { def issuedOn: LocalDate}](
+       period: Period[LocalDate]
+     ): T => Boolean =
+       t => period contains t.issuedOn
+
+
+    def trimmed(reportingPeriod: Period[LocalDate]): MTBPatientRecord =
+      record.copy(
+        ngsReports = record.ngsReports.map(_ filter reportingPeriod),
+        carePlans = record.carePlans.map(_ filter reportingPeriod),
+      )
+  }
+
+}
+
+
+trait MTBReportCompiler extends MTBReportingOps
+{
+
+  import MTBReport._
+  import ReportingExtensions._
+
+  def apply(
+    seq: Seq[Snapshot[MTBPatientRecord]],
+    criteria: MTBReportingCriteria
+  )(
+    implicit
+    atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
+    kaplanMeier: KaplanMeierModule[cats.Id]
+  ): MTBReport = {
+
+    val snapshots =
+      seq.map(
+        snp => snp.copy(
+          data = snp.data.trimmed(criteria.period)
+        )
+      )
+
+    val cohort =
+      snapshots.map(_.data)
+
+    MTBReport(
+      criteria,
+      demographics(cohort.map(_.patient)),
+      Distribution.of(cohort.flatMap(_.diagnoses.toList).map(_.code)),
+      processStepDurations(cohort),
+      recommendations(cohort),
+      claimResponses(cohort),
+      followUp(snapshots),
+      Distribution.of(
+        cohort.flatMap(_.getNgsReports)
+          .map(_.`type`)
+      )
+    )
+  }
+
+  private def durations(
+    seq: Seq[Long],
+    timeUnit: UnitOfTime
+  ): Option[Durations] =
+    for {
+      mean <- mean(seq)
+      median <- median(seq)
+    } yield Durations(
+      Duration(mean,timeUnit),
+      Duration(median,timeUnit),
+    )
+
+
+  private def demographics(patients: Seq[Patient]): Demographics = {
+
+    val ages =
+      patients.map(_.age.value)
+
+    Demographics(
+      Distribution.of(patients.map(_.gender)),
+      Distribution.binned(ages,5),
+      mean(ages).map(Age(_)),
+      median(ages).map(Age(_))
+    )
+  }
+
+
+  private def processStepDurations(
+    cohort: Seq[MTBPatientRecord],
+    timeUnit: UnitOfTime = UnitOfTime.Weeks
+  ): MTBReport.ProcessStepDurations = {
+
+    import MTBReport.ProcessStep._
+
+    val chronoUnit =
+      UnitOfTime.chronoUnit(timeUnit)
+
+
+    val refToCarePlanDurations =
+      cohort.flatMap {
+        record =>
+
+          val carePlans =
+            record.getCarePlans
+              .sortBy(_.issuedOn)
+
+          record.episodesOfCare
+            .toList
+            .map(_.period.start)
+            .flatMap(
+              start => 
+                // for lack of episode reference on CarePlan,
+                // assume the first CarePlan after the episode's start date
+                // to belong to this episode
+                carePlans.find(_.issuedOn isAfter start)
+                  .map(cp => start until (cp.issuedOn,chronoUnit))
+            )
+      }
+
+    val carePlanToTherapyDurations: Seq[Long] =
+      cohort.flatMap {
+        record => 
+
+          implicit val recommendations =
+            record.getCarePlans
+              .flatMap(_.getMedicationRecommendations)
+
+          record.getSystemicTherapies
+            // Take first therapy entry
+            .map(_.history.toList.minBy(_.recordedOn)) // TODO: Consider filtering only therapies with status != NotDone
+            .flatMap {
+              th =>
+                th.basedOn
+                  .flatMap(_.resolve)
+                  .map(_.issuedOn until (th.recordedOn,chronoUnit))
+            }
+      }
+        
+
+    Seq(
+      ReferralToCarePlan -> refToCarePlanDurations,
+//      ReferralToTherapy  ->
+      CarePlanToTherapy  -> carePlanToTherapyDurations
+    )
+    .collect { 
+      case (step,ts) if ts.nonEmpty =>
+        Entry(
+          Coding(step),
+          durations(ts,timeUnit).get
+        )
+    }
+  }
+
+
+  private def recommendations(
+    cohort: Seq[MTBPatientRecord],
+  )(
+    implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
+  ): Recommendations = {
+
+    val recordsWithRecommendations =
+      cohort.filter(_.getCarePlans.exists(_.hasRecommendations))
+
+    val patientsCarePlans: Seq[(Patient,Seq[MTBCarePlan])] =
+      cohort.map(
+        record =>
+          record.patient -> record.getCarePlans.filter(cp => cp.hasRecommendations) // && reportingPeriod.contains(cp.issuedOn))
+        )
+        .filter(_._2.nonEmpty)
+
+    val (patientsInStudies,studyEnrollmentRecommendations) =
+      patientsCarePlans.collect { 
+        case (patient,carePlans) if carePlans.exists(_.hasStudyEnrollmentRecommendations) =>
+          patient -> carePlans.flatMap(_.getStudyEnrollmentRecommendations)
+      }
+      .unzip
+
+
+    implicit val diagnoses =
+      cohort.flatMap(_.diagnoses.toList)
+
+
+    Recommendations(
+      Count.of(
+        n     = recordsWithRecommendations.size,
+        total = cohort.size
+      ),
+      demographics(recordsWithRecommendations.map(_.patient)),
+      Distribution.of(
+        patientsCarePlans
+          .flatMap(_._2)
+          .flatMap(_.getMedicationRecommendations)
+          .flatMap(_.reason.flatMap(_.resolve))
+          .map(_.code)
+      ),
+      recommendationDistribution(recordsWithRecommendations),
+      recommendationsBySupportingVariant(recordsWithRecommendations),
+      Distribution.of(
+        patientsCarePlans.flatMap(_._2)
+          .flatMap(_.getMedicationRecommendations)
+          .flatMap(_.levelOfEvidence.map(_.grading))
+      ),
+      Recommendations.StudyRecommendations(
+        demographics(patientsInStudies),
+        Distribution.of(
+          studyEnrollmentRecommendations
+            .flatten
+            .flatMap(_.study.map(_.extId).toList)
+        )
+      )
+    )
+  }
+
+
+  private def claimResponses(
+    cohort: Seq[MTBPatientRecord],
+  ): Seq[Entry[Coding[ClaimResponse.Status.Value],ClaimResponses]] = {
+
+
+    implicit val claims =
+      cohort.flatMap(_.getClaims) 
+
+    implicit val recommendations =
+      cohort
+        .flatMap(_.getCarePlans)
+        .flatMap(_.getMedicationRecommendations)
+
+    val allClaimResponses =
+      cohort.flatMap(_.getClaimResponses)
+
+    val counter =
+      Count.total(allClaimResponses.size)
+
+    allClaimResponses
+      .groupBy(_.status.getOrElse(Coding(ClaimResponse.Status.Unknown)))
+      .map { 
+        case (status,crs) =>
+          Entry(
+            status,
+            ClaimResponses(
+              counter(crs.size),
+              Distribution.of(
+                crs.flatMap(_.claim.resolve)
+                  .flatMap(_.recommendation.resolve)
+                  .flatMap(_.levelOfEvidence.map(_.grading))
+              )
+            )
+          )
+      }
+      .toSeq
+
+  }
+
+
+  private def followUp(
+    snapshots: Seq[Snapshot[MTBPatientRecord]],
+  )(
+    implicit kaplanMeier: KaplanMeierModule[cats.Id]
+  ): FollowUp = {
+
+    val cohort =
+      snapshots.map(_.data)
+
+    implicit val recommendationsInPeriod =
+      cohort
+        .flatMap(_.getCarePlans)
+        .flatMap(_.getMedicationRecommendations)
+
+    val therapies =
+      cohort.flatMap(_.getSystemicTherapies.map(_.latest))
+
+    FollowUp(
+      Count.of(
+        n     = cohort.count(_.patient.dateOfDeath.isDefined),
+        total = cohort.size
+      ),
+      therapies
+        .groupBy(_.status)
+        .map { 
+          case (status,ths) =>
+            Entry(
+              status,
+              Distribution.of(
+                ths.filter(_.basedOn.flatMap(_.resolve).isDefined)
+                  .flatMap(_.statusReason)
+              )
+            )
+        }
+        .toSeq,
+      kaplanMeier.pfsRatioReport(snapshots)  
+    )  
+
+  }
+
+}
+*/
