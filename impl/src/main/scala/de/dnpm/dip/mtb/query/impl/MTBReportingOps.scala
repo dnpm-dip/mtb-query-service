@@ -59,7 +59,6 @@ trait MTBReportingOps extends ReportingOps
   )(
     implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]],
   ): (Distribution[Set[Coding[Medications]]],Seq[Entry[Set[Coding[Medications]],Seq[Entry[Set[Coding[Medications]],Double]]]]) = {
-//  ): (Distribution[Set[Coding[Medications]]],Seq[Entry[Set[Coding[Medications]],Double]]) = {
 
     val therapies =
       records
@@ -96,20 +95,6 @@ trait MTBReportingOps extends ReportingOps
         }
         .toSeq
 
-/*
-    val meanDurations =
-      therapies
-        .groupBy(_.medication.get)
-        .map {
-          case (meds,ths) =>
-            Entry(
-              meds,
-              ths.flatMap(_.period.flatMap(_.duration(Weeks).map(_.value)))
-                .pipe(mean(_).getOrElse(0.0))
-            )
-        }
-        .toSeq
-*/
     therapyDistribution -> meanDurations
 
   }
