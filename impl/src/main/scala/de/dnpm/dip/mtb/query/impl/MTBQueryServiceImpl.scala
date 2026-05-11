@@ -1,7 +1,6 @@
 package de.dnpm.dip.mtb.query.impl 
 
 
-import scala.util.Properties.envOrNone
 import scala.concurrent.Future
 import cats.{
   Id,
@@ -55,7 +54,7 @@ object MTBQueryServiceImpl extends Logging
     new BaseQueryCache[MTBQueryCriteria,MTBResultSet,MTBPatientRecord]
 
   private val federatedQueriesActive =
-    envOrNone("ACTIVE_FEDERATED_QUERY_USE_CASES")
+    sys.env.get("ACTIVE_FEDERATED_QUERY_USE_CASES")
       .map(_.split(",").map(_.trim.toUpperCase).toSet)
       .exists(_ contains "MTB")
 
