@@ -1,6 +1,7 @@
 package de.dnpm.dip.mtb.query.impl 
 
 
+import scala.util.Properties.envOrNone
 import scala.concurrent.Future
 import cats.{
   Id,
@@ -19,7 +20,7 @@ import de.dnpm.dip.service.query.{
   Query,
   QueryCache,
   BaseQueryCache,
-  PeerToPeerQuery,
+  FederatedQuery,
   PatientRecordRequest,
   LocalDB,
   PreparedQueryDB
@@ -53,6 +54,11 @@ object MTBQueryServiceImpl extends Logging
   private val cache =
     new BaseQueryCache[MTBQueryCriteria,MTBResultSet,MTBPatientRecord]
 
+  private val federatedQueriesActive =
+    envOrNone("ACTIVE_FEDERATED_QUERY_USE_CASES")
+      .map(_.split(",").map(_.trim.toUpperCase).toSet)
+      .exists(_ contains "MTB")
+
 
   private lazy val connector =
     System.getProperty(HttpConnector.Type.property,"broker") match {
@@ -61,20 +67,16 @@ object MTBQueryServiceImpl extends Logging
         HttpConnector(
           typ,
           { 
-            case _: PeerToPeerQuery[_,_] =>
+            case _: FederatedQuery[_,_] =>
               (POST, s"$baseURI/query", Map.empty)
 
-            case req: PatientRecordRequest[_] =>
-              val params =
-                Map(
-                  "querier" -> Seq(req.querier.value),
-                  "patient" -> Seq(req.patient.value)
-                ) ++ req.snapshot.map(
-                  snp => "snapshot" -> Seq(snp.toString)
-                )
-
-              (GET, s"$baseURI/patient-record", params)
-//              (POST, s"$baseURI/patient-record", Map.empty)
+            case PatientRecordRequest(_,querier,patient,snapshot) =>
+              (
+                GET, s"$baseURI/patient-record", Map(
+                  "querier" -> Seq(querier.value),
+                  "patient" -> Seq(patient.value)
+                ) ++ snapshot.map(snp => "snapshot" -> Seq(snp.toString))
+              )
           }        
         )
 
@@ -89,7 +91,8 @@ object MTBQueryServiceImpl extends Logging
       MTBPreparedQueryDB.instance,      
       MTBLocalDB.instance,
       connector,
-      cache
+      cache,
+      federatedQueriesActive
     )
 }
 
@@ -99,7 +102,8 @@ class MTBQueryServiceImpl
   val preparedQueryDB: PreparedQueryDB[Future,Monad[Future],MTBQueryCriteria,String],
   val db: LocalDB[Future,Monad[Future],MTBQueryCriteria,MTBPatientRecord],
   val connector: Connector[Future,Monad[Future]],
-  val cache: QueryCache[MTBQueryCriteria,MTBResultSet,MTBPatientRecord]
+  val cache: QueryCache[MTBQueryCriteria,MTBResultSet,MTBPatientRecord],
+  val federatedQueriesActive: Boolean
 )
 extends BaseQueryService[Future,MTBConfig]
 with MTBQueryService

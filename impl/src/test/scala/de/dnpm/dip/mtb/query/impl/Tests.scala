@@ -34,7 +34,7 @@ class Tests extends AsyncFlatSpec
   import de.dnpm.dip.util.Completer.syntax._
   import de.dnpm.dip.mtb.gens.Generators._
 
-  System.setProperty(Site.property,"UKx:Musterlingen")
+  System.setProperty(Site.PROP,"UKx:Musterlingen")
   System.setProperty(HttpConnector.Type.property,"fake")
   System.setProperty(MTBLocalDB.dataGenProp,"0")
 
@@ -89,18 +89,7 @@ class Tests extends AsyncFlatSpec
             )
           )
           .toSet
-/*
-      cnv = 
-        ngs.results
-          .copyNumberVariants
-          .head
 
-      cnvCriteria =
-        CNVCriteria(
-          Some(cnv.reportedAffectedGenes.getOrElse(Set.empty).take(1)),
-          Some(cnv.`type`)
-        )
-*/
       medicationCriteria =
         patRec
           .getSystemicTherapies
@@ -137,17 +126,6 @@ class Tests extends AsyncFlatSpec
         )
       ),
       None,
-/*      
-      Some(
-        VariantCriteria(
-          Some(LogicalOperator.Or),
-          Some(snvCriteria),
-          Some(Set(cnvCriteria)),
-          None,
-          None
-        )
-      ),
-*/    
       medicationCriteria,
       None
     )
@@ -205,28 +183,22 @@ class Tests extends AsyncFlatSpec
 
       query = result.value
 
-      queryCriteria =
-        query.criteria.value
+      queryCriteria = query.criteria.value
 
-      resultSet <-
-        service.resultSet(query.id)
-          .map(_.value)
+      resultSet <- service.resultSet(query.id).map(_.value)
 
-      patientMatches = 
-        resultSet.patientMatches(MTBFilters.empty)
+      patientMatches = resultSet.patientMatches(MTBFilters.empty)
 
       _ = patientMatches must not be empty
 
       _ = patientMatches.size must be < (dataSets.size) 
 
-      matchingCriteria =
-        patientMatches.map(_.matchingCriteria)
+      matchingCriteria = patientMatches.map(_.matchingCriteria)
 
       _ = all (matchingCriteria) must be (defined)
 
     } yield forAll(matchingCriteria){ 
-      matches =>
-        assert( (queryCriteria intersect matches.value).nonEmpty )
+      matches => assert( (queryCriteria intersect matches.value).nonEmpty )
     }
 
   }
@@ -244,19 +216,15 @@ class Tests extends AsyncFlatSpec
 
       query = result.value
 
-      resultSet <-
-        service.resultSet(query.id)
-          .map(_.value)
+      resultSet <- service.resultSet(query.id).map(_.value)
 
-      filter =
-        MTBFilters.empty
-          .copy(
-            patient = PatientFilter.empty.copy(
-              gender = Some(Set(Coding(Gender.Female)))
-            )
-          )
-      patientMatches = 
-        resultSet.patientMatches(filter)
+      filter = MTBFilters.empty.copy(
+        patient = PatientFilter.empty.copy(
+          gender = Some(Set(Coding(Gender.Female)))
+        )
+      )
+
+      patientMatches = resultSet.patientMatches(filter)
 
     } yield patientMatches.size must be < (dataSets.size)
 
@@ -266,8 +234,7 @@ class Tests extends AsyncFlatSpec
   "PreparedQuery" must "have been successfully created" in {
 
     for {
-      result <-
-        service ! PreparedQuery.Create("Dummy Prepared Query",genCriteria.next)
+      result <- service ! PreparedQuery.Create("Dummy Prepared Query",genCriteria.next)
 
     } yield result.isRight mustBe true 
 
@@ -276,13 +243,11 @@ class Tests extends AsyncFlatSpec
   it must "have been successfully retrieved" in {
 
     for {
-      result <-
-        service ? PreparedQuery.Filter(Some(querier))
+      result <- service ? PreparedQuery.Filter(Some(querier))
 
       _ = result must not be empty 
 
-      query <- 
-        service ? result.head.id
+      query <- service ? result.head.id
 
     } yield query must be (defined)
 
