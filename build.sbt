@@ -68,7 +68,7 @@ lazy val impl = project
 lazy val dependencies =
   new {
     val scalatest      = "org.scalatest"  %% "scalatest"              % "3.2.17" % Test
-    val service_base   = "de.dnpm.dip"    %% "service-base"           % "1.3.1"
+    val service_base   = "de.dnpm.dip"    %% "service-base"           % "1.4.0"
     val mtb_model      = "de.dnpm.dip"    %% "mtb-dto-model"          % "1.2.1"
     val mtb_generators = "de.dnpm.dip"    %% "mtb-dto-generators"     % "1.2.1"
     val connector_base = "de.dnpm.dip"    %% "connector-base"         % "1.1.2"
