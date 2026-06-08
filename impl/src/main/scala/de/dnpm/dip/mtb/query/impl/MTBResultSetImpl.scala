@@ -131,7 +131,6 @@ with MTBReportingOps
 
     TumorDiagnostics(
       overallDiagnosticDistributions(records),
-      diagnosticDistributionsByAlteration(records,queryCriteria.flatMap(_.geneAlterations))
     )
   }
 
