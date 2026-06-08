@@ -18,7 +18,6 @@ import de.dnpm.dip.service.{
 import de.dnpm.dip.service.query.ResultSet
 import de.dnpm.dip.mtb.model.{
   MTBPatientRecord,
-  Variant,
   RECIST
 }
 import play.api.libs.json.{
@@ -35,25 +34,15 @@ with KaplanMeierOps[Id,Applicative[Id]]
   type Filter = MTBFilters
 
 
-  def tumorDiagnostics(
-    filter: MTBFilters
-  ): MTBResultSet.TumorDiagnostics
+  def tumorDiagnostics(filter: MTBFilters = MTBFilters.empty): MTBResultSet.TumorDiagnostics
 
-  def medication(
-    filter: MTBFilters
-  ): MTBResultSet.Medication
+  def medication(filter: MTBFilters = MTBFilters.empty): MTBResultSet.Medication
 
-  def therapyResponses(
-    filter: MTBFilters
-  ): Seq[MTBResultSet.TherapyResponseDistribution]
+  def therapyResponses(filter: MTBFilters = MTBFilters.empty): Seq[MTBResultSet.TherapyResponses]
 
-  def therapyResponsesBySupportingVariant(
-    filter: MTBFilters
-  ): Seq[MTBResultSet.TherapyResponses]
+  def geneAlterations(filter: MTBFilters = MTBFilters.empty): Seq[MTBResultSet.GeneAlterationInfo]
 
-  def alterationsByGene(
-    filter: MTBFilters
-  ): MTBResultSet.AlterationDistributions
+  def alteredGeneDistributions(filter: MTBFilters = MTBFilters.empty): Seq[Entry[GeneAlteration.Type.Value,Distribution[DisplayLabel[Coding[HGNC]]]]]
 
 }
 
@@ -70,7 +59,6 @@ object MTBResultSet
       tumorMorphologies: Distribution[Coding[ICDO3]]
     )
 
-
     implicit val writesDistributions: OWrites[Distributions] =
       Json.writes[Distributions]
   }
@@ -78,15 +66,22 @@ object MTBResultSet
 
   final case class TumorDiagnostics
   (
-    overallDistributions: TumorDiagnostics.Distributions,
-    distributionsByVariant: Seq[Entry[DisplayLabel[GeneAlteration],TumorDiagnostics.Distributions]]
+    overallDistributions: TumorDiagnostics.Distributions
   )
 
 
-  final case class AlterationDistributions
+  final case class GeneAlterationInfo
   (
-    alterationsByGene: Seq[Entry[Coding[HGNC],Distribution[GeneAlteration]]]
+    tumorEntity: Coding[ICD10GM],
+    alteration: GeneAlteration,
+    count: Int,
+    supporting: Boolean
   )
+  object GeneAlterationInfo
+  {
+    implicit val writes: OWrites[GeneAlterationInfo] =
+      Json.writes[GeneAlterationInfo]
+  }
 
 
   final case class Medication
@@ -100,13 +95,13 @@ object MTBResultSet
     final case class Recommendations
     (
       overallDistribution: Distribution[Set[Coding[Medications]]],
-      distributionBySupportingVariant: Seq[Entry[DisplayLabel[GeneAlteration],Distribution[Set[Coding[Medications]]]]]
+      distributionBySupportingVariant: Seq[Entry[GeneAlteration,Distribution[Set[Coding[Medications]]]]]
     )
 
     final case class Therapies
     (
       overallDistribution: Distribution[Set[Coding[Medications]]],
-      meanDurations: Seq[Entry[Set[Coding[Medications]],Double]]
+      meanDurations: Seq[Entry[Set[Coding[Medications]],Seq[Entry[Set[Coding[Medications]],Double]]]]
     )
 
 
@@ -122,28 +117,17 @@ object MTBResultSet
   }
 
 
-  final case class TherapyResponseDistribution
-  (
-    medicationClasses: Set[Coding[Medications]],
-    medications: Set[Coding[Medications]],
-    supportingVariants: Set[DisplayLabel[Variant]],
-    responseDistribution: Distribution[Coding[RECIST.Value]]
-  )
-
-  object TherapyResponseDistribution
-  {
-    implicit val writes: OWrites[TherapyResponseDistribution] =
-      Json.writes[TherapyResponseDistribution]
-  }
-
-
   final case class TherapyResponses
   (
-    supportingVariant: DisplayLabel[Variant],
-    medicationClasses: Set[Coding[Medications]],
+    tumorEntity: Coding[ICD10GM],
     medications: Set[Coding[Medications]],
-    responseDistribution: Distribution[Coding[RECIST.Value]]
+    supportingAlteration: GeneAlteration,
+    count: Int,
+    orr: Int,  // Overall Response Rate: 0 - 100 %
+    responseDistribution: Distribution[RECIST.Value],
+    meanDuration: Double,  // In weeks
   )
+
 
   object TherapyResponses
   {
