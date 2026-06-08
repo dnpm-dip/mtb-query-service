@@ -66,8 +66,7 @@ object MTBResultSet
 
   final case class TumorDiagnostics
   (
-    overallDistributions: TumorDiagnostics.Distributions,
-    distributionsByVariant: Seq[Entry[GeneAlteration,TumorDiagnostics.Distributions]]
+    overallDistributions: TumorDiagnostics.Distributions
   )
 
 
