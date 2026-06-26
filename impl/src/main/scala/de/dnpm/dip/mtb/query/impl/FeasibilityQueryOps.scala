@@ -3,6 +3,7 @@ package de.dnpm.dip.mtb.query.impl
 
 import cats.Applicative
 import cats.data.NonEmptyList
+import cats.syntax.either._
 import de.dnpm.dip.coding.{
   CodeSystemProvider,
   Coding
@@ -73,8 +74,7 @@ trait FeasibilityQueryOps extends MTBReportingOps
 
     val cohortSize = localResults.map(_.cohortSize).toList.sum
 
-    Either.cond(
-      cohortSize >= cutoff,
+    if (cohortSize >= cutoff) 
       AggregatedResults(
         query,
         localResults.map(_.site),
@@ -89,9 +89,10 @@ trait FeasibilityQueryOps extends MTBReportingOps
         localResults.map(_.therapyStatusReason).reduce,
         localResults.map(_.ecogStatus).reduce,
         localResults.map(_.usedMedication).reduce,
-      ),
-      NoResults
-    )
+      )
+      .asRight
+
+    else NoResults.asLeft
 
   }
 
