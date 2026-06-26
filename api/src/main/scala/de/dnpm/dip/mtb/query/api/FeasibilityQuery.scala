@@ -33,6 +33,12 @@ import de.dnpm.dip.service.{
   ConnectionStatus,
   PeerToPeerRequest
 }
+import play.api.libs.json.{
+  Json,
+  OFormat,
+  OWrites,
+  Reads
+}
 
 
 case class FeasibilityQuery
@@ -69,39 +75,39 @@ object FeasibilityQuery
 
   case class Delete(id: Id[FeasibilityQuery]) extends Command
 
+  sealed trait Error
+  case object NoResults extends Error
 
 
   sealed trait Results
   {
-    val query: Id[FeasibilityQuery]
     val cohortSize: Int
     val gender: Distribution[Coding[Gender.Value]]
     val age: Distribution[Interval[Int]]
     val vitalStatus: Distribution[Coding[VitalStatus.Value]]
     val tumorEntities: Distribution[Coding[ICD10GM]]
-    val tumorMorphologies: Distribution[Coding[ICDO3.M]]
-    val recommendedMedication: Distribution[Coding[Medications]]
+    val tumorMorphologies: Distribution[Coding[ICDO3]]
+    val recommendedMedication: Distribution[Set[Coding[Medications]]]
     val therapyStatus: Distribution[Coding[Therapy.Status.Value]]
     val therapyStatusReason: Distribution[Coding[MTBTherapy.StatusReason.Value]]
     val ecogStatus: Distribution[Coding[ECOG.Value]]
-    val usedMedication: Distribution[Coding[Medications]]
+    val usedMedication: Distribution[Set[Coding[Medications]]]
   }
 
   case class LocalResults
   (
-    query: Id[FeasibilityQuery],
     site: Coding[Site],
     cohortSize: Int,
     gender: Distribution[Coding[Gender.Value]],
     age: Distribution[Interval[Int]],
     vitalStatus: Distribution[Coding[VitalStatus.Value]],
     tumorEntities: Distribution[Coding[ICD10GM]],
-    tumorMorphologies: Distribution[Coding[ICDO3.M]],
-    recommendedMedication: Distribution[Coding[Medications]],
+    tumorMorphologies: Distribution[Coding[ICDO3]],
+    recommendedMedication: Distribution[Set[Coding[Medications]]],
     therapyStatus: Distribution[Coding[Therapy.Status.Value]],
     therapyStatusReason: Distribution[Coding[MTBTherapy.StatusReason.Value]],
     ecogStatus: Distribution[Coding[ECOG.Value]],
-    usedMedication: Distribution[Coding[Medications]]
+    usedMedication: Distribution[Set[Coding[Medications]]]
   )
   extends Results
 
@@ -114,12 +120,12 @@ object FeasibilityQuery
     age: Distribution[Interval[Int]],
     vitalStatus: Distribution[Coding[VitalStatus.Value]],
     tumorEntities: Distribution[Coding[ICD10GM]],
-    tumorMorphologies: Distribution[Coding[ICDO3.M]],
-    recommendedMedication: Distribution[Coding[Medications]],
+    tumorMorphologies: Distribution[Coding[ICDO3]],
+    recommendedMedication: Distribution[Set[Coding[Medications]]],
     therapyStatus: Distribution[Coding[Therapy.Status.Value]],
     therapyStatusReason: Distribution[Coding[MTBTherapy.StatusReason.Value]],
     ecogStatus: Distribution[Coding[ECOG.Value]],
-    usedMedication: Distribution[Coding[Medications]]
+    usedMedication: Distribution[Set[Coding[Medications]]]
   )
   extends Results
 
@@ -138,10 +144,47 @@ object FeasibilityQuery
 
   trait Operations[F[_],Ctx]
   {
-    def !(cmd: Command)(implicit ctx: Ctx): F[Either[String,FeasibilityQuery]]
 
-    def feasibilityQuery(id: Id[FeasibilityQuery])(implicit ctx: Ctx): F[Option[AggregatedResults]]
+    def !(
+      cmd: Command
+    )(
+      implicit ctx: Ctx
+    ): F[Either[String,FeasibilityQuery]]
 
+
+    def feasibilityQuery(
+      id: Id[FeasibilityQuery]
+    )(
+      implicit ctx: Ctx
+    ): F[Option[FeasibilityQuery]]
+
+
+    def aggregatedResults(
+      query: Id[FeasibilityQuery]
+    )(
+      implicit ctx: Ctx
+    ): F[Option[AggregatedResults]]
+
+
+    def process(
+      req: Request
+    )(
+      implicit ctx: Ctx
+    ): F[LocalResults]
   }
 
+
+  import de.dnpm.dip.util.json.writesNel
+
+  implicit val readsSubmit: Reads[Submit] =
+    Json.reads[Submit]
+
+  implicit val writesFeasibilityQuery: OWrites[FeasibilityQuery] =
+    Json.writes[FeasibilityQuery]
+
+  implicit val formatLocalResults: OFormat[LocalResults] =
+    Json.format[LocalResults]
+
+  implicit val writesAggregatedResults: OWrites[AggregatedResults] =
+    Json.writes[AggregatedResults]
 }
