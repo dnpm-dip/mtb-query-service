@@ -130,7 +130,7 @@ lazy val compilerOptions = Seq(
   "-Wunused:patvars",
   "-Wunused:privates",
   "-Wunused:implicits",
-  "-Wvalue-discard",
+  "-Wvalue-discard"
 )
 
 

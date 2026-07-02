@@ -61,7 +61,7 @@ object FeasibilityQuery
   case class Submit
   (
     mode: Coding[Query.Mode.Value],
-    criteria: Option[MTBQueryCriteria]
+    criteria: MTBQueryCriteria
   )
   extends Command
 
@@ -134,7 +134,7 @@ object FeasibilityQuery
   (
     origin: Coding[Site],
     querier: Querier,
-    criteria: Option[MTBQueryCriteria]
+    criteria: MTBQueryCriteria
   )
   extends PeerToPeerRequest
   {
@@ -148,8 +148,10 @@ object FeasibilityQuery
     def !(
       cmd: Command
     )(
-      implicit ctx: Ctx
-    ): F[Either[String,FeasibilityQuery]]
+      implicit
+      querier: Querier,
+      ctx: Ctx
+    ): F[Either[Query.Error,FeasibilityQuery]]
 
 
     def feasibilityQuery(
@@ -167,10 +169,10 @@ object FeasibilityQuery
 
 
     def process(
-      req: Request
+      request: Request
     )(
       implicit ctx: Ctx
-    ): F[LocalResults]
+    ): F[Either[String,request.ResultType]]
   }
 
 
@@ -187,4 +189,5 @@ object FeasibilityQuery
 
   implicit val writesAggregatedResults: OWrites[AggregatedResults] =
     Json.writes[AggregatedResults]
+
 }

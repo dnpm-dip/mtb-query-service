@@ -22,35 +22,6 @@ class MTBQueryPermissionsSPI extends PermissionsSPI
 
 object MTBQueryRoles extends QueryRoles(MTBQueryPermissions)
 
-/*
-object MTBRoles extends Roles
-{
-
-  import MTBPermissions._
-
-
-  val BasicMTBMember =
-    Role(
-      "MTBMemberBasic",
-      (permissions - ReadPatientRecord),
-      Some("MTB: Basis-Such-Rechte (nur Ergebnis-Zusammenfassungen)")
-    )
-
-  val PrivilegedMTBMember =
-    Role(
-      "MTBMemberPrivileged",
-      permissions,
-      Some("MTB: Privilegierte Such-Rechte (Ergebnis-Zusammenfassungen + Einsicht in Patienten-Akten)")
-    )
-
-  override val roles: Set[Role] =
-    Set(
-      BasicMTBMember,
-      PrivilegedMTBMember
-    )
-
-}
-*/
 
 class MTBQueryRolesSPI extends RolesSPI
 {

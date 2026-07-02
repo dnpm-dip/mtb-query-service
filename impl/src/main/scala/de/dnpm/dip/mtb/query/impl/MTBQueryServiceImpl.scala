@@ -1,9 +1,11 @@
 package de.dnpm.dip.mtb.query.impl 
 
 
-import scala.concurrent.Future
+import scala.concurrent.{
+  ExecutionContext,
+  Future
+}
 import cats.{
-  Id,
   Applicative,
   Monad
 }
@@ -31,9 +33,13 @@ import de.dnpm.dip.coding.icd.{
   ICDO3
 }
 import de.dnpm.dip.coding.hgnc.HGNC
+import de.dnpm.dip.model.{
+  Id,
+  Site
+}
 import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.mtb.query.api._
-
+import play.api.libs.json.Json
 
 
 class MTBQueryServiceProviderImpl extends MTBQueryServiceProvider
@@ -68,6 +74,9 @@ object MTBQueryServiceImpl extends Logging
           { 
             case _: FederatedQuery[_,_] =>
               (POST, s"$baseURI/query", Map.empty)
+
+            case _: FeasibilityQuery.Request =>
+              (POST, s"$baseURI/feasibility-query", Map.empty)
 
             case PatientRecordRequest(_,querier,patient,snapshot) =>
               (
@@ -107,36 +116,37 @@ class MTBQueryServiceImpl
 extends BaseQueryService[Future,MTBConfig]
 with MTBQueryService
 with Completers
+with FeasibilityQueryOps
 {
 
     
-  override implicit val hgnc: CodeSystemProvider[HGNC,Id,Applicative[Id]] =
+  override implicit val hgnc: CodeSystemProvider[HGNC,cats.Id,Applicative[cats.Id]] =
     HGNC.GeneSet
       .getInstance[cats.Id]
       .get
 
-  override implicit val atc: CodeSystemProvider[ATC,Id,Applicative[Id]] =
+  override implicit val atc: CodeSystemProvider[ATC,cats.Id,Applicative[cats.Id]] =
     ATC.Catalogs
       .getInstance[cats.Id]
       .get
 
 
-  override implicit val icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]] =
+  override implicit val icd10gm: CodeSystemProvider[ICD10GM,cats.Id,Applicative[cats.Id]] =
     ICD10GM.Catalogs
       .getInstance[cats.Id]
       .get
 
-  override implicit val icdo3: ICDO3.Catalogs[Id,Applicative[Id]] =
+  override implicit val icdo3: ICDO3.Catalogs[cats.Id,Applicative[cats.Id]] =
     ICDO3.Catalogs  
       .getInstance[cats.Id]
       .get
 
 
 
-  private implicit val kmEstimator: KaplanMeierEstimator[Id] =
+  private implicit val kmEstimator: KaplanMeierEstimator[cats.Id] =
     DefaultKaplanMeierEstimator
 
-  private implicit val kmModule: KaplanMeierModule[Id] =
+  private implicit val kmModule: KaplanMeierModule[cats.Id] =
     new DefaultKaplanMeierModule
 
 
@@ -149,5 +159,51 @@ with Completers
 
   override val survivalConfig: KaplanMeier.Config =
     kmModule.survivalConfig
+
+
+
+  def !(
+    cmd: FeasibilityQuery.Command
+  )(
+    implicit
+    querier: Querier,
+    ctx: ExecutionContext
+  ): Future[Either[Query.Error,FeasibilityQuery]] =
+ ???
+
+
+  def feasibilityQuery(
+    id: Id[FeasibilityQuery]
+  )(
+    implicit ctx: ExecutionContext,
+  ): Future[Option[FeasibilityQuery]] =
+ ???
+
+
+  def aggregatedResults(
+    query: Id[FeasibilityQuery]
+  )(
+    implicit ctx: ExecutionContext
+  ): Future[Option[FeasibilityQuery.AggregatedResults]] =
+???
+
+
+  // Suppress deprecation waring for CriteriaExpander for now
+  @annotation.nowarn("cat=deprecation") 
+  def process(
+    request: FeasibilityQuery.Request
+  )(
+    implicit ctx: ExecutionContext
+  ): Future[Either[String,request.ResultType]] = {
+
+    log.info(
+      s"""Processing feasibility query from site ${request.origin.code}, Querier: ${request.querier}, Criteria:\n${Json.prettyPrint(Json.toJson(request.criteria))}"""
+    )
+
+    // Expand the query criteria
+    (db ? Some(CriteriaExpander(request.criteria)))
+      .map(_.map(matches => localResults(Site.local,matches.map(_.record.data))))
+
+  }
 
 }
