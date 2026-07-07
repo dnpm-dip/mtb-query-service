@@ -47,7 +47,7 @@ case class FeasibilityQuery
   submittedAt: LocalDateTime,
   querier: Querier,
   mode: Coding[Query.Mode.Value],
-  criteria: Option[MTBQueryCriteria],
+  criteria: MTBQueryCriteria,
   peers: Seq[ConnectionStatus],
   expiresAfter: Int,
   lastUpdate: Instant
@@ -162,7 +162,7 @@ object FeasibilityQuery
 
 
     def aggregatedResults(
-      query: Id[FeasibilityQuery]
+      id: Id[FeasibilityQuery]
     )(
       implicit ctx: Ctx
     ): F[Option[AggregatedResults]]
@@ -189,5 +189,8 @@ object FeasibilityQuery
 
   implicit val writesAggregatedResults: OWrites[AggregatedResults] =
     Json.writes[AggregatedResults]
+
+  implicit val writesFeasibilityRequest: OWrites[FeasibilityQuery.Request] =
+    Json.writes[FeasibilityQuery.Request]
 
 }
