@@ -75,9 +75,6 @@ object FeasibilityQuery
 
   case class Delete(id: Id[FeasibilityQuery]) extends Command
 
-  sealed trait Error
-  case object NoResults extends Error
-
 
   sealed trait Results
   {
