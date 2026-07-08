@@ -219,7 +219,8 @@ with Completers
 
         validate(rawCriteria).map(_.complete) match {
           case Right(criteria) =>
-//TODO: Logging
+            log.info(s"Processing new FeasibilityQuery by $querier: \n${Json.prettyPrint(Json.toJson(criteria))}")
+
             val id = Id[FeasibilityQuery](randomUUID.toString)
             
             for {
@@ -229,7 +230,9 @@ with Completers
                 resultsBySite
                   .values
                   .map(_.map(NonEmptyList.one).toIor.toIorNel)
-                  .reduce(_ combine _) //TODO: consider using safe operation
+                  // Note: Call to reduce is implicitly safe here, because the local site is always queried,
+                  // so the returned Map is nonEmpty, but consider making explicitly safe (reduceOption...) TODO?
+                  .reduce(_ combine _)
                   .toEither  
             
               outcome = errsOrLocalResults match {
@@ -273,10 +276,11 @@ with Completers
               case Right(optCriteria) =>
             
                 if (optMode.exists(_ != query.mode) || optCriteria.exists(_ != query.criteria)){
-                //TODO: Logging
                 
                   val mode = optMode.getOrElse(query.mode)
                   val criteria = optCriteria.getOrElse(query.criteria)
+
+                  log.info(s"Updating FeasibilityQuery $id: \n${Json.prettyPrint(Json.toJson(criteria))}")
             
                   for {
                     resultsBySite <- executeFeasibilityQuery(id,mode.code.enumValue,criteria)
