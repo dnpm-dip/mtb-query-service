@@ -111,30 +111,6 @@ trait Completers extends BaseCompleters
             )
         }         
       )
-/*
-    implicit val alterationCriteriaCompleter: Completer[GeneAlterationCriteria] =
-      Completer.of(
-        alteration => alteration.copy(
-          gene = alteration.gene.complete,
-          snv  = alteration.snv.map(
-            crit => crit.copy(
-              dnaChange = crit.dnaChange.complete,
-              proteinChange = crit.proteinChange.complete
-            )              
-          ),
-          cnv  = alteration.cnv.map(
-            crit => crit.copy(
-              `type` = crit.`type`.complete
-            )              
-          ),
-          fusion = alteration.fusion.map(
-            crit => crit.copy(
-              partner = crit.partner.complete
-            )
-          )
-        )
-      )
-*/
 
     criteria => criteria.copy(
       diagnoses         = criteria.diagnoses.complete,
