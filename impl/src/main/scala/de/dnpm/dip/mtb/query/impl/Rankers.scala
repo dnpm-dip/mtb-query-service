@@ -14,14 +14,15 @@ import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.coding.icd.ICD10GM
 
 
+object IsSupportingVariant
+
 trait Rankers
 {
 
   implicit def toQueryVector(geneAlterations: GeneAlterations): Set[Any] =
-    geneAlterations.items.map(_.gene.code)
-
-
-//  implicit val icd10gm: CodeSystemProvider[ICD10GM,cats.Id,Applicative[cats.Id]]
+    geneAlterations.items.map(_.gene.code) ++
+      // Also add "marker term" that supporting variants are queried
+      Option.when(geneAlterations.items.exists(_.supporting.contains(true)))(IsSupportingVariant)
 
 
   /**
@@ -57,8 +58,10 @@ trait Rankers
    */
   lazy val GeneAlterationInfoRanker =
     Ranker.of[(GeneAlterationInfo,Set[Coding[ICD10GM]]),Any]{
-      case GeneAlterationInfo(entity,alteration,_,_) -> entities =>
-        entities.map[Any](_.code) + entity.code + alteration.gene.code
+      case (GeneAlterationInfo(entity,alteration,_,supporting),entities) =>
+        entities.map[Any](_.code) + entity.code + alteration.gene.code ++
+          // Also add "marker term" that variant is supporting
+          Option.when(supporting)(IsSupportingVariant)
     }
 
 
@@ -75,7 +78,6 @@ trait Rankers
         th.medications.flatMap(_.display.map(_.toLowerCase)) ++
         th.responseDistribution.elements.map(_.key)
     }
-
 
 }
 
