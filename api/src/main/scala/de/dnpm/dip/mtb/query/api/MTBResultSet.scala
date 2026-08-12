@@ -17,6 +17,7 @@ import de.dnpm.dip.service.{
 }
 import de.dnpm.dip.service.query.ResultSet
 import de.dnpm.dip.mtb.model.{
+  LevelOfEvidence,
   MTBPatientRecord,
   RECIST
 }
@@ -38,6 +39,7 @@ with KaplanMeierOps[Id,Applicative[Id]]
 
   def medication(filter: MTBFilters = MTBFilters.empty): MTBResultSet.Medication
 
+//  def therapyResponses(filter: MTBFilters = MTBFilters.empty): MTBResultSet.TherapyResponses
   def therapyResponses(filter: MTBFilters = MTBFilters.empty): Seq[MTBResultSet.TherapyResponses]
 
   def geneAlterations(filter: MTBFilters = MTBFilters.empty): Seq[MTBResultSet.GeneAlterationInfo]
@@ -75,6 +77,7 @@ object MTBResultSet
     tumorEntity: Coding[ICD10GM],
     alteration: GeneAlteration,
     count: Int,
+    supportingCount: Int,
     supporting: Boolean
   )
   object GeneAlterationInfo
@@ -116,16 +119,49 @@ object MTBResultSet
 
   }
 
+/*
+  final case class TherapyResponses
+  (
+    patientCount: Int,
+    entries: Seq[TherapyResponses.Entry]
+  )
+
+
+  object TherapyResponses
+  {
+
+    final case class Entry
+    (
+      tumorEntity: Coding[ICD10GM],
+      medications: Set[Coding[Medications]],
+      supportingAlteration: GeneAlteration,
+      levelsOfEvidence: Set[Coding[LevelOfEvidence.Grading.Value]],
+      count: Int,
+      orr: Option[Int],  // Overall Response Rate: 0 - 100 %
+      dcr: Option[Int],  // Disease Control Rate:  0 - 100 %
+      responseDistribution: Distribution[RECIST.Value],
+      meanDuration: Option[Double],  // In weeks
+    )
+
+    implicit val writesEntry: OWrites[Entry] =
+      Json.writes[Entry]
+
+    implicit val writes: OWrites[TherapyResponses] =
+      Json.writes[TherapyResponses]
+  }
+*/
 
   final case class TherapyResponses
   (
     tumorEntity: Coding[ICD10GM],
     medications: Set[Coding[Medications]],
     supportingAlteration: GeneAlteration,
+    levelsOfEvidence: Set[Coding[LevelOfEvidence.Grading.Value]],
     count: Int,
-    orr: Int,  // Overall Response Rate: 0 - 100 %
+    orr: Option[Int],  // Overall Response Rate: 0 - 100 %
+    dcr: Option[Int],  // Disease Control Rate:  0 - 100 %
     responseDistribution: Distribution[RECIST.Value],
-    meanDuration: Double,  // In weeks
+    meanDuration: Option[Double],  // In weeks
   )
 
 
