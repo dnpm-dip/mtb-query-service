@@ -3,12 +3,16 @@ package de.dnpm.dip.mtb.query.impl
 
 import scala.concurrent.Future
 import cats.{
-  Id,
   Applicative,
   Monad
 }
+import cats.data.EitherNel
+import cats.syntax.either._
 import de.dnpm.dip.util.Logging
-import de.dnpm.dip.service.Connector
+import de.dnpm.dip.service.{
+  Cache,
+  Connector
+}
 import de.dnpm.dip.connector.{
   FakeConnector,
   HttpConnector,
@@ -17,8 +21,6 @@ import de.dnpm.dip.connector.{
 import de.dnpm.dip.service.query.{
   BaseQueryService,
   Query,
-  QueryCache,
-  BaseQueryCache,
   FederatedQuery,
   PatientRecordRequest,
   LocalDB,
@@ -49,9 +51,6 @@ object MTBQueryServiceImpl extends Logging
 {
 
   import HttpMethod._
-
-  private val cache =
-    new BaseQueryCache[MTBQueryCriteria,MTBResultSet,MTBPatientRecord]
 
   private val federatedQueriesActive =
     sys.env.get("ACTIVE_FEDERATED_QUERY_USE_CASES")
@@ -90,7 +89,6 @@ object MTBQueryServiceImpl extends Logging
       MTBPreparedQueryDB.instance,      
       MTBLocalDB.instance,
       connector,
-      cache,
       federatedQueriesActive
     )
 }
@@ -101,7 +99,6 @@ class MTBQueryServiceImpl
   val preparedQueryDB: PreparedQueryDB[Future,Monad[Future],MTBQueryCriteria,String],
   val db: LocalDB[Future,Monad[Future],MTBQueryCriteria,MTBPatientRecord],
   val connector: Connector[Future,Monad[Future]],
-  val cache: QueryCache[MTBQueryCriteria,MTBResultSet,MTBPatientRecord],
   val federatedQueriesActive: Boolean
 )
 extends BaseQueryService[Future,MTBConfig]
@@ -109,34 +106,35 @@ with MTBQueryService
 with Completers
 {
 
+  override val querySessions = Cache.empty()
     
-  override implicit val hgnc: CodeSystemProvider[HGNC,Id,Applicative[Id]] =
+  override implicit val hgnc: CodeSystemProvider[HGNC,cats.Id,Applicative[cats.Id]] =
     HGNC.GeneSet
       .getInstance[cats.Id]
       .get
 
-  override implicit val atc: CodeSystemProvider[ATC,Id,Applicative[Id]] =
+  override implicit val atc: CodeSystemProvider[ATC,cats.Id,Applicative[cats.Id]] =
     ATC.Catalogs
       .getInstance[cats.Id]
       .get
 
 
-  override implicit val icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]] =
+  override implicit val icd10gm: CodeSystemProvider[ICD10GM,cats.Id,Applicative[cats.Id]] =
     ICD10GM.Catalogs
       .getInstance[cats.Id]
       .get
 
-  override implicit val icdo3: ICDO3.Catalogs[Id,Applicative[Id]] =
+  override implicit val icdo3: ICDO3.Catalogs[cats.Id,Applicative[cats.Id]] =
     ICDO3.Catalogs  
       .getInstance[cats.Id]
       .get
 
 
 
-  private implicit val kmEstimator: KaplanMeierEstimator[Id] =
+  private implicit val kmEstimator: KaplanMeierEstimator[cats.Id] =
     DefaultKaplanMeierEstimator
 
-  private implicit val kmModule: KaplanMeierModule[Id] =
+  private implicit val kmModule: KaplanMeierModule[cats.Id] =
     new DefaultKaplanMeierModule
 
 
@@ -146,6 +144,13 @@ with Completers
   ) =
     new MTBResultSetImpl(query.id,query.criteria,results)
 
+
+  override def validate(
+    criteria: MTBQueryCriteria
+  ): EitherNel[String,MTBQueryCriteria] =
+    //TODO: Adapt to check that criteria be non-empty after having announced this as a breaking change
+    criteria.asRight 
+    
 
   override val survivalConfig: KaplanMeier.Config =
     kmModule.survivalConfig
