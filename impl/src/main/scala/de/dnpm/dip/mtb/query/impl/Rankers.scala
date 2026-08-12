@@ -58,7 +58,7 @@ trait Rankers
    */
   lazy val GeneAlterationInfoRanker =
     Ranker.of[(GeneAlterationInfo,Set[Coding[ICD10GM]]),Any]{
-      case (GeneAlterationInfo(entity,alteration,_,supporting),entities) =>
+      case (GeneAlterationInfo(entity,alteration,_,_,supporting),entities) =>
         entities.map[Any](_.code) + entity.code + alteration.gene.code ++
           // Also add "marker term" that variant is supporting
           Option.when(supporting)(IsSupportingVariant)
