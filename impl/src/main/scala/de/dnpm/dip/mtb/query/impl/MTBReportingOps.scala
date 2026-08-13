@@ -323,13 +323,13 @@ trait MTBReportingOps extends ReportingOps
         }
     }
     .map {
-      case ((entity,medications,alteration),(evidenceGradings,n,responses,durations)) =>
+      case ((entity,medications,alteration),(evidenceGradings,count,responses,durations)) =>
         MTBResultSet.TherapyResponses(
           entity,
           medications,
           alteration,
-          evidenceGradings,
-          n,
+          Option(evidenceGradings).filter(_.nonEmpty),
+          count,
           ORR(responses),
           DCR(responses),
           Distribution.of(responses),
@@ -339,112 +339,6 @@ trait MTBReportingOps extends ReportingOps
     .toSeq
     .optRanked
   }
-
-/*
-  def therapyResponses(
-    records: Seq[MTBPatientRecord],
-    queryCriteria: Option[MTBQueryCriteria]
-  ): MTBResultSet.TherapyResponses = {
-
-    implicit val ranker = queryCriteria.flatMap(TherapyResponsesRanker(_))
-
-    val (patientIds,data) = records.foldLeft(      
-      Set.empty[Id[Patient]] -> Map.empty[
-        (Coding[ICD10GM],Set[Coding[Medications]],GeneAlteration),
-        (Set[Coding[LevelOfEvidence.Grading.Value]],Int,Seq[RECIST.Value],Seq[Double])
-      ]
-    ){ 
-      case ((patIds,acc),record) =>
-
-        implicit val diagnoses = record.diagnoses
-        implicit lazy val recommendations = record.getCarePlans.flatMap(_.medicationRecommendations.getOrElse(List.empty))
-        implicit lazy val variants = record.getNgsReports.flatMap(_.variants)
-        implicit lazy val responses =
-          record.getResponses
-            .groupBy(_.therapy.id)
-            .map {
-              case (therapy,responses) => therapy -> responses.maxBy(_.effectiveDate).value.code.enumValue
-            }
-
-        val therapies =
-          record.getSystemicTherapies
-            .map(_.latestBy(_.recordedOn))
-            .filter(_.medication.isDefined)
-
-        therapies.foldLeft(patIds -> acc){
-          case ((patIds2,acc2),therapy) =>
-
-            val recommendationWithEntityAndGrading: Option[(MTBMedicationRecommendation,Coding[ICD10GM],Option[Coding[LevelOfEvidence.Grading.Value]])] =
-              for {
-                recommendation <- therapy.basedOn.flatMap(_.resolve)
-                diagnosis <- recommendation.reason.flatMap(_.resolve)
-              } yield (
-                recommendation,
-                diagnosis.code,
-                recommendation.levelOfEvidence.map(_.grading)
-              )
-
-            lazy val medications = therapy.medication.get
-            lazy val response    = responses.get(therapy.id)
-            lazy val duration    = therapy.period.flatMap(_.duration(Weeks)).map(_.value)
-
-            recommendationWithEntityAndGrading.fold(patIds2 -> acc2){
-              case (recommendation,entity,evidenceGrading) =>
-
-                val supportingAlterations =
-                  recommendation.supportingVariants
-                    .getOrElse(List.empty)
-                    .flatMap(
-                      ref => ref.resolveOn(variants).map(
-                        variant => ref.gene match {
-                          case Some(relevantGene) => variant.geneAlteration(relevantGene)
-                          case None               => variant.geneAlterations
-                        }
-                      )
-                      .getOrElse(List.empty)
-                    )
-                    .distinct
-
-                supportingAlterations.foldLeft(patIds2 -> acc2){ 
-                  case ((patIds3,acc3),alteration) => (
-                    patIds3 + record.id,
-                    acc3.updatedWith((entity,medications,alteration))(
-                      _.map {
-                        case (evidenceGradings,n,recists,durations) => (
-                          evidenceGradings ++ evidenceGrading,
-                          n+1,
-                          recists ++ response,
-                          durations ++ duration
-                        )
-                      }
-                      .orElse(Some((evidenceGrading.toSet,1, response.toSeq, duration.toSeq)))
-                    )
-                  )
-                }    
-            }
-        }
-    }
-
-    MTBResultSet.TherapyResponses(
-      patientIds.size,
-      data.map {
-        case ((entity,medications,alteration),(evidenceGradings,n,responses,durations)) =>
-          MTBResultSet.TherapyResponses.Entry(
-            entity,
-            medications,
-            alteration,
-            evidenceGradings,
-            n,
-            ORR(responses),
-            Distribution.of(responses),
-            mean(durations)
-          )
-      }
-      .toSeq
-      .optRanked
-    )
-  }
-*/
 
 
   def geneAlterationInfos(
