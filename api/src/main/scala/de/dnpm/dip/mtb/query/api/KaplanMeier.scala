@@ -87,15 +87,17 @@ object KaplanMeier
   extends CodedEnum("dnpm-dip/kaplan-meier-analysis/grouping")
   with DefaultCodeSystem
   {
-    val ByTherapy     = Value("by-therapy")
-    val ByTumorEntity = Value("by-tumor-entity")
-    val Ungrouped     = Value("none")
+    val Therapy         = Value("therapy")
+    val TumorEntity     = Value("tumor-entity")
+    val ObtainedTherapy = Value("treatment-obtained")
+    val Ungrouped       = Value("none")
 
     override val display =
       Map(
-        ByTherapy     -> "Nach Therapie",
-        ByTumorEntity -> "Nach Tumor-Entität",
-        Ungrouped     -> "Keine"
+        TumorEntity     -> "Tumor-Entität",
+        Therapy         -> "Therapie",
+        ObtainedTherapy -> "Therapie erhalten: ja/nein",
+        Ungrouped       -> "Keine"
       )
 
     implicit val format: Format[Value] =

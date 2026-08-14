@@ -136,22 +136,18 @@ extends KaplanMeierModule[cats.Id]
 
   import ICD.extensions._
 
-  private val defaults =
-    Config.Defaults(
-      PFS,
-      ByTherapy
-    )
+  private val defaults = Config.Defaults(OS,ObtainedTherapy)
 
   override val survivalConfig: Config =
     Config(
       Seq(
         Entry(
           Coding(OS),
-          Seq(Ungrouped,ByTumorEntity).map(Coding(_))
+          Seq(Ungrouped,TumorEntity,ObtainedTherapy).map(Coding(_))
         ),
         Entry(
           Coding(PFS),
-          Seq(ByTherapy).map(Coding(_))
+          Seq(Therapy).map(Coding(_))
         )
       ),
       defaults  
@@ -159,8 +155,8 @@ extends KaplanMeierModule[cats.Id]
 
 
   override def survivalStatistics(
-    survivalType: Option[SurvivalType.Value],
-    grouping: Option[Grouping.Value],
+    optSurvivalType: Option[SurvivalType.Value],
+    optGrouping: Option[Grouping.Value],
     cohort: Seq[Snapshot[MTBPatientRecord]],
     timeUnit: UnitOfTime
   )(
@@ -168,30 +164,25 @@ extends KaplanMeierModule[cats.Id]
     estimator: KaplanMeierEstimator[cats.Id]
   ): SurvivalStatistics = {
 
-    val chronoUnit =
-      UnitOfTime.chronoUnit(timeUnit)
+    val chronoUnit = UnitOfTime.chronoUnit(timeUnit)
 
-    val survType = survivalType.getOrElse(defaults.`type`)
-    val grping   = grouping.getOrElse(defaults.grouping)
+    val survivalType = optSurvivalType.getOrElse(defaults.`type`)
+    val grouping     = optGrouping.getOrElse(defaults.grouping)
 
     cohort
-      .flatMap(projectors(survType -> grping))
+      .flatMap(projectors(survivalType -> grouping))
       .groupMap(_._1){
         case (_,startDate,endDate,status) => chronoUnit.between(startDate,endDate) -> status
       }
       .map {
-        case (group,data) =>
-          Entry(
-            group,
-            estimator.cohortResult(data)
-          )
+        case (group,data) => Entry(group,estimator.cohortResult(data))
       }
       .toSeq
       .sortBy(_.key)
       .pipe(
         SurvivalStatistics(
-          Coding(survType),
-          Coding(grping),
+          Coding(survivalType),
+          Coding(grouping),
           timeUnit,
           _
         )
@@ -200,7 +191,7 @@ extends KaplanMeierModule[cats.Id]
   }
 
 
-  private val progressionRecist =
+  private val progression =
     Set(
       RECIST.PD,
       RECIST.SD
@@ -239,8 +230,7 @@ extends KaplanMeierModule[cats.Id]
       .get(therapy.id)
       // 1. Look for date of latest response with recorded progression
       .collect {
-        case response if progressionRecist contains response.value =>
-          response.effectiveDate
+        case response if progression(response.value) => response.effectiveDate
       }
       // 2. Check whether therapy was stopped due to progression and take the end or recording date
       .orElse(
@@ -265,23 +255,42 @@ extends KaplanMeierModule[cats.Id]
     Snapshot[MTBPatientRecord] => Iterable[(String,LocalDate,LocalDate,Boolean)]
   ] =
     Map(
-      (OS,ByTumorEntity) -> {
+      (OS,TumorEntity) -> {
         snp =>
           val (observationDate,status) = dateOfDeathOrCensoring(snp)
         
           snp.data
             .diagnoses
             .map(
-              diagnosis =>
-                (
-                  diagnosis.code
-                    .parentOfKind(Category)
-                    .getOrElse(diagnosis.code)
-                    .code.value,
-                  diagnosis.recordedOn,
-                  observationDate,
-                  status
-                )
+              diagnosis => (
+                diagnosis.code.parentOfKind(Category).getOrElse(diagnosis.code).code.value,
+                diagnosis.recordedOn,
+                observationDate,
+                status
+              )
+            )
+            .toList
+
+      },
+      (OS,ObtainedTherapy) -> {
+        snp =>
+          val (observationDate,status) = dateOfDeathOrCensoring(snp)
+
+          val groupLabel =         
+            if (snp.data.systemicTherapies.exists(_.exists(_.latestBy(_.recordedOn).period.isDefined)))
+              "Therapie erhalten"
+            else
+              "Keine Therapie erhalten" 
+
+          snp.data
+            .diagnoses
+            .map(
+              diagnosis => (
+                groupLabel,
+                diagnosis.recordedOn,
+                observationDate,
+                status
+              )
             )
             .toList
 
@@ -305,7 +314,7 @@ extends KaplanMeierModule[cats.Id]
                 )
             )
       },
-      (PFS,ByTherapy) -> { 
+      (PFS,Therapy) -> { 
         case Snapshot(record,_) =>
         
           implicit val lastResponses =
