@@ -28,11 +28,12 @@ import de.dnpm.dip.service.{
 }
 import de.dnpm.dip.service.query.ReportingOps
 import de.dnpm.dip.model.{
-  Snapshot,
-  Id,
   ClosedInterval,
+  FollowUp,
+  Id,
   Patient,
   Reference,
+  Snapshot,
   UnitOfTime
 }
 import de.dnpm.dip.model.Medications._
@@ -206,6 +207,15 @@ extends KaplanMeierModule[cats.Id]
       record
         .patient
         .dateOfDeath
+        // Else if last Follow-Up documents "Lost to follow-up", use FU date as event occurred
+        .orElse(
+          record.followUps.flatMap(
+            _.maxByOption(_.date)
+             .collect { 
+              case followUp if followUp.patientStatus.exists(_.code.enumValue == FollowUp.PatientStatus.LostToFU) => followUp.date
+            }
+          )
+        )
         .map(_ -> true)
         .getOrElse(
           // 1. Censoring time strategy: fall back to date of last therapy follow-up
@@ -222,7 +232,8 @@ extends KaplanMeierModule[cats.Id]
 
   private def progressionOrCensoringDate(
     therapy: MTBSystemicTherapy,
-    patient: Patient
+    record: MTBPatientRecord
+//    patient: Patient
   )(
     implicit lastResponses: Map[Id[MTBSystemicTherapy],Response]
   ): (LocalDate,Boolean) =
@@ -244,9 +255,18 @@ extends KaplanMeierModule[cats.Id]
           }
       )
       // 3. Use patient date of death as "progression" date
-      .orElse(patient.dateOfDeath)
+      .orElse(record.patient.dateOfDeath)
+      // 4. If last Follow-Up documents "Lost to follow-up", use FU date as event occurred
+      .orElse(
+        record.followUps.flatMap(
+          _.maxByOption(_.date)
+           .collect { 
+            case followUp if followUp.patientStatus.exists(_.code.enumValue == FollowUp.PatientStatus.LostToFU) => followUp.date
+          }
+        )
+      )
       .map(_ -> true)
-      // 4. Censoring: therapy recording date
+      // 5. Censoring: therapy recording date
       .getOrElse(therapy.recordedOn -> false)
   
 
@@ -331,12 +351,10 @@ extends KaplanMeierModule[cats.Id]
             .flatMap {
               therapy =>
           
-                val (observationDate,status) =
-                  progressionOrCensoringDate(therapy,record.patient)
+                val (observationDate,status) = progressionOrCensoringDate(therapy,record)
 
                 for { 
-                  start <-
-                    therapy.period.map(_.start) 
+                  start <- therapy.period.map(_.start) 
           
                   medClasses <-
                     therapy
@@ -370,8 +388,7 @@ extends KaplanMeierModule[cats.Id]
             .flatMap {
               therapy =>
           
-                val (observationDate,status) =
-                  progressionOrCensoringDate(therapy,record.patient)
+                val (observationDate,status) = progressionOrCensoringDate(therapy,record)
 
                 therapy.period
                   .map(_.start) 
@@ -445,8 +462,7 @@ extends KaplanMeierModule[cats.Id]
     )(
       implicit lastResponses: Map[Id[MTBSystemicTherapy],Response]
     ): Option[Long] = {
-      val (observationDate,status) =
-        progressionOrCensoringDate(therapy,record.patient)
+      val (observationDate,status) = progressionOrCensoringDate(therapy,record)
 
       status match {
         case true  => therapy.period.map(p => chronoUnit.between(p.start,observationDate))
