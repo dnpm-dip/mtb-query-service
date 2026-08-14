@@ -194,4 +194,12 @@ with MTBReportingOps
       queryCriteria
     )
 
+  override def coarseTherapyResponses(
+    filter: MTBFilters
+  ): Seq[CoarseTherapyResponses] =
+    coarseTherapyResponses(
+      patientRecords(filter),
+      queryCriteria
+    )
+
 }

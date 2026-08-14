@@ -1,10 +1,7 @@
 package de.dnpm.dip.mtb.query.api
 
 
-import cats.{
-  Id,
-  Applicative
-}
+import cats.Applicative
 import de.dnpm.dip.util.DisplayLabel
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.coding.hgnc.HGNC
@@ -29,7 +26,7 @@ import play.api.libs.json.{
 
 trait MTBResultSet
 extends ResultSet[MTBPatientRecord,MTBQueryCriteria]
-with KaplanMeierOps[Id,Applicative[Id]]
+with KaplanMeierOps[cats.Id,Applicative[cats.Id]]
 {
 
   type Filter = MTBFilters
@@ -40,6 +37,8 @@ with KaplanMeierOps[Id,Applicative[Id]]
   def medication(filter: MTBFilters = MTBFilters.empty): MTBResultSet.Medication
 
   def therapyResponses(filter: MTBFilters = MTBFilters.empty): Seq[MTBResultSet.TherapyResponses]
+
+  def coarseTherapyResponses(filter: MTBFilters = MTBFilters.empty): Seq[MTBResultSet.CoarseTherapyResponses]
 
   def geneAlterations(filter: MTBFilters = MTBFilters.empty): Seq[MTBResultSet.GeneAlterationInfo]
 
@@ -137,6 +136,28 @@ object MTBResultSet
   {
     implicit val writes: OWrites[TherapyResponses] =
       Json.writes[TherapyResponses]
+  }
+
+
+  final case class CoarseTherapyResponses
+  (
+    tumorEntity: Coding[ICD10GM],
+    medications: Set[Coding[Medications]],
+    supportingAlterations: Option[Set[GeneAlteration]],
+    levelsOfEvidence: Option[Set[Coding[LevelOfEvidence.Grading.Value]]],
+    count: Int,
+    countResponderPFSRatio: Int,  // Von Hoff PFS ratio
+    orr: Option[Int],  // Overall Response Rate: 0 - 100 %
+    dcr: Option[Int],  // Disease Control Rate:  0 - 100 %
+    responseDistribution: Distribution[RECIST.Value],
+    meanDuration: Option[Double],  // In weeks
+  )
+
+
+  object CoarseTherapyResponses
+  {
+    implicit val writes: OWrites[CoarseTherapyResponses] =
+      Json.writes[CoarseTherapyResponses]
   }
 
 
