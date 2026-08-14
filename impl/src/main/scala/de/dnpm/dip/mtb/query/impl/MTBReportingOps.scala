@@ -1,6 +1,7 @@
 package de.dnpm.dip.mtb.query.impl
 
 
+import java.time.temporal.ChronoUnit.DAYS
 import scala.util.chaining._
 import cats.Applicative
 import de.dnpm.dip.util.DisplayLabel
@@ -17,11 +18,7 @@ import de.dnpm.dip.coding.icd.{
   ICDO3
 }
 import ClassKinds._
-import de.dnpm.dip.model.{
-//  Id,
-  Medications,
-//  Patient
-}
+import de.dnpm.dip.model.Medications
 import de.dnpm.dip.model.UnitOfTime.Weeks
 import de.dnpm.dip.service.{
   Distribution,
@@ -38,11 +35,12 @@ import de.dnpm.dip.mtb.query.api.{
   GeneAlteration,
   GeneAlterations,
   MTBResultSet,
-  MTBQueryCriteria
+  MTBQueryCriteria,
+  PFSRatio
 }
 
 
-trait MTBReportingOps extends ReportingOps
+trait MTBReportingOps extends ReportingOps with SurvivalOps
 {
 
   import ICD.extensions._
@@ -277,7 +275,7 @@ trait MTBReportingOps extends ReportingOps
             val recommendationWithEntityAndGrading: Option[(MTBMedicationRecommendation,Coding[ICD10GM],Option[Coding[LevelOfEvidence.Grading.Value]])] =
               for {
                 recommendation <- therapy.basedOn.flatMap(_.resolve)
-                diagnosis <- recommendation.reason.flatMap(_.resolve)
+                diagnosis <- recommendation.reason.flatMap(_.resolve).orElse(if (diagnoses.size == 1) Some(diagnoses.head) else None)
               } yield (
                 recommendation,
                 diagnosis.code,
@@ -339,6 +337,117 @@ trait MTBReportingOps extends ReportingOps
     .toSeq
     .optRanked
   }
+
+
+  def coarseTherapyResponses(
+    records: Seq[MTBPatientRecord],
+    queryCriteria: Option[MTBQueryCriteria]
+  ): Seq[MTBResultSet.CoarseTherapyResponses] = {
+
+    implicit val ranker = queryCriteria.flatMap(CoarseTherapyResponsesRanker(_))
+
+    records.foldLeft(
+      Map.empty[
+        (Coding[ICD10GM],Set[Coding[Medications]]),
+        (Set[GeneAlteration],Set[Coding[LevelOfEvidence.Grading.Value]],Int,Seq[PFSRatio.DataPoint],Seq[RECIST.Value],Seq[Double])
+      ]
+    ){ 
+      (acc,record) =>
+
+        implicit val diagnoses = record.diagnoses
+        implicit lazy val recommendations = record.getCarePlans.flatMap(_.medicationRecommendations.getOrElse(List.empty))
+        implicit lazy val variants = record.getNgsReports.flatMap(_.variants)
+        implicit lazy val responses =
+          record.getResponses
+            .groupBy(_.therapy.id)
+            .map {
+              case (therapy,responses) => therapy -> responses.maxBy(_.effectiveDate).value.code.enumValue
+            }
+
+        val therapies =
+          record.getSystemicTherapies
+            .map(_.latestBy(_.recordedOn))
+            .filter(_.medication.isDefined)
+
+        therapies.foldLeft(acc){
+          (acc2,therapy) =>
+
+            val recommendationWithEntityAndGrading: Option[(MTBMedicationRecommendation,Coding[ICD10GM],Option[Coding[LevelOfEvidence.Grading.Value]])] =
+              for {
+                recommendation <- therapy.basedOn.flatMap(_.resolve)
+                diagnosis <- recommendation.reason.flatMap(_.resolve).orElse(if (diagnoses.size == 1) Some(diagnoses.head) else None)
+              } yield (
+                recommendation,
+                diagnosis.code,
+                recommendation.levelOfEvidence.map(_.grading)
+              )
+
+            recommendationWithEntityAndGrading.fold(acc2){
+              case (recommendation,entity,evidenceGrading) =>
+
+                val medications = therapy.medication.get
+                val response    = responses.get(therapy.id)
+                val duration    = therapy.period.flatMap(_.duration(Weeks)).map(_.value)
+                val supportingAlterations =
+                  recommendation.supportingVariants
+                    .getOrElse(List.empty)
+                    .flatMap(
+                      ref => ref.resolveOn(variants).map(
+                        variant => ref.gene match {
+                          case Some(relevantGene) => variant.geneAlteration(relevantGene)
+                          case None               => variant.geneAlterations
+                        }
+                      )
+                      .getOrElse(List.empty)
+                    )
+
+                acc2.updatedWith((entity,medications))(
+                  _.map {
+                    case (alterations,evidenceGradings,n,pfsRatios,recists,durations) => (
+                      alterations ++ supportingAlterations,
+                      evidenceGradings ++ evidenceGrading,
+                      n+1,
+                      pfsRatios ++ pfsRatio(therapy)(record,DAYS),
+                      recists ++ response,
+                      durations ++ duration
+                    )
+                  }
+                  .orElse(
+                    Some(
+                      (
+                        supportingAlterations.toSet,
+                        evidenceGrading.toSet,
+                        1,
+                        pfsRatio(therapy)(record,DAYS).toList,
+                        response.toSeq,
+                        duration.toSeq 
+                      )
+                    )
+                  )
+                )
+                
+            }
+        }
+    }
+    .map {
+      case ((entity,medications),(supportingAlterations,evidenceGradings,count,pfsRatios,responses,durations)) =>
+        MTBResultSet.CoarseTherapyResponses(
+          entity,
+          medications,
+          Option(supportingAlterations).filter(_.nonEmpty),
+          Option(evidenceGradings).filter(_.nonEmpty),
+          count,
+          pfsRatios.count(_.pfsRatio >= responderThreshold),
+          ORR(responses),
+          DCR(responses),
+          Distribution.of(responses),
+          mean(durations)
+        )
+    }
+    .toSeq
+    .optRanked
+  }
+
 
 
   def geneAlterationInfos(

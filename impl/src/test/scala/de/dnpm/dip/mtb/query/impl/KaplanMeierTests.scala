@@ -256,8 +256,7 @@ class KaplanMeierTests extends AnyFlatSpec
     implicit val estimator: KaplanMeierEstimator[cats.Id] =
       DefaultKaplanMeierEstimator
 
-    val kmModule =
-      new DefaultKaplanMeierModule
+    val kmModule = new DefaultKaplanMeierModule
 
     forAll(
       kmModule

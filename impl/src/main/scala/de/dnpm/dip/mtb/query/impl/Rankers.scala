@@ -8,7 +8,8 @@ import de.dnpm.dip.mtb.query.api.{
 }
 import de.dnpm.dip.mtb.query.api.MTBResultSet.{
   GeneAlterationInfo,
-  TherapyResponses
+  TherapyResponses,
+  CoarseTherapyResponses
 }
 import de.dnpm.dip.coding.Coding
 import de.dnpm.dip.coding.icd.ICD10GM
@@ -75,6 +76,18 @@ trait Rankers
           th.tumorEntity.code,
           th.supportingAlteration.gene.code
         ) ++
+        th.medications.flatMap(_.display.map(_.toLowerCase)) ++
+        th.responseDistribution.elements.map(_.key)
+    }
+
+  /**
+   * Converter of TherapyResponses object into a "bag of words" representation for relevance ranking
+   */
+  lazy val CoarseTherapyResponsesRanker =
+    Ranker.of[CoarseTherapyResponses,Any]{
+      th =>
+        Set(th.tumorEntity.code) ++
+        th.supportingAlterations.getOrElse(Set.empty).map(_.gene.code) ++
         th.medications.flatMap(_.display.map(_.toLowerCase)) ++
         th.responseDistribution.elements.map(_.key)
     }
