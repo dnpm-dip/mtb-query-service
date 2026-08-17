@@ -23,10 +23,10 @@ import de.dnpm.dip.coding.icd.{
 }
 import de.dnpm.dip.coding.icd.ClassKinds.Category
 import de.dnpm.dip.service.{
-  Count,
+//  Count,
   Entry
 }
-import de.dnpm.dip.service.query.ReportingOps
+//import de.dnpm.dip.service.query.ReportingOps
 import de.dnpm.dip.model.{
   ClosedInterval,
   FollowUp,
@@ -184,6 +184,24 @@ trait SurvivalOps
   }
 
 
+  private def orderedTherapies(record: MTBPatientRecord): Seq[MTBSystemicTherapy] =
+    (record.getGuidelineTherapies ++ record.getSystemicTherapies.map(_.latest))
+      .filter(_.period.isDefined)
+      .sortBy(_.period.get.start)
+
+
+  private def precedingTherapy(
+    therapy: MTBSystemicTherapy,
+    record: MTBPatientRecord
+  ): Option[MTBSystemicTherapy] =
+    therapy.period match {
+      case Some(period) => orderedTherapies(record).find(_.period.exists(_.start isBefore period.start))
+
+      // No way to find the preceding therapy without therapy.period
+      case None => None 
+    }
+
+/*
   def pfsRatio(
     record: MTBPatientRecord
   )(
@@ -225,10 +243,10 @@ trait SurvivalOps
     )
           
   }
+*/
 
-
-  def pfsRatio(
-    mtbTherapy: MTBSystemicTherapy
+  def precisionToStandardRatio(
+    therapy: MTBSystemicTherapy
   )(
     implicit
     record: MTBPatientRecord,
@@ -241,9 +259,38 @@ trait SurvivalOps
 
       medication1 <- th1.medication
 
-      pfs2 <- progressionFreeSurvival(mtbTherapy,record).map(_._1)
+      pfs2 <- progressionFreeSurvival(therapy,record).map(_._1)
 
-      medication2 <- mtbTherapy.medication
+      medication2 <- therapy.medication
+
+    } yield PFSRatio.DataPoint(
+      Reference.to(record.patient),
+      medication1,
+      medication2,
+      pfs1,
+      pfs2,
+      pfs2.toDouble/pfs1
+    )
+          
+  }
+
+  def vonHoffRatio(
+    therapy: MTBSystemicTherapy
+  )(
+    implicit
+    record: MTBPatientRecord,
+    chronoUnit: ChronoUnit
+  ): Option[PFSRatio.DataPoint] = {
+    for {
+      th1 <- precedingTherapy(therapy,record)
+
+      pfs1 <- progressionFreeSurvival(th1,record).map(_._1)
+
+      medication1 <- th1.medication
+
+      pfs2 <- progressionFreeSurvival(therapy,record).map(_._1)
+
+      medication2 <- therapy.medication
 
     } yield PFSRatio.DataPoint(
       Reference.to(record.patient),
@@ -319,14 +366,14 @@ trait KaplanMeierModule[F[_]] extends SurvivalOps
     implicit estimator: KaplanMeierEstimator[F],
   ): F[SurvivalStatistics]
 
-
+/*
   def pfsRatioReport(
     cohort: Seq[Snapshot[MTBPatientRecord]],
     timeUnit: UnitOfTime = UnitOfTime.Days
   )(
     implicit F: Monad[F]
   ): F[PFSRatio.Report]
-
+*/
 }
 
 
@@ -393,6 +440,73 @@ extends KaplanMeierModule[cats.Id]
   }
 
 
+  private def projector(
+    survivalType: SurvivalType.Value,
+    grouping: Grouping.Value
+  )(
+    implicit chronoUnit: ChronoUnit
+  ): Snapshot[MTBPatientRecord] => Iterable[(String,Long,Boolean)] =
+    survivalType match {   
+
+      case OS =>
+
+        val survival: (MTBDiagnosis,Snapshot[MTBPatientRecord]) => Option[(Long,Boolean)] = overallSurvival(_,_)
+
+        val groupLabel: (MTBDiagnosis,MTBPatientRecord) => String =
+          grouping match {
+            case TumorEntity =>
+              (diagnosis,_) => diagnosis.code.parentOfKind(Category).getOrElse(diagnosis.code).code.value
+
+            case ObtainedTherapy =>
+              (_,record) => {
+                val hasObtainedTherapy =
+                  record.systemicTherapies.exists(_.exists { 
+                    history =>
+                      val latest = history.latestBy(_.recordedOn)
+                      latest.period.isDefined && latest.medication.exists(_.nonEmpty)
+                    }
+                  )
+                if (hasObtainedTherapy) "Therapie erhalten"
+                else "Keine Therapie erhalten"
+              }
+
+            case Ungrouped => (_,_) => "Alle"
+          }
+            
+        snp => snp.data.diagnoses.toList.flatMap {
+          diagnosis =>
+            for {
+              (os,status) <- survival(diagnosis,snp) 
+            } yield (groupLabel(diagnosis,snp.data),os,status)
+        }
+      
+      case PFS =>
+
+        val survival: (MTBSystemicTherapy,MTBPatientRecord) => Option[(Long,Boolean)] = progressionFreeSurvival(_,_)
+
+        val groupLabel: MTBSystemicTherapy => String =
+          grouping match {
+            case Therapy =>
+              _.medication.map(_.flatMap(_.currentGroup))
+               .map(_.flatMap(_.display))
+               .mkString(" + ")
+
+            case Ungrouped => _ => "Alle"
+          }
+
+        {
+          case Snapshot(record,_) =>
+            record.getSystemicTherapies.map(_.latest).flatMap {
+              therapy =>
+                for {
+                  (pfs,status) <- survival(therapy,record)
+                } yield (groupLabel(therapy),pfs,status)
+            }
+        }
+
+    }
+
+/*
   private def projector(
     survivalType: SurvivalType.Value,
     grouping: Grouping.Value
@@ -474,8 +588,8 @@ extends KaplanMeierModule[cats.Id]
       }
 
     }
-
-
+*/
+/*
   override def pfsRatioReport(
     cohort: Seq[Snapshot[MTBPatientRecord]],
     timeUnit: UnitOfTime
@@ -512,10 +626,9 @@ extends KaplanMeierModule[cats.Id]
     )
 
   }
+*/
 
 }
-
-
 
 object DefaultKaplanMeierEstimator extends KaplanMeierEstimator[cats.Id]
 {
