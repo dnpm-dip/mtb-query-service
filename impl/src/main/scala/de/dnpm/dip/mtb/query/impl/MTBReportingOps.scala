@@ -407,7 +407,7 @@ trait MTBReportingOps extends ReportingOps with SurvivalOps
                       alterations ++ supportingAlterations,
                       evidenceGradings ++ evidenceGrading,
                       n+1,
-                      pfsRatios ++ pfsRatio(therapy)(record,DAYS),
+                      pfsRatios ++ vonHoffRatio(therapy)(record,DAYS),
                       recists ++ response,
                       durations ++ duration
                     )
@@ -418,7 +418,7 @@ trait MTBReportingOps extends ReportingOps with SurvivalOps
                         supportingAlterations.toSet,
                         evidenceGrading.toSet,
                         1,
-                        pfsRatio(therapy)(record,DAYS).toList,
+                        vonHoffRatio(therapy)(record,DAYS).toList,
                         response.toSeq,
                         duration.toSeq 
                       )
