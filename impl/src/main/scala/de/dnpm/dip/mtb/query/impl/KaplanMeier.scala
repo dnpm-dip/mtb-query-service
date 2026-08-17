@@ -5,11 +5,9 @@ import scala.util.chaining._
 import java.time.{
   Instant,
   LocalDate,
-  Period,
   ZoneId
 }
 import java.time.temporal.ChronoUnit
-import java.time.temporal.TemporalAmount
 import cats.{
   Applicative,
   Monad,
@@ -146,18 +144,22 @@ trait SurvivalOps
   def overallSurvival(
     diagnosis: MTBDiagnosis,
     snp: Snapshot[MTBPatientRecord]
-  ): (TemporalAmount,Boolean) = {
+  )(
+    implicit chronoUnit: ChronoUnit
+  ): (Long,Boolean) = {
 
     val (observationDate,status) = dateOfDeathOrCensoring(snp)
 
-    Period.between(diagnosis.recordedOn,observationDate) -> status
+    chronoUnit.between(diagnosis.recordedOn,observationDate) -> status
   }
 
   
   def progressionFreeSurvival(
     therapy: MTBSystemicTherapy,
     record: MTBPatientRecord
-  ): Option[(TemporalAmount,Boolean)] = {
+  )(
+    implicit chronoUnit: ChronoUnit
+  ): Option[(Long,Boolean)] = {
 
     implicit val lastResponses =
       record
@@ -169,7 +171,7 @@ trait SurvivalOps
 
     val (observationDate,status) = progressionOrCensoringDate(therapy,record)
 
-    therapy.period.map(p => Period.between(p.start,observationDate) -> status)
+    therapy.period.map(p => chronoUnit.between(p.start,observationDate) -> status)
 
   }
 
@@ -185,13 +187,13 @@ trait SurvivalOps
     for {
       th1 <- record.getGuidelineTherapies.maxByOption(_.recordedOn)
 
-      pfs1 <- progressionFreeSurvival(th1,record).map(_._1.get(chronoUnit))
+      pfs1 <- progressionFreeSurvival(th1,record).map(_._1)
 
       medication1 <- th1.medication
 
       th2 <- record.getSystemicTherapies.map(_.latest).maxByOption(_.recordedOn)
 
-      pfs2 <- progressionFreeSurvival(th2,record).map(_._1.get(chronoUnit))
+      pfs2 <- progressionFreeSurvival(th2,record).map(_._1)
 
       medication2 <- th2.medication
 
@@ -227,11 +229,11 @@ trait SurvivalOps
     for {
       th1 <- record.getGuidelineTherapies.maxByOption(_.recordedOn)
 
-      pfs1 <- progressionFreeSurvival(th1,record).map(_._1.get(chronoUnit))
+      pfs1 <- progressionFreeSurvival(th1,record).map(_._1)
 
       medication1 <- th1.medication
 
-      pfs2 <- progressionFreeSurvival(mtbTherapy,record).map(_._1.get(chronoUnit))
+      pfs2 <- progressionFreeSurvival(mtbTherapy,record).map(_._1)
 
       medication2 <- mtbTherapy.medication
 
@@ -353,19 +355,18 @@ extends KaplanMeierModule[cats.Id]
     cohort: Seq[Snapshot[MTBPatientRecord]],
     timeUnit: UnitOfTime
   )(
-    implicit
-    estimator: KaplanMeierEstimator[cats.Id]
+    implicit estimator: KaplanMeierEstimator[cats.Id]
   ): SurvivalStatistics = {
 
-    val chronoUnit = UnitOfTime.chronoUnit(timeUnit)
+    implicit val chronoUnit = UnitOfTime.chronoUnit(timeUnit)
 
     val survivalType = optSurvivalType.getOrElse(defaults.`type`)
     val grouping     = optGrouping.getOrElse(defaults.grouping)
 
     cohort
-      .flatMap(projectors(survivalType -> grouping))
+      .flatMap(projector(survivalType,grouping))
       .groupMap(_._1){
-        case (_,duration,status) => duration.get(chronoUnit) -> status
+        case (_,duration,status) => duration -> status
       }
       .map {
         case (group,data) => Entry(group,estimator.cohortResult(data))
@@ -383,164 +384,28 @@ extends KaplanMeierModule[cats.Id]
 
   }
 
-/*
-  private val projectors: Map[
-    (SurvivalType.Value,Grouping.Value),
-    Snapshot[MTBPatientRecord] => Iterable[(String,LocalDate,LocalDate,Boolean)]
-  ] =
-    Map(
-      (OS,TumorEntity) -> {
-        snp =>
-          val (observationDate,status) = dateOfDeathOrCensoring(snp)
-        
-          snp.data
-            .diagnoses
-            .map(
-              diagnosis => (
-                diagnosis.code.parentOfKind(Category).getOrElse(diagnosis.code).code.value,
-                diagnosis.recordedOn,
-                observationDate,
-                status
-              )
-            )
-            .toList
 
-      },
-      (OS,ObtainedTherapy) -> {
-
-        def hasObtainedTherapy(record: MTBPatientRecord): Boolean =
-          record.systemicTherapies.exists(_.exists { 
-            history =>
-              val latest = history.latestBy(_.recordedOn)
-              latest.period.isDefined && latest.medication.exists(_.nonEmpty)
-            }
-          )
-
-        snp =>
-          val (observationDate,status) = dateOfDeathOrCensoring(snp)
-
-          snp.data
-            .diagnoses
-            .map(
-              diagnosis => (
-                if (hasObtainedTherapy(snp.data)) "Therapie erhalten" else "Keine Therapie erhalten" ,
-                diagnosis.recordedOn,
-                observationDate,
-                status
-              )
-            )
-            .toList
-
-      },
-      (OS,Ungrouped) -> {
-        snp =>
-          val (observationDate,status) = dateOfDeathOrCensoring(snp)
-
-          snp.data
-            .diagnoses
-            .map(_.recordedOn)
-            .toList
-            .minOption
-            .map(
-              date => (
-                "Alle",
-                date,
-                observationDate,
-                status
-              )
-            )
-      },
-      (PFS,Therapy) -> { 
-        case Snapshot(record,_) =>
-        
-          implicit val lastResponses =
-            record
-              .getResponses
-              .groupBy(_.therapy)
-              .collect { 
-                case (ref,responses) => ref.id -> responses.maxBy(_.effectiveDate)
-              }
-          
-          record
-            .getSystemicTherapies
-            .map(_.latest)
-            .flatMap {
-              therapy =>
-          
-                val (observationDate,status) = progressionOrCensoringDate(therapy,record)
-
-                for { 
-                  start <- therapy.period.map(_.start) 
-          
-                  medClasses <-
-                    therapy
-                      .medication
-                      .map(_.flatMap(_.currentGroup))
-                      .map(_.flatMap(_.display))
-          
-                } yield (
-                  medClasses.mkString(" + "),
-                  start,
-                  observationDate,
-                  status
-                )
-          
-            }
-      },
-      (PFS,Ungrouped) -> { 
-        case Snapshot(record,_) =>
-        
-          implicit val lastResponses =
-            record
-              .getResponses
-              .groupBy(_.therapy)
-              .collect { 
-                case (ref,responses) => ref.id -> responses.maxBy(_.effectiveDate)
-              }
-          
-          record
-            .getSystemicTherapies
-            .map(_.latest)
-            .flatMap {
-              therapy =>
-          
-                val (observationDate,status) = progressionOrCensoringDate(therapy,record)
-
-                therapy.period
-                  .map(_.start) 
-                  .map(date =>
-                    (
-                      "Alle",
-                      date,
-                      observationDate,
-                      status
-                    )
-                  )
-                     
-          }
-      }
-
-    )
-*/
-
-  private val projectors: Map[
-    (SurvivalType.Value,Grouping.Value),
-    Snapshot[MTBPatientRecord] => Iterable[(String,TemporalAmount,Boolean)]
-  ] =
-    Map(
-      (OS,TumorEntity) -> {
+  private def projector(
+    survivalType: SurvivalType.Value,
+    grouping: Grouping.Value
+  )(
+    implicit chronoUnit: ChronoUnit
+  ): Snapshot[MTBPatientRecord] => Iterable[(String,Long,Boolean)] =
+    (survivalType,grouping) match {   
+      case (OS,TumorEntity) =>
         snp => snp.data.diagnoses.map {
           diagnosis =>
             val (os,status) = overallSurvival(diagnosis,snp)
             (
+             // ICD-10 Category as group label
               diagnosis.code.parentOfKind(Category).getOrElse(diagnosis.code).code.value,
               os,
               status
             )
         }
         .toList
-      },
-      (OS,ObtainedTherapy) -> {
+      
+      case (OS,ObtainedTherapy) =>
 
         def hasObtainedTherapy(record: MTBPatientRecord): Boolean =
           record.systemicTherapies.exists(_.exists { 
@@ -558,16 +423,15 @@ extends KaplanMeierModule[cats.Id]
         }
         .toList
 
-      },
-      (OS,Ungrouped) -> {
+      case (OS,Ungrouped) =>
         snp =>
           snp.data.diagnoses.toList.minByOption(_.recordedOn).map {
             diagnosis =>
               val (os,status) = overallSurvival(diagnosis,snp)
               ("Alle",os,status)
           }
-      },
-      (PFS,Therapy) -> { 
+
+      case (PFS,Therapy) => {
         case Snapshot(record,_) =>
           record.getSystemicTherapies.map(_.latest).flatMap {
             therapy =>
@@ -586,8 +450,9 @@ extends KaplanMeierModule[cats.Id]
                 status
               )
           }
-      },
-      (PFS,Ungrouped) -> { 
+      }
+
+      case (PFS,Ungrouped) => {
         case Snapshot(record,_) =>
           record.getSystemicTherapies.map(_.latest).flatMap {
             therapy =>
@@ -597,8 +462,7 @@ extends KaplanMeierModule[cats.Id]
                 }
           }
       }
-
-    )
+    }
 
 
   override def pfsRatioReport(
