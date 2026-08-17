@@ -561,8 +561,6 @@ extends KaplanMeierModule[cats.Id]
       },
       (OS,Ungrouped) -> {
         snp =>
-          val (observationDate,status) = dateOfDeathOrCensoring(snp)
-
           snp.data.diagnoses.toList.minByOption(_.recordedOn).map {
             diagnosis =>
               val (os,status) = overallSurvival(diagnosis,snp)
