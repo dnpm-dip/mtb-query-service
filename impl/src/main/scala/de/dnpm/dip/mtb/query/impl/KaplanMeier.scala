@@ -63,6 +63,7 @@ import Grouping._
 trait SurvivalOps
 { 
 
+  // Inclusion of SD as marker of 'progression' was specified by domain experts
   protected val progression = Set(RECIST.PD,RECIST.SD).map(Coding(_))
 
   val dateOfDeathOrCensoring: Snapshot[MTBPatientRecord] => (LocalDate,Boolean) = {
@@ -146,11 +147,14 @@ trait SurvivalOps
     snp: Snapshot[MTBPatientRecord]
   )(
     implicit chronoUnit: ChronoUnit
-  ): (Long,Boolean) = {
+  ): Option[(Long,Boolean)] = {
 
     val (observationDate,status) = dateOfDeathOrCensoring(snp)
 
-    chronoUnit.between(diagnosis.recordedOn,observationDate) -> status
+    Option(chronoUnit.between(diagnosis.recordedOn,observationDate))
+      .collect { 
+        case l if l > 0 => l -> status
+      }
   }
 
   
@@ -171,7 +175,11 @@ trait SurvivalOps
 
     val (observationDate,status) = progressionOrCensoringDate(therapy,record)
 
-    therapy.period.map(p => chronoUnit.between(p.start,observationDate) -> status)
+    therapy.period.map(_.start)
+      .map(chronoUnit.between(_,observationDate))
+      .collect { 
+        case l if l > 0 => l -> status
+      }
 
   }
 
@@ -392,18 +400,19 @@ extends KaplanMeierModule[cats.Id]
     implicit chronoUnit: ChronoUnit
   ): Snapshot[MTBPatientRecord] => Iterable[(String,Long,Boolean)] =
     (survivalType,grouping) match {   
+
       case (OS,TumorEntity) =>
-        snp => snp.data.diagnoses.map {
+        snp => snp.data.diagnoses.toList.flatMap {
           diagnosis =>
-            val (os,status) = overallSurvival(diagnosis,snp)
-            (
+            for {
+              (os,status) <- overallSurvival(diagnosis,snp)
+            } yield (
              // ICD-10 Category as group label
               diagnosis.code.parentOfKind(Category).getOrElse(diagnosis.code).code.value,
               os,
               status
             )
         }
-        .toList
       
       case (OS,ObtainedTherapy) =>
 
@@ -415,20 +424,21 @@ extends KaplanMeierModule[cats.Id]
             }
           )
 
-        snp => snp.data.diagnoses.map {
+        snp => snp.data.diagnoses.toList.flatMap {
           diagnosis => 
-            val (os,status) = overallSurvival(diagnosis,snp)
-            val group = if (hasObtainedTherapy(snp.data)) "Therapie erhalten" else "Keine Therapie erhalten"
-            (group,os,status)
+            for {
+              (os,status) <- overallSurvival(diagnosis,snp)
+              group = if (hasObtainedTherapy(snp.data)) "Therapie erhalten" else "Keine Therapie erhalten"
+            } yield (group,os,status)
         }
-        .toList
 
       case (OS,Ungrouped) =>
         snp =>
-          snp.data.diagnoses.toList.minByOption(_.recordedOn).map {
+          snp.data.diagnoses.toList.minByOption(_.recordedOn).flatMap {
             diagnosis =>
-              val (os,status) = overallSurvival(diagnosis,snp)
-              ("Alle",os,status)
+              for {  
+                (os,status) <- overallSurvival(diagnosis,snp)
+              } yield ("Alle",os,status)
           }
 
       case (PFS,Therapy) => {
@@ -462,12 +472,13 @@ extends KaplanMeierModule[cats.Id]
                 }
           }
       }
+
     }
 
 
   override def pfsRatioReport(
     cohort: Seq[Snapshot[MTBPatientRecord]],
-    timeUnit: UnitOfTime = UnitOfTime.Weeks
+    timeUnit: UnitOfTime
   )(
     implicit F: Monad[cats.Id]
   ): PFSRatio.Report = {
