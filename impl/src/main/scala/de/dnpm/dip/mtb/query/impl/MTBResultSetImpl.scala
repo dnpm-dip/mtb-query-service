@@ -5,16 +5,23 @@ import cats.{
   Applicative,
   Id
 }
+import de.dnpm.dip.util.DisplayLabel
 import de.dnpm.dip.coding.{
-  CodeSystemProvider
+  CodeSystemProvider,
+  Coding
 }
 import de.dnpm.dip.coding.atc.ATC
+import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.coding.icd.{
   ICD10GM,
   ICDO3
 }
 import de.dnpm.dip.coding.icd.ClassKinds.Category
 import de.dnpm.dip.model.Medications
+import de.dnpm.dip.service.{
+  Distribution,
+  Entry
+}
 import de.dnpm.dip.service.query.{
   PatientFilter,
   Query
@@ -22,6 +29,7 @@ import de.dnpm.dip.service.query.{
 import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.mtb.query.api.{
   DiagnosisFilter,
+  GeneAlteration,
   KaplanMeier,
   MTBQueryCriteria,
   MTBFilters,
@@ -146,7 +154,7 @@ with MTBReportingOps
 
   override def alteredGeneDistributions(
     filter: MTBFilters
-  ) =
+  ): Seq[Entry[GeneAlteration.Type.Value,Distribution[DisplayLabel[Coding[HGNC]]]]] =
     alteredGeneDistributions(patientRecords(filter))
 
 
