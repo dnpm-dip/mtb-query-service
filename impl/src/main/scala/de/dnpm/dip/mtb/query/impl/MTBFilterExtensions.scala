@@ -29,6 +29,89 @@ import de.dnpm.dip.mtb.query.api.{
 object MTBFilterExtensions
 {
 
+
+  implicit class DiagnosisFilterPredicate(val filter: DiagnosisFilter) extends AnyVal
+  {
+
+    /**
+     * For the queried diagnosis Codings (expanded to tree),
+     * check whether there exists a matching occurring diagnosis code
+     */
+    def apply(
+      diagnoses: Iterable[MTBDiagnosis]
+    )(
+      implicit icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]]
+    ): Boolean =
+      filter.code match {
+        case Some(queriedCodings) if queriedCodings.nonEmpty =>
+          queriedCodings.flatMap(_.expand)
+            .exists(queriedCoding => diagnoses.exists(diagnosis => queriedCoding.exists(_.code == diagnosis.code.code)))
+
+        // True by default if nothing to filter by
+        case _ => true
+      }
+
+  }
+
+
+  implicit class RecommendationFilterPredicate(val filter: RecommendationFilter) extends AnyVal
+  {
+
+    def apply(
+      recommendations: Iterable[MTBMedicationRecommendation]
+    )(
+      implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
+    ): Boolean = 
+      matches(
+        filter.medication,
+        recommendations.map(_.medication) 
+      )
+
+  }
+
+
+  implicit class TherapyFilterPredicate(val filter: TherapyFilter) extends AnyVal
+  {
+
+    def apply(
+      therapies: Iterable[MTBSystemicTherapy]
+    )(
+      implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
+    ): Boolean =
+      matches(
+        filter.medication,
+        therapies.flatMap(_.medication.filter(_.nonEmpty))
+      )
+  }
+
+
+  /**
+   * For the queried medication combinations (expanded to tree),
+   * check whether there exists an occurring medication combination
+   * such that each entry in the queried combination has a match by name
+   */
+  private def matches(
+    filteredMedications: Option[Set[Set[Coding[Medications]]]],
+    occurringMedications: => Iterable[Set[Coding[Medications]]]
+  )(
+    implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
+  ): Boolean =
+    filteredMedications match { 
+      case Some(medication) if medication.nonEmpty =>
+
+        val occurringMedicationNames = occurringMedications.map(_.flatMap(_.display.map(_.toLowerCase)))
+
+        expandedMedicationNames(medication).exists(
+          filteredMedications => occurringMedicationNames.exists(
+            names => filteredMedications.forall(entry => names.exists(entry.contains))
+          )
+        )
+
+      // True by default if nothing to filter by
+      case _ => true 
+    }
+
+
   private def expandedMedicationNames(
     meds: Set[Set[Coding[Medications]]]
   )(
@@ -46,76 +129,5 @@ object MTBFilterExtensions
         }
       )
     )
-
-
-  implicit class DiagnosisPredicate(val filter: DiagnosisFilter) extends AnyVal
-  {
-
-    def apply(
-      diagnoses: Iterable[MTBDiagnosis]
-    )(
-      implicit icd10gm: CodeSystemProvider[ICD10GM,Id,Applicative[Id]]
-    ): Boolean = {
-
-      val occurringCodes =
-        diagnoses.map(_.code.code)
-
-      filter
-        .code
-        .map(_.flatMap(_.expand))
-        .map(codes => occurringCodes exists (code => codes exists (_ exists (_.code == code))))
-        .getOrElse(true)
-    }
-
-  }
-
-
-  implicit class RecommendationPredicate(val filter: RecommendationFilter) extends AnyVal
-  {
-
-    def apply(
-      recommendations: Iterable[MTBMedicationRecommendation]
-    )(
-      implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
-    ): Boolean = {
-
-      val occurringDrugNames =
-        recommendations
-          .map(_.medication.flatMap(_.display).map(_.toLowerCase))
-
-      val occurring: String => Boolean =
-        name => occurringDrugNames exists (_ contains name)
-          
-      filter
-        .medication
-        .map(expandedMedicationNames)
-        .map(_ exists (_ forall (_ exists occurring)))
-        .getOrElse(true)
-    }
-  }
-
-
-  implicit class TherapyPredicate(val filter: TherapyFilter) extends AnyVal
-  {
-
-    def apply(
-      therapies: Iterable[MTBSystemicTherapy]
-    )(
-      implicit atc: CodeSystemProvider[ATC,Id,Applicative[Id]]
-    ): Boolean = {
-
-      val optOccurringDrugNames =
-        therapies.map(_.medication.map(_.flatMap(_.display).map(_.toLowerCase)))
-      
-      val occurring: String => Boolean =
-        name => optOccurringDrugNames.exists(_ exists (_ contains name))
-            
-      filter
-        .medication
-        .map(expandedMedicationNames)
-        .map(_ exists (_ forall (_ exists occurring)))
-        .getOrElse(true)
-    }
-  }
 
 }
