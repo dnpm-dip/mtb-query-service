@@ -277,6 +277,8 @@ class KaplanMeierTests extends AnyFlatSpec
     ){
       dataPoints =>
 
+        dataPoints must not be (empty)
+
         // Check that all values are in interval [0.0,1.0]
         forAll(dataPoints){_.survRate must be (0.5 +- 0.5) }
 
