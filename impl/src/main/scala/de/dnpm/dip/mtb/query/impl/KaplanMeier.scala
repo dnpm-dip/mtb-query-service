@@ -24,7 +24,6 @@ import de.dnpm.dip.coding.icd.{
 import de.dnpm.dip.coding.icd.ClassKinds.Category
 import de.dnpm.dip.service.Entry
 import de.dnpm.dip.model.{
-//  CarePlan,
   ClosedInterval,
   FollowUp,
   Id,
@@ -32,7 +31,6 @@ import de.dnpm.dip.model.{
   Snapshot,
   UnitOfTime
 }
-//import CarePlan.BoardType.TherapyBoard
 import de.dnpm.dip.model.Medications._
 import de.dnpm.dip.mtb.model.{
   ECOG,
@@ -156,20 +154,8 @@ trait SurvivalOps
     implicit chronoUnit: ChronoUnit
   ): Option[(Long,Boolean)] =
     for {
-/*
-      carePlans <- snp.data.carePlans
 
-      // Get therapy board plan as the earliest with this declared board-type (or with recommendations if type undefined)
-      // and referencing the diagnosis as reason ( if defined)
-      firstTherapyBoard <- carePlans.filter(carePlan => 
-        carePlan.boardType.map(_.code.enumValue == TherapyBoard)
-          .getOrElse(carePlan.medicationRecommendations.exists(_.nonEmpty)) &&
-        carePlan.reason.map(_.id == diagnosis.id).getOrElse(true)
-      )
-      .minByOption(_.issuedOn)
-*/
       firstTherapyBoard <- snp.data.therapyBoardPlans.filter(_.reason.map(_.id == diagnosis.id).getOrElse(true)).minByOption(_.issuedOn)
-
 
       (observationDate,status) = dateOfDeathOrCensoring(snp)
 
@@ -453,13 +439,13 @@ extends KaplanMeierModule[cats.Id]
                  - No therapy w/ recommendation
                  - No therapy w/o recommendation
                 */
-                if (hasObtainedTherapy) "Therapie erhalten"
-                else {
-                  if (record.therapyBoardPlans.exists(_.medicationRecommendations.exists(_.nonEmpty)))
-                    "Keine Therapie erhalten (mit Empfehlungen)"
-                  else 
-                    "Keine Therapie erhalten (ohne Empfehlungen)"
-                }
+                if (hasObtainedTherapy)
+                  "Therapie erhalten"
+                else if (record.therapyBoardPlans.exists(_.medicationRecommendations.exists(_.nonEmpty)))
+                  "Keine Therapie erhalten (mit Empfehlungen)"
+                else 
+                  "Keine Therapie erhalten (ohne Empfehlungen)"
+                
               }
 
             case Ungrouped => (_,_) => "Alle"
@@ -498,89 +484,6 @@ extends KaplanMeierModule[cats.Id]
 
     }
 
-/*
-  private def projector(
-    survivalType: SurvivalType.Value,
-    grouping: Grouping.Value
-  )(
-    implicit chronoUnit: ChronoUnit
-  ): Snapshot[MTBPatientRecord] => Iterable[(String,Long,Boolean)] =
-    (survivalType,grouping) match {   
-
-      case (OS,TumorEntity) =>
-        snp => snp.data.diagnoses.toList.flatMap {
-          diagnosis =>
-            for {
-              (os,status) <- overallSurvival(diagnosis,snp)
-            } yield (
-             // ICD-10 Category as group label
-              diagnosis.code.parentOfKind(Category).getOrElse(diagnosis.code).code.value,
-              os,
-              status
-            )
-        }
-      
-      case (OS,ObtainedTherapy) =>
-
-        def hasObtainedTherapy(record: MTBPatientRecord): Boolean =
-          record.systemicTherapies.exists(_.exists { 
-            history =>
-              val latest = history.latestBy(_.recordedOn)
-              latest.period.isDefined && latest.medication.exists(_.nonEmpty)
-            }
-          )
-
-        snp => snp.data.diagnoses.toList.flatMap {
-          diagnosis => 
-            for {
-              (os,status) <- overallSurvival(diagnosis,snp)
-              group = if (hasObtainedTherapy(snp.data)) "Therapie erhalten" else "Keine Therapie erhalten"
-            } yield (group,os,status)
-        }
-
-      case (OS,Ungrouped) =>
-        snp =>
-          snp.data.diagnoses.toList.minByOption(_.recordedOn).flatMap {
-            diagnosis =>
-              for {  
-                (os,status) <- overallSurvival(diagnosis,snp)
-              } yield ("Alle",os,status)
-          }
-
-      case (PFS,Therapy) => {
-        case Snapshot(record,_) =>
-          record.getSystemicTherapies.map(_.latest).flatMap {
-            therapy =>
-              for { 
-                (pfs,status) <- progressionFreeSurvival(therapy,record)
-          
-                medClasses <-
-                  therapy
-                    .medication
-                    .map(_.flatMap(_.currentGroup))
-                    .map(_.flatMap(_.display))
-          
-              } yield (
-                medClasses.mkString(" + "),
-                pfs,
-                status
-              )
-          }
-      }
-
-      case (PFS,Ungrouped) => {
-        case Snapshot(record,_) =>
-          record.getSystemicTherapies.map(_.latest).flatMap {
-            therapy =>
-              progressionFreeSurvival(therapy,record)
-                .map {
-                  case (pfs,status) => ("Alle",pfs,status)
-                }
-          }
-      }
-
-    }
-*/
 /*
   override def pfsRatioReport(
     cohort: Seq[Snapshot[MTBPatientRecord]],
