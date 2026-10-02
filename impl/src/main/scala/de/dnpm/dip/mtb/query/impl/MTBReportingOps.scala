@@ -437,7 +437,7 @@ trait MTBReportingOps extends ReportingOps with SurvivalOps
           Option(supportingAlterations).filter(_.nonEmpty),
           Option(evidenceGradings).filter(_.nonEmpty),
           count,
-          pfsRatios.count(_.pfsRatio >= responderThreshold),
+          ((pfsRatios.count(_.pfsRatio >= responderThreshold).toDouble/count)*100).toInt,
           ORR(responses),
           DCR(responses),
           Distribution.of(responses),

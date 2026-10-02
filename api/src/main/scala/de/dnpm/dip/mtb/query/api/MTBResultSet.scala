@@ -146,7 +146,7 @@ object MTBResultSet
     supportingAlterations: Option[Set[GeneAlteration]],
     levelsOfEvidence: Option[Set[Coding[LevelOfEvidence.Grading.Value]]],
     count: Int,
-    countResponderPFSRatio: Int,  // Von Hoff PFS ratio
+    vonHoffResponderRatio: Int, // Percentage of PFSr >= 1.3. w.r.t total therapy count in entry
     orr: Option[Int],  // Overall Response Rate: 0 - 100 %
     dcr: Option[Int],  // Disease Control Rate:  0 - 100 %
     responseDistribution: Distribution[RECIST.Value],

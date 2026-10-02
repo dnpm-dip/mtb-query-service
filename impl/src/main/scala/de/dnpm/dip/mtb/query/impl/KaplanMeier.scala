@@ -22,12 +22,9 @@ import de.dnpm.dip.coding.icd.{
   ICD10GM
 }
 import de.dnpm.dip.coding.icd.ClassKinds.Category
-import de.dnpm.dip.service.{
-//  Count,
-  Entry
-}
-//import de.dnpm.dip.service.query.ReportingOps
+import de.dnpm.dip.service.Entry
 import de.dnpm.dip.model.{
+//  CarePlan,
   ClosedInterval,
   FollowUp,
   Id,
@@ -35,6 +32,7 @@ import de.dnpm.dip.model.{
   Snapshot,
   UnitOfTime
 }
+//import CarePlan.BoardType.TherapyBoard
 import de.dnpm.dip.model.Medications._
 import de.dnpm.dip.mtb.model.{
   ECOG,
@@ -57,7 +55,7 @@ import de.dnpm.dip.mtb.query.api.KaplanMeier.{
 }
 import SurvivalType._
 import Grouping._
-
+import extensions._
 
 
 trait SurvivalOps
@@ -121,7 +119,16 @@ trait SurvivalOps
         }
       )
       // 3. Use patient date of death as "progression" date
-      .orElse(record.patient.dateOfDeath)
+      .orElse(
+        record.patient.dateOfDeath.orElse(
+          // In case dateOfDeath undefined check if an ECOG 5 (death) is recorded
+          record.performanceStatus.flatMap(
+            _.collectFirst {
+              case ecog if ecog.value.code.enumValue == ECOG.Five => ecog.effectiveDate
+            } 
+          )
+        )
+      )
       .orElse {
 
         val mtbTherapy = record.getSystemicTherapies.exists(_.history.exists(_.id == therapy.id))
@@ -147,17 +154,33 @@ trait SurvivalOps
     snp: Snapshot[MTBPatientRecord]
   )(
     implicit chronoUnit: ChronoUnit
-  ): Option[(Long,Boolean)] = {
+  ): Option[(Long,Boolean)] =
+    for {
+/*
+      carePlans <- snp.data.carePlans
 
-    val (observationDate,status) = dateOfDeathOrCensoring(snp)
+      // Get therapy board plan as the earliest with this declared board-type (or with recommendations if type undefined)
+      // and referencing the diagnosis as reason ( if defined)
+      firstTherapyBoard <- carePlans.filter(carePlan => 
+        carePlan.boardType.map(_.code.enumValue == TherapyBoard)
+          .getOrElse(carePlan.medicationRecommendations.exists(_.nonEmpty)) &&
+        carePlan.reason.map(_.id == diagnosis.id).getOrElse(true)
+      )
+      .minByOption(_.issuedOn)
+*/
+      firstTherapyBoard <- snp.data.therapyBoardPlans.filter(_.reason.map(_.id == diagnosis.id).getOrElse(true)).minByOption(_.issuedOn)
 
-    Option(chronoUnit.between(diagnosis.recordedOn,observationDate))
-      .collect { 
-        case l if l > 0 => l -> status
-      }
-  }
 
-  
+      (observationDate,status) = dateOfDeathOrCensoring(snp)
+
+      // Start Date: Date of chronologically first MTB therapy board 
+      os = chronoUnit.between(firstTherapyBoard.issuedOn,observationDate)
+
+      if os > 0
+
+    } yield os -> status
+
+
   def progressionFreeSurvival(
     therapy: MTBSystemicTherapy,
     record: MTBPatientRecord
@@ -165,7 +188,7 @@ trait SurvivalOps
     implicit chronoUnit: ChronoUnit
   ): Option[(Long,Boolean)] = {
 
-    implicit val lastResponses =
+    implicit lazy val lastResponses =
       record
         .getResponses
         .groupBy(_.therapy)
@@ -173,13 +196,16 @@ trait SurvivalOps
           case (ref,responses) => ref.id -> responses.maxBy(_.effectiveDate)
         }
 
-    val (observationDate,status) = progressionOrCensoringDate(therapy,record)
+    for {
+      start <- therapy.period.map(_.start)
 
-    therapy.period.map(_.start)
-      .map(chronoUnit.between(_,observationDate))
-      .collect { 
-        case l if l > 0 => l -> status
-      }
+      (observationDate,status) = progressionOrCensoringDate(therapy,record)
+
+      pfs = chronoUnit.between(start,observationDate)
+
+      if pfs > 0
+
+    } yield pfs -> status
 
   }
 
@@ -200,50 +226,6 @@ trait SurvivalOps
       // No way to find the preceding therapy without therapy.period
       case None => None 
     }
-
-/*
-  def pfsRatio(
-    record: MTBPatientRecord
-  )(
-    implicit chronoUnit: ChronoUnit
-  ): Option[(Coding[ICD10GM],PFSRatio.DataPoint)] = {
-
-    implicit val diagnoses = record.diagnoses
-
-    for {
-      th1 <- record.getGuidelineTherapies.maxByOption(_.recordedOn)
-
-      pfs1 <- progressionFreeSurvival(th1,record).map(_._1)
-
-      medication1 <- th1.medication
-
-      th2 <- record.getSystemicTherapies.map(_.latest).maxByOption(_.recordedOn)
-
-      pfs2 <- progressionFreeSurvival(th2,record).map(_._1)
-
-      medication2 <- th2.medication
-
-      tumorEntity <-
-        for {
-          entity2 <- th2.reason.flatMap(_.resolve).map(_.code)
-          entity1 <- th1.reason.flatMap(_.resolve).map(_.code)
-          if entity1 == entity2
-        } yield entity2
-
-    } yield (
-      tumorEntity,
-      PFSRatio.DataPoint(
-        Reference.to(record.patient),
-        medication1,
-        medication2,
-        pfs1,
-        pfs2,
-        pfs2.toDouble/pfs1
-      )
-    )
-          
-  }
-*/
 
   def precisionToStandardRatio(
     therapy: MTBSystemicTherapy
@@ -466,8 +448,18 @@ extends KaplanMeierModule[cats.Id]
                       latest.period.isDefined && latest.medication.exists(_.nonEmpty)
                     }
                   )
+                /* Groups:
+                 - Obtained therapy
+                 - No therapy w/ recommendation
+                 - No therapy w/o recommendation
+                */
                 if (hasObtainedTherapy) "Therapie erhalten"
-                else "Keine Therapie erhalten"
+                else {
+                  if (record.therapyBoardPlans.exists(_.medicationRecommendations.exists(_.nonEmpty)))
+                    "Keine Therapie erhalten (mit Empfehlungen)"
+                  else 
+                    "Keine Therapie erhalten (ohne Empfehlungen)"
+                }
               }
 
             case Ungrouped => (_,_) => "Alle"
