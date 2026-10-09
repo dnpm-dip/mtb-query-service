@@ -75,8 +75,8 @@ lazy val dependencies =
     val icd10gm        = "de.dnpm.dip"    %% "icd10gm-impl"           % "1.1.4" % Test
     val icdo3          = "de.dnpm.dip"    %% "icdo3-impl"             % "1.1.4" % Test
     val icd_catalogs   = "de.dnpm.dip"    %% "icd-claml-packaged"     % "1.1.4" % Test
-    val atc_impl       = "de.dnpm.dip"    %% "atc-impl"               % "1.1.2" % Test
-    val atc_catalogs   = "de.dnpm.dip"    %% "atc-catalogs-packaged"  % "1.1.2" % Test
+    val atc_impl       = "de.dnpm.dip"    %% "atc-impl"               % "1.1.3" % Test
+    val atc_catalogs   = "de.dnpm.dip"    %% "atc-catalogs-packaged"  % "1.1.3" % Test
     val hgnc_geneset   = "de.dnpm.dip"    %% "hgnc-gene-set-impl"     % "1.1.3" % Test
   }
 
