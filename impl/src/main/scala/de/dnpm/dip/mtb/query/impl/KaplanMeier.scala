@@ -28,6 +28,7 @@ import de.dnpm.dip.model.{
   FollowUp,
   Id,
   Reference,
+  Site,
   Snapshot,
   UnitOfTime
 }
@@ -49,7 +50,9 @@ import de.dnpm.dip.mtb.query.api.KaplanMeier.{
   Grouping,
   DataPoint,
   CohortResult,
-  SurvivalStatistics
+  SurvivalStatistics,
+  RawDataPoint,
+  RawSurvivalStatistics
 }
 import SurvivalType._
 import Grouping._
@@ -324,6 +327,13 @@ trait KaplanMeierModule[F[_]] extends SurvivalOps
 
   def survivalConfig: Config
 
+  def rawSurvivalStatistics(
+    survivalType: Option[SurvivalType.Value],
+    grouping: Option[Grouping.Value],
+    timeUnit: Option[UnitOfTime],
+    cohort: Seq[Snapshot[MTBPatientRecord]]
+  ): F[RawSurvivalStatistics]
+
 
   def survivalStatistics(
     survivalType: Option[SurvivalType.Value],
@@ -334,14 +344,6 @@ trait KaplanMeierModule[F[_]] extends SurvivalOps
     implicit estimator: KaplanMeierEstimator[F],
   ): F[SurvivalStatistics]
 
-/*
-  def pfsRatioReport(
-    cohort: Seq[Snapshot[MTBPatientRecord]],
-    timeUnit: UnitOfTime = UnitOfTime.Days
-  )(
-    implicit F: Monad[F]
-  ): F[PFSRatio.Report]
-*/
 }
 
 
@@ -371,6 +373,31 @@ extends KaplanMeierModule[cats.Id]
       defaults  
     )
 
+  def rawSurvivalStatistics(
+    survivalType: Option[SurvivalType.Value],
+    grouping: Option[Grouping.Value],
+    timeUnit: Option[UnitOfTime],
+    cohort: Seq[Snapshot[MTBPatientRecord]]
+  ): RawSurvivalStatistics = {
+
+    val theSurvivalType = survivalType.getOrElse(defaults.`type`)
+    val theGrouping     = grouping.getOrElse(defaults.grouping)
+    val theTimeUnit     = timeUnit.getOrElse(UnitOfTime.Days)
+
+    implicit val chronoUnit = UnitOfTime.chronoUnit(theTimeUnit)
+
+    RawSurvivalStatistics(
+      Site.local,
+      Coding(theSurvivalType),
+      Coding(theGrouping),
+      theTimeUnit,
+      cohort
+        .flatMap(projector(theSurvivalType,theGrouping))
+        .toSeq
+        .sortBy(_.time)
+    )
+  }
+
 
   override def survivalStatistics(
     optSurvivalType: Option[SurvivalType.Value],
@@ -388,8 +415,8 @@ extends KaplanMeierModule[cats.Id]
 
     cohort
       .flatMap(projector(survivalType,grouping))
-      .groupMap(_._1){
-        case (_,duration,status) => duration -> status
+      .groupMap(_.groupLabel){
+        case RawDataPoint(_,duration,status) => duration -> status
       }
       .map {
         case (group,data) => Entry(group,estimator.cohortResult(data))
@@ -408,6 +435,79 @@ extends KaplanMeierModule[cats.Id]
   }
 
 
+  private def projector(
+    survivalType: SurvivalType.Value,
+    grouping: Grouping.Value
+  )(
+    implicit chronoUnit: ChronoUnit
+  ): Snapshot[MTBPatientRecord] => Iterable[RawDataPoint] =
+    survivalType match {   
+
+      case OS =>
+
+        val survival: (MTBDiagnosis,Snapshot[MTBPatientRecord]) => Option[(Long,Boolean)] = overallSurvival(_,_)
+
+        val groupLabel: (MTBDiagnosis,MTBPatientRecord) => String =
+          grouping match {
+            case TumorEntity =>
+              (diagnosis,_) => diagnosis.code.parentOfKind(Category).getOrElse(diagnosis.code).code.value
+
+            case ObtainedTherapy =>
+              (_,record) => {
+                val hasObtainedTherapy =
+                  record.systemicTherapies.exists(_.exists { 
+                    history =>
+                      val latest = history.latestBy(_.recordedOn)
+                      latest.period.isDefined && latest.medication.exists(_.nonEmpty)
+                    }
+                  )
+                /* Groups:
+                 - Obtained therapy
+                 - No therapy w/ recommendation
+                 - No therapy w/o recommendation
+                */
+                if (hasObtainedTherapy)
+                  "Therapie erhalten"
+                else if (record.therapyBoardPlans.exists(_.medicationRecommendations.exists(_.nonEmpty)))
+                  "Keine Therapie erhalten (mit Empfehlungen)"
+                else 
+                  "Keine Therapie erhalten (ohne Empfehlungen)"
+                
+              }
+
+            case Ungrouped => (_,_) => "Alle"
+          }
+            
+        snp => snp.data.diagnoses.toList.flatMap {
+          diagnosis =>
+            for { (os,status) <- survival(diagnosis,snp) } yield RawDataPoint(groupLabel(diagnosis,snp.data),os,status)
+        }
+      
+      case PFS =>
+
+        val survival: (MTBSystemicTherapy,MTBPatientRecord) => Option[(Long,Boolean)] = progressionFreeSurvival(_,_)
+
+        val groupLabel: MTBSystemicTherapy => String =
+          grouping match {
+            case Therapy =>
+              _.medication.map(_.flatMap(_.currentGroup))
+               .map(_.flatMap(_.display))
+               .mkString(" + ")
+
+            case Ungrouped => _ => "Alle"
+          }
+
+        {
+          case Snapshot(record,_) =>
+            record.getSystemicTherapies.map(_.latest).flatMap {
+              therapy =>
+                for { (pfs,status) <- survival(therapy,record) } yield RawDataPoint(groupLabel(therapy),pfs,status)
+            }
+        }
+
+    }
+
+/*
   private def projector(
     survivalType: SurvivalType.Value,
     grouping: Grouping.Value
@@ -484,7 +584,6 @@ extends KaplanMeierModule[cats.Id]
 
     }
 
-/*
   override def pfsRatioReport(
     cohort: Seq[Snapshot[MTBPatientRecord]],
     timeUnit: UnitOfTime

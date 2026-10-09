@@ -1,14 +1,31 @@
 package de.dnpm.dip.mtb.query.impl 
 
 
-import scala.concurrent.Future
+import scala.concurrent.{
+  ExecutionContext,
+  Future
+}
 import cats.{
   Id,
   Applicative,
   Monad
 }
+import cats.data.EitherNel
+import cats.syntax.apply._
+import cats.syntax.either._
+import cats.syntax.ior._
 import de.dnpm.dip.util.Logging
-import de.dnpm.dip.service.Connector
+import de.dnpm.dip.service.{
+  ConnectionStatus,
+  Connector,
+  Entry
+}
+import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.model.{
+  Site,
+  UnitOfTime
+ }
+import UnitOfTime.Days
 import de.dnpm.dip.connector.{
   FakeConnector,
   HttpConnector,
@@ -35,7 +52,14 @@ import de.dnpm.dip.coding.icd.{
 import de.dnpm.dip.coding.hgnc.HGNC
 import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.mtb.query.api._
-
+import KaplanMeier.{
+  GlobalSurvivalStatistics,
+  Grouping,
+  RawSurvivalStatistics,
+  RawSurvivalStatisticsRequest,
+  RawDataPoint,
+  SurvivalType
+}
 
 
 class MTBQueryServiceProviderImpl extends MTBQueryServiceProvider
@@ -78,6 +102,17 @@ object MTBQueryServiceImpl extends Logging
                   "patient" -> patient.value
                   ) + ("snapshot" -> snapshot.map(_.toString))
               )
+
+            case RawSurvivalStatisticsRequest(_,survivalType,grouping,timeUnit) =>
+              (
+                GET, s"$baseURI/raw-survival-statistics", Seq(
+                  "type"     -> survivalType.map(_.toString),
+                  "grouping" -> grouping.map(_.toString),
+                  "timeunit" -> timeUnit.map(_.toString)
+                )
+                .foldLeft(Map.empty[String,Seq[String]])((acc,param) => acc + param)
+              )
+              
           }        
         )
 
@@ -156,5 +191,91 @@ with Completers
 
   override val survivalConfig: KaplanMeier.Config =
     kmModule.survivalConfig
+
+
+  override def !(
+    request: RawSurvivalStatisticsRequest
+  )(
+    implicit env: ExecutionContext
+  ): Future[Either[String,RawSurvivalStatistics]] = {
+
+    val RawSurvivalStatisticsRequest(origin,survivalType,grouping,timeUnit) = request
+
+    log.info(s"Processing RawSurvivalStatistics request - Origin: $origin, Type: $survivalType, Grouping: $grouping")
+
+    rawSurvivalStatistics(survivalType,grouping,timeUnit)  
+  }
+
+
+  private def rawSurvivalStatistics(
+    survivalType: Option[SurvivalType.Value],
+    grouping: Option[Grouping.Value],
+    timeUnit: Option[UnitOfTime]
+  )(        
+    implicit env: ExecutionContext
+  ): Future[Either[String,RawSurvivalStatistics]] =
+
+    //TODO: Cache to avoid multiple re-compilation of results on successive requests
+    for { 
+  
+      matches <- db ? (criteria = None)
+  
+      snapshots = matches.map(_.map(_.record))
+  
+      result = snapshots.map(kmModule.rawSurvivalStatistics(survivalType,grouping,timeUnit,_) )
+  
+    } yield result  
+
+
+  override def survivalStatistics(
+    survivalType: Option[SurvivalType.Value],
+    grouping: Option[Grouping.Value]
+  )(
+    implicit env: ExecutionContext
+  ): Future[Either[KaplanMeier.Error,GlobalSurvivalStatistics]] = {
+
+    log.info(s"Compiling GlobalSurvivalStatistics - Type: $survivalType, Grouping: $grouping")
+
+    val timeUnit = Days
+
+    for {
+      resultsBySite <- (
+        connector ! RawSurvivalStatisticsRequest(Site.local,survivalType,grouping,Some(timeUnit)),
+        rawSurvivalStatistics(survivalType,grouping,Some(timeUnit))
+          .map(result => Some(Site.local -> result))
+      )
+      .mapN(
+        (externalResultsBySite,localResult) => externalResultsBySite ++ localResult
+      )
+
+      combinedResults: EitherNel[String,Seq[RawDataPoint]] =
+        resultsBySite.values
+          .map(_.map(_.data).toIor.toIorNel)
+          .reduceOption(_ combine _)
+          .getOrElse(Seq.empty.rightIor)
+          .toEither
+
+      outcome = combinedResults match { 
+
+        case Right(dataPoints) if dataPoints.nonEmpty => 
+          GlobalSurvivalStatistics(
+            Coding(survivalType.getOrElse(survivalConfig.defaults.`type`)),
+            Coding(grouping.getOrElse(survivalConfig.defaults.grouping)),
+            timeUnit,
+            dataPoints.groupMap(_.groupLabel)(dataPoint => dataPoint.time -> dataPoint.event)
+              .map { case (group,data) => Entry(group,kmEstimator.cohortResult(data)) }
+              .toSeq,
+            ConnectionStatus.from(resultsBySite)
+          )
+          .asRight
+
+        case Right(_) => KaplanMeier.NoResults.asLeft
+
+        case Left(errors) => KaplanMeier.ConnectionErrors(errors).asLeft
+      }
+
+    } yield outcome
+
+  }
 
 }
