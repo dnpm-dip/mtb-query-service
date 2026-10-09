@@ -10,7 +10,6 @@ import cats.{
   Applicative,
   Monad
 }
-import cats.data.EitherNel
 import cats.syntax.apply._
 import cats.syntax.either._
 import cats.syntax.ior._
@@ -57,7 +56,6 @@ import KaplanMeier.{
   Grouping,
   RawSurvivalStatistics,
   RawSurvivalStatisticsRequest,
-  RawDataPoint,
   SurvivalType
 }
 
@@ -103,16 +101,15 @@ object MTBQueryServiceImpl extends Logging
                   ) + ("snapshot" -> snapshot.map(_.toString))
               )
 
-            case RawSurvivalStatisticsRequest(_,survivalType,grouping,timeUnit) =>
+            case RawSurvivalStatisticsRequest(_,survivalTypeAndGrouping,timeUnit) =>
               (
                 GET, s"$baseURI/raw-survival-statistics", Seq(
-                  "type"     -> survivalType.map(_.toString),
-                  "grouping" -> grouping.map(_.toString),
+                  "type"     -> survivalTypeAndGrouping.map(_._1.toString),
+                  "grouping" -> survivalTypeAndGrouping.flatMap(_._2).map(_.toString),
                   "timeunit" -> timeUnit.map(_.toString)
                 )
                 .foldLeft(Map.empty[String,Seq[String]])((acc,param) => acc + param)
               )
-              
           }        
         )
 
@@ -199,40 +196,25 @@ with Completers
     implicit env: ExecutionContext
   ): Future[Either[String,RawSurvivalStatistics]] = {
 
-    val RawSurvivalStatisticsRequest(origin,survivalType,grouping,timeUnit) = request
+    val RawSurvivalStatisticsRequest(origin,survivalTypeAndGrouping,timeUnit) = request
+
+    val survivalType = survivalTypeAndGrouping.map(_._1)
+    val grouping     = survivalTypeAndGrouping.flatMap(_._2)
 
     log.info(s"Processing RawSurvivalStatistics request - Origin: $origin, Type: $survivalType, Grouping: $grouping")
 
-    rawSurvivalStatistics(survivalType,grouping,timeUnit)  
+    rawSurvivalStatistics(survivalTypeAndGrouping,timeUnit)  
   }
 
 
-  private def rawSurvivalStatistics(
-    survivalType: Option[SurvivalType.Value],
-    grouping: Option[Grouping.Value],
-    timeUnit: Option[UnitOfTime]
-  )(        
-    implicit env: ExecutionContext
-  ): Future[Either[String,RawSurvivalStatistics]] =
-
-    //TODO: Cache to avoid multiple re-compilation of results on successive requests
-    for { 
-  
-      matches <- db ? (criteria = None)
-  
-      snapshots = matches.map(_.map(_.record))
-  
-      result = snapshots.map(kmModule.rawSurvivalStatistics(survivalType,grouping,timeUnit,_) )
-  
-    } yield result  
-
-
   override def survivalStatistics(
-    survivalType: Option[SurvivalType.Value],
-    grouping: Option[Grouping.Value]
+    survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])],
   )(
     implicit env: ExecutionContext
   ): Future[Either[KaplanMeier.Error,GlobalSurvivalStatistics]] = {
+
+    val survivalType = survivalTypeAndGrouping.map(_._1)
+    val grouping = survivalTypeAndGrouping.flatMap(_._2)
 
     log.info(s"Compiling GlobalSurvivalStatistics - Type: $survivalType, Grouping: $grouping")
 
@@ -240,15 +222,15 @@ with Completers
 
     for {
       resultsBySite <- (
-        connector ! RawSurvivalStatisticsRequest(Site.local,survivalType,grouping,Some(timeUnit)),
-        rawSurvivalStatistics(survivalType,grouping,Some(timeUnit))
+        connector ! RawSurvivalStatisticsRequest(Site.local,survivalTypeAndGrouping,Some(timeUnit)),
+        rawSurvivalStatistics(survivalTypeAndGrouping,Some(timeUnit))
           .map(result => Some(Site.local -> result))
       )
       .mapN(
         (externalResultsBySite,localResult) => externalResultsBySite ++ localResult
       )
 
-      combinedResults: EitherNel[String,Seq[RawDataPoint]] =
+      combinedResults =
         resultsBySite.values
           .map(_.map(_.data).toIor.toIorNel)
           .reduceOption(_ combine _)
@@ -277,5 +259,25 @@ with Completers
     } yield outcome
 
   }
+
+  private def rawSurvivalStatistics(
+    survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])],
+    timeUnit: Option[UnitOfTime]
+  )(        
+    implicit env: ExecutionContext
+  ): Future[Either[String,RawSurvivalStatistics]] =
+
+    //TODO: Cache result to avoid multiple re-compilation on successive requests
+    for { 
+  
+      matches <- db ? (criteria = None)
+  
+      snapshots = matches.map(_.map(_.record))
+  
+      result = snapshots.map(
+        kmModule.rawSurvivalStatistics(survivalTypeAndGrouping,timeUnit,_)
+      )
+  
+    } yield result  
 
 }

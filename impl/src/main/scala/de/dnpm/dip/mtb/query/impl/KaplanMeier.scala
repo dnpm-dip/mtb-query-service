@@ -210,7 +210,10 @@ trait SurvivalOps
     record: MTBPatientRecord
   ): Option[MTBSystemicTherapy] =
     therapy.period match {
-      case Some(period) => orderedTherapies(record).find(_.period.exists(_.start isBefore period.start))
+
+      case Some(period) =>
+        orderedTherapies(record)
+          .findLast(_.period.exists(_.start isBefore period.start))
 
       // No way to find the preceding therapy without therapy.period
       case None => None 
@@ -328,8 +331,7 @@ trait KaplanMeierModule[F[_]] extends SurvivalOps
   def survivalConfig: Config
 
   def rawSurvivalStatistics(
-    survivalType: Option[SurvivalType.Value],
-    grouping: Option[Grouping.Value],
+    survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])],
     timeUnit: Option[UnitOfTime],
     cohort: Seq[Snapshot[MTBPatientRecord]]
   ): F[RawSurvivalStatistics]
@@ -356,48 +358,55 @@ extends KaplanMeierModule[cats.Id]
 
   import ICD.extensions._
 
-  private val defaults = Config.Defaults(OS,ObtainedTherapy)
+  private val possibleGroupings =
+    Map(
+      OS -> Set(Ungrouped,TumorEntity,ObtainedTherapy),
+      PFS -> Set(Therapy)
+    )
+
+  private val defaultGroupings =
+    Map(
+      OS -> ObtainedTherapy,
+      PFS -> Therapy
+    )
 
   override val survivalConfig: Config =
     Config(
-      Seq(
-        Entry(
-          Coding(OS),
-          Seq(Ungrouped,TumorEntity,ObtainedTherapy).map(Coding(_))
-        ),
-        Entry(
-          Coding(PFS),
-          Seq(Therapy).map(Coding(_))
-        )
-      ),
-      defaults  
+      possibleGroupings.map { 
+        case (typ,groupings) => Entry(Coding(typ), groupings.toSeq.map(Coding(_)))
+      }
+      .toSeq,
+      Config.Defaults(OS,ObtainedTherapy)
     )
 
-  def rawSurvivalStatistics(
-    survivalType: Option[SurvivalType.Value],
-    grouping: Option[Grouping.Value],
+  override def rawSurvivalStatistics(
+    survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])],
     timeUnit: Option[UnitOfTime],
     cohort: Seq[Snapshot[MTBPatientRecord]]
   ): RawSurvivalStatistics = {
 
-    val theSurvivalType = survivalType.getOrElse(defaults.`type`)
-    val theGrouping     = grouping.getOrElse(defaults.grouping)
+    val (survivalType,grouping) = survivalTypeAndGrouping match { 
+      case Some(typ -> grp) =>
+        typ -> grp.filter(value => possibleGroupings.get(typ).exists(_ contains value)).getOrElse(defaultGroupings(typ))
+      
+      case None => (OS,defaultGroupings(OS))
+    }
+
     val theTimeUnit     = timeUnit.getOrElse(UnitOfTime.Days)
 
     implicit val chronoUnit = UnitOfTime.chronoUnit(theTimeUnit)
 
     RawSurvivalStatistics(
       Site.local,
-      Coding(theSurvivalType),
-      Coding(theGrouping),
+      Coding(survivalType),
+      Coding(grouping),
       theTimeUnit,
       cohort
-        .flatMap(projector(theSurvivalType,theGrouping))
+        .flatMap(projector(survivalType,grouping))
         .toSeq
         .sortBy(_.time)
     )
   }
-
 
   override def survivalStatistics(
     optSurvivalType: Option[SurvivalType.Value],
@@ -410,8 +419,8 @@ extends KaplanMeierModule[cats.Id]
 
     implicit val chronoUnit = UnitOfTime.chronoUnit(timeUnit)
 
-    val survivalType = optSurvivalType.getOrElse(defaults.`type`)
-    val grouping     = optGrouping.getOrElse(defaults.grouping)
+    val survivalType = optSurvivalType.getOrElse(survivalConfig.defaults.`type`)
+    val grouping     = optGrouping.getOrElse(survivalConfig.defaults.grouping)
 
     cohort
       .flatMap(projector(survivalType,grouping))
@@ -508,82 +517,6 @@ extends KaplanMeierModule[cats.Id]
     }
 
 /*
-  private def projector(
-    survivalType: SurvivalType.Value,
-    grouping: Grouping.Value
-  )(
-    implicit chronoUnit: ChronoUnit
-  ): Snapshot[MTBPatientRecord] => Iterable[(String,Long,Boolean)] =
-    survivalType match {   
-
-      case OS =>
-
-        val survival: (MTBDiagnosis,Snapshot[MTBPatientRecord]) => Option[(Long,Boolean)] = overallSurvival(_,_)
-
-        val groupLabel: (MTBDiagnosis,MTBPatientRecord) => String =
-          grouping match {
-            case TumorEntity =>
-              (diagnosis,_) => diagnosis.code.parentOfKind(Category).getOrElse(diagnosis.code).code.value
-
-            case ObtainedTherapy =>
-              (_,record) => {
-                val hasObtainedTherapy =
-                  record.systemicTherapies.exists(_.exists { 
-                    history =>
-                      val latest = history.latestBy(_.recordedOn)
-                      latest.period.isDefined && latest.medication.exists(_.nonEmpty)
-                    }
-                  )
-                /* Groups:
-                 - Obtained therapy
-                 - No therapy w/ recommendation
-                 - No therapy w/o recommendation
-                */
-                if (hasObtainedTherapy)
-                  "Therapie erhalten"
-                else if (record.therapyBoardPlans.exists(_.medicationRecommendations.exists(_.nonEmpty)))
-                  "Keine Therapie erhalten (mit Empfehlungen)"
-                else 
-                  "Keine Therapie erhalten (ohne Empfehlungen)"
-                
-              }
-
-            case Ungrouped => (_,_) => "Alle"
-          }
-            
-        snp => snp.data.diagnoses.toList.flatMap {
-          diagnosis =>
-            for {
-              (os,status) <- survival(diagnosis,snp) 
-            } yield (groupLabel(diagnosis,snp.data),os,status)
-        }
-      
-      case PFS =>
-
-        val survival: (MTBSystemicTherapy,MTBPatientRecord) => Option[(Long,Boolean)] = progressionFreeSurvival(_,_)
-
-        val groupLabel: MTBSystemicTherapy => String =
-          grouping match {
-            case Therapy =>
-              _.medication.map(_.flatMap(_.currentGroup))
-               .map(_.flatMap(_.display))
-               .mkString(" + ")
-
-            case Ungrouped => _ => "Alle"
-          }
-
-        {
-          case Snapshot(record,_) =>
-            record.getSystemicTherapies.map(_.latest).flatMap {
-              therapy =>
-                for {
-                  (pfs,status) <- survival(therapy,record)
-                } yield (groupLabel(therapy),pfs,status)
-            }
-        }
-
-    }
-
   override def pfsRatioReport(
     cohort: Seq[Snapshot[MTBPatientRecord]],
     timeUnit: UnitOfTime
