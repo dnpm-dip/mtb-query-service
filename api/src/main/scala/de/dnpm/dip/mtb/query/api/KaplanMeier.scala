@@ -150,8 +150,7 @@ object KaplanMeier
   final case class RawSurvivalStatisticsRequest
   (  
     origin: Coding[Site] = Site.local,
-    survivalType: Option[SurvivalType.Value] = None,
-    grouping: Option[Grouping.Value] = None,
+    survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])] = None,
     timeUnit: Option[UnitOfTime] = None
   )
   extends PeerToPeerRequest
@@ -233,8 +232,7 @@ trait GlobalKaplanMeierOps[F[_],Env]
 
 
   def survivalStatistics(
-    survivalType: Option[SurvivalType.Value],
-    grouping: Option[Grouping.Value]
+    survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])],
   )(
     implicit env: Env
   ): F[Either[Error,GlobalSurvivalStatistics]]
