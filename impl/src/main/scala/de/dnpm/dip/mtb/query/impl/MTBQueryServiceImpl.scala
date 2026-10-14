@@ -5,6 +5,8 @@ import scala.concurrent.{
   ExecutionContext,
   Future
 }
+import scala.concurrent.duration._
+import scala.util.Success
 import cats.{
   Applicative,
   Monad
@@ -138,6 +140,8 @@ with Completers
 {
 
   override val querySessions = Cache.empty()
+
+  private val survivalStatisticsResults = Cache.empty[(SurvivalType.Value,Grouping.Value),RawSurvivalStatistics]()
     
   override implicit val hgnc: CodeSystemProvider[HGNC,cats.Id,Applicative[cats.Id]] =
     HGNC.GeneSet
@@ -191,6 +195,23 @@ with Completers
   override val survivalConfig: KaplanMeier.Config =
     kmModule.survivalConfig
 
+  private def valuesOrDefaults(
+    survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])]
+  ): (SurvivalType.Value,Grouping.Value) =
+    survivalTypeAndGrouping match { 
+
+      case Some(survivalType -> grouping) =>
+        survivalType -> grouping.getOrElse(
+          survivalType match { 
+            case SurvivalType.OS  => Grouping.ObtainedTherapy
+            case SurvivalType.PFS => Grouping.Therapy
+          }
+        )
+
+      case _ => survivalConfig.defaults.`type` -> survivalConfig.defaults.grouping
+       
+    }
+
 
   override def !(
     request: RawSurvivalStatisticsRequest
@@ -200,12 +221,11 @@ with Completers
 
     val RawSurvivalStatisticsRequest(origin,survivalTypeAndGrouping,timeUnit) = request
 
-    val survivalType = survivalTypeAndGrouping.map(_._1)
-    val grouping     = survivalTypeAndGrouping.flatMap(_._2)
+    val (survivalType,grouping) = valuesOrDefaults(survivalTypeAndGrouping)
 
     log.info(s"Processing RawSurvivalStatistics request - Origin: $origin, Type: $survivalType, Grouping: $grouping")
 
-    rawSurvivalStatistics(survivalTypeAndGrouping,timeUnit)  
+    rawSurvivalStatistics(survivalType,grouping,timeUnit)  
   }
 
 
@@ -215,9 +235,8 @@ with Completers
     implicit env: ExecutionContext
   ): Future[Either[KaplanMeier.Error,GlobalSurvivalStatistics]] = {
 
-    val survivalType = survivalTypeAndGrouping.map(_._1)
-    val grouping = survivalTypeAndGrouping.flatMap(_._2)
-
+    val (survivalType,grouping) = valuesOrDefaults(survivalTypeAndGrouping)
+ 
     log.info(s"Compiling GlobalSurvivalStatistics - Type: $survivalType, Grouping: $grouping")
 
     val timeUnit = Days
@@ -225,7 +244,7 @@ with Completers
     for {
       resultsBySite <- (
         connector ! RawSurvivalStatisticsRequest(Site.local,survivalTypeAndGrouping,Some(timeUnit)),
-        rawSurvivalStatistics(survivalTypeAndGrouping,Some(timeUnit))
+        rawSurvivalStatistics(survivalType,grouping,Some(timeUnit))
           .map(result => Some(Site.local -> result))
       )
       .mapN(
@@ -243,8 +262,8 @@ with Completers
 
         case Right(dataPoints) if dataPoints.nonEmpty => 
           GlobalSurvivalStatistics(
-            Coding(survivalType.getOrElse(survivalConfig.defaults.`type`)),
-            Coding(grouping.getOrElse(survivalConfig.defaults.grouping)),
+            Coding(survivalType),
+            Coding(grouping),
             timeUnit,
             dataPoints.groupMap(_.groupLabel)(dataPoint => dataPoint.time -> dataPoint.event)
               .map { case (group,data) => Entry(group,kmEstimator.cohortResult(data)) }
@@ -263,23 +282,32 @@ with Completers
   }
 
   private def rawSurvivalStatistics(
-    survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])],
+    survivalType: SurvivalType.Value,
+    grouping: Grouping.Value,
     timeUnit: Option[UnitOfTime]
   )(        
     implicit env: ExecutionContext
   ): Future[Either[String,RawSurvivalStatistics]] =
+    survivalStatisticsResults.get(survivalType -> grouping) match {
 
-    //TODO: Cache result to avoid multiple re-compilation on successive requests
-    for { 
-  
-      matches <- db ? (criteria = None)
-  
-      snapshots = matches.map(_.map(_.record))
-  
-      result = snapshots.map(
-        kmModule.rawSurvivalStatistics(survivalTypeAndGrouping,timeUnit,_)
+      case Some(result) => Future.successful(result.asRight)
+
+      case _ => (
+        for { 
+        
+          matches <- db ? (criteria = None)
+        
+          snapshots = matches.map(_.map(_.record))
+        
+          result = snapshots.map(
+            kmModule.rawSurvivalStatistics(survivalType,grouping,timeUnit,_)
+          )
+        
+        } yield result
       )
-  
-    } yield result  
+      .andThen { 
+        case Success(Right(result)) => survivalStatisticsResults.put(survivalType -> grouping, result, 60 seconds)
+      }
+    }  
 
 }

@@ -331,7 +331,8 @@ trait KaplanMeierModule[F[_]] extends SurvivalOps
   def survivalConfig: Config
 
   def rawSurvivalStatistics(
-    survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])],
+    survivalType: SurvivalType.Value,
+    grouping: Grouping.Value,
     timeUnit: Option[UnitOfTime],
     cohort: Seq[Snapshot[MTBPatientRecord]]
   ): F[RawSurvivalStatistics]
@@ -363,12 +364,13 @@ extends KaplanMeierModule[cats.Id]
       OS -> Set(Ungrouped,TumorEntity,ObtainedTherapy),
       PFS -> Set(Therapy)
     )
-
+/*
   private val defaultGroupings =
     Map(
       OS -> ObtainedTherapy,
       PFS -> Therapy
     )
+*/
 
   override val survivalConfig: Config =
     Config(
@@ -380,19 +382,20 @@ extends KaplanMeierModule[cats.Id]
     )
 
   override def rawSurvivalStatistics(
-    survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])],
+    survivalType: SurvivalType.Value,
+    grouping: Grouping.Value,
     timeUnit: Option[UnitOfTime],
     cohort: Seq[Snapshot[MTBPatientRecord]]
   ): RawSurvivalStatistics = {
-
+/*
     val (survivalType,grouping) = survivalTypeAndGrouping match { 
       case Some(typ -> grp) =>
         typ -> grp.filter(value => possibleGroupings.get(typ).exists(_ contains value)).getOrElse(defaultGroupings(typ))
       
       case None => (OS,defaultGroupings(OS))
     }
-
-    val theTimeUnit     = timeUnit.getOrElse(UnitOfTime.Days)
+*/
+    val theTimeUnit = timeUnit.getOrElse(UnitOfTime.Days)
 
     implicit val chronoUnit = UnitOfTime.chronoUnit(theTimeUnit)
 
