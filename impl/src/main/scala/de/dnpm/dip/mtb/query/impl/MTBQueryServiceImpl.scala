@@ -9,6 +9,7 @@ import cats.{
   Applicative,
   Monad
 }
+import cats.data.EitherNel
 import cats.syntax.apply._
 import cats.syntax.either._
 import cats.syntax.ior._
