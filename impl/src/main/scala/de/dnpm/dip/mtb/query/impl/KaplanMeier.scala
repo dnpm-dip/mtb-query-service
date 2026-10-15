@@ -3,8 +3,8 @@ package de.dnpm.dip.mtb.query.impl
 
 import scala.util.chaining._
 import java.time.{
-  LocalDate,
   Instant,
+  LocalDate,
   ZoneId
 }
 import java.time.temporal.ChronoUnit
@@ -22,21 +22,20 @@ import de.dnpm.dip.coding.icd.{
   ICD10GM
 }
 import de.dnpm.dip.coding.icd.ClassKinds.Category
-import de.dnpm.dip.service.{
-  Count,
-  Entry
-}
-import de.dnpm.dip.service.query.ReportingOps
+import de.dnpm.dip.service.Entry
 import de.dnpm.dip.model.{
-  Snapshot,
-  Id,
   ClosedInterval,
-  Patient,
+  FollowUp,
+  Id,
   Reference,
+  Site,
+  Snapshot,
   UnitOfTime
 }
 import de.dnpm.dip.model.Medications._
 import de.dnpm.dip.mtb.model.{
+  ECOG,
+  MTBDiagnosis,
   MTBPatientRecord,
   MTBTherapy,
   MTBSystemicTherapy,
@@ -51,11 +50,236 @@ import de.dnpm.dip.mtb.query.api.KaplanMeier.{
   Grouping,
   DataPoint,
   CohortResult,
-  SurvivalStatistics
+  SurvivalStatistics,
+  RawDataPoint,
+  RawSurvivalStatistics
 }
 import SurvivalType._
 import Grouping._
+import extensions._
 
+
+trait SurvivalOps
+{ 
+
+  // Inclusion of SD as marker of 'progression' was specified by domain experts
+  protected val progression = Set(RECIST.PD,RECIST.SD).map(Coding(_))
+
+  val dateOfDeathOrCensoring: Snapshot[MTBPatientRecord] => (LocalDate,Boolean) = {
+
+    case Snapshot(record,t) =>
+    
+      record.patient.dateOfDeath
+        // Else check if an ECOG 5 (death) occurs
+        .orElse(
+          record.performanceStatus.flatMap(
+            _.collectFirst {
+              case ecog if ecog.value.code.enumValue == ECOG.Five => ecog.effectiveDate
+            } 
+          )
+        )
+        // Else if last Follow-Up documents "Lost to follow-up", use FU date as event occurred
+        .orElse(
+          record.followUps.flatMap(
+            _.maxByOption(_.date)
+             .collect { 
+               case followUp if followUp.patientStatus.exists(_.code.enumValue == FollowUp.PatientStatus.LostToFU) => followUp.date
+             }
+          )
+        )
+        .map(_ -> true)
+        .getOrElse(
+          // 1. Censoring time strategy: fall back to date of last therapy follow-up
+          record
+            .getSystemicTherapies
+            .flatMap(_.history.map(_.recordedOn).toList)
+            .maxOption
+            // 2. Censoring time strategy: fall back to upload date
+            .getOrElse(LocalDate.ofInstant(Instant.ofEpochMilli(t),ZoneId.systemDefault)) -> false
+          )
+
+  }
+
+
+  def progressionOrCensoringDate(
+    therapy: MTBSystemicTherapy,
+    record: MTBPatientRecord,
+  )(
+    implicit lastResponses: Map[Id[MTBSystemicTherapy],Response]
+  ): (LocalDate,Boolean) =
+    lastResponses
+      .get(therapy.id)
+      // 1. Look for date of latest response with recorded progression
+      .collect {
+        case response if progression(response.value) => response.effectiveDate
+      }
+      // 2. Check whether therapy was stopped due to progression and take the end or recording date
+      .orElse(
+        therapy.statusReason.collect { 
+          case MTBTherapy.StatusReason(Progression) => therapy.period.flatMap(_.endOption).getOrElse(therapy.recordedOn)
+        }
+      )
+      // 3. Use patient date of death as "progression" date
+      .orElse(
+        record.patient.dateOfDeath.orElse(
+          // In case dateOfDeath undefined check if an ECOG 5 (death) is recorded
+          record.performanceStatus.flatMap(
+            _.collectFirst {
+              case ecog if ecog.value.code.enumValue == ECOG.Five => ecog.effectiveDate
+            } 
+          )
+        )
+      )
+      .orElse {
+
+        val mtbTherapy = record.getSystemicTherapies.exists(_.history.exists(_.id == therapy.id))
+
+        // 4. MTB Therapy: If last Follow-Up documents "Lost to follow-up", use FU date as event occurred
+        if (mtbTherapy)
+          record.followUps.flatMap(
+            _.maxByOption(_.date)
+             .collect { 
+               case followUp if followUp.patientStatus.exists(_.code.enumValue == FollowUp.PatientStatus.LostToFU) => followUp.date
+             }
+          )
+        // 5. Prior/guideline therapy: Use therapy end date as event occurred
+        else therapy.period.flatMap(_.endOption)
+      }
+      .map(_ -> true)
+      // 5. Censoring: therapy recording date
+      .getOrElse(therapy.recordedOn -> false)
+ 
+ 
+  def overallSurvival(
+    diagnosis: MTBDiagnosis,
+    snp: Snapshot[MTBPatientRecord]
+  )(
+    implicit chronoUnit: ChronoUnit
+  ): Option[(Long,Boolean)] =
+    for {
+
+      firstTherapyBoard <- snp.data.therapyBoardPlans.filter(_.reason.map(_.id == diagnosis.id).getOrElse(true)).minByOption(_.issuedOn)
+
+      (observationDate,status) = dateOfDeathOrCensoring(snp)
+
+      // Start Date: Date of chronologically first MTB therapy board 
+      os = chronoUnit.between(firstTherapyBoard.issuedOn,observationDate)
+
+      if os > 0
+
+    } yield os -> status
+
+
+  def progressionFreeSurvival(
+    therapy: MTBSystemicTherapy,
+    record: MTBPatientRecord
+  )(
+    implicit chronoUnit: ChronoUnit
+  ): Option[(Long,Boolean)] = {
+
+    implicit lazy val lastResponses =
+      record
+        .getResponses
+        .groupBy(_.therapy)
+        .collect { 
+          case (ref,responses) => ref.id -> responses.maxBy(_.effectiveDate)
+        }
+
+    for {
+      start <- therapy.period.map(_.start)
+
+      (observationDate,status) = progressionOrCensoringDate(therapy,record)
+
+      pfs = chronoUnit.between(start,observationDate)
+
+      if pfs > 0
+
+    } yield pfs -> status
+
+  }
+
+
+  private def orderedTherapies(record: MTBPatientRecord): Seq[MTBSystemicTherapy] =
+    (record.getGuidelineTherapies ++ record.getSystemicTherapies.map(_.latest))
+      .filter(_.period.isDefined)
+      .sortBy(_.period.get.start)
+
+
+  private def precedingTherapy(
+    therapy: MTBSystemicTherapy,
+    record: MTBPatientRecord
+  ): Option[MTBSystemicTherapy] =
+    therapy.period match {
+
+      case Some(period) =>
+        orderedTherapies(record)
+          .findLast(_.period.exists(_.start isBefore period.start))
+
+      // No way to find the preceding therapy without therapy.period
+      case None => None 
+    }
+
+  def precisionToStandardRatio(
+    therapy: MTBSystemicTherapy
+  )(
+    implicit
+    record: MTBPatientRecord,
+    chronoUnit: ChronoUnit
+  ): Option[PFSRatio.DataPoint] = {
+    for {
+      th1 <- record.getGuidelineTherapies.maxByOption(_.recordedOn)
+
+      pfs1 <- progressionFreeSurvival(th1,record).map(_._1)
+
+      medication1 <- th1.medication
+
+      pfs2 <- progressionFreeSurvival(therapy,record).map(_._1)
+
+      medication2 <- therapy.medication
+
+    } yield PFSRatio.DataPoint(
+      Reference.to(record.patient),
+      medication1,
+      medication2,
+      pfs1,
+      pfs2,
+      pfs2.toDouble/pfs1
+    )
+          
+  }
+
+  def vonHoffRatio(
+    therapy: MTBSystemicTherapy
+  )(
+    implicit
+    record: MTBPatientRecord,
+    chronoUnit: ChronoUnit
+  ): Option[PFSRatio.DataPoint] = {
+    for {
+      th1 <- precedingTherapy(therapy,record)
+
+      pfs1 <- progressionFreeSurvival(th1,record).map(_._1)
+
+      medication1 <- th1.medication
+
+      pfs2 <- progressionFreeSurvival(therapy,record).map(_._1)
+
+      medication2 <- therapy.medication
+
+    } yield PFSRatio.DataPoint(
+      Reference.to(record.patient),
+      medication1,
+      medication2,
+      pfs1,
+      pfs2,
+      pfs2.toDouble/pfs1
+    )
+          
+  }
+
+  val responderThreshold = 1.3
+
+}
 
 
 trait KaplanMeierEstimator[F[_]]
@@ -95,7 +319,7 @@ trait KaplanMeierEstimator[F[_]]
 }
 
 
-trait KaplanMeierModule[F[_]]
+trait KaplanMeierModule[F[_]] extends SurvivalOps
 {
   self =>
 
@@ -106,23 +330,22 @@ trait KaplanMeierModule[F[_]]
 
   def survivalConfig: Config
 
+  def rawSurvivalStatistics(
+    survivalType: SurvivalType.Value,
+    grouping: Grouping.Value,
+    timeUnit: Option[UnitOfTime],
+    cohort: Seq[Snapshot[MTBPatientRecord]]
+  ): F[RawSurvivalStatistics]
+
 
   def survivalStatistics(
     survivalType: Option[SurvivalType.Value],
     grouping: Option[Grouping.Value],
     cohort: Seq[Snapshot[MTBPatientRecord]],
-    timeUnit: UnitOfTime = UnitOfTime.Weeks
+    timeUnit: UnitOfTime = UnitOfTime.Days
   )(
     implicit estimator: KaplanMeierEstimator[F],
   ): F[SurvivalStatistics]
-
-
-  def pfsRatioReport(
-    cohort: Seq[Snapshot[MTBPatientRecord]],
-    timeUnit: UnitOfTime = UnitOfTime.Weeks
-  )(
-    implicit F: Monad[F]
-  ): F[PFSRatio.Report]
 
 }
 
@@ -136,62 +359,86 @@ extends KaplanMeierModule[cats.Id]
 
   import ICD.extensions._
 
-  private val defaults =
-    Config.Defaults(
-      PFS,
-      ByTherapy
+  private val possibleGroupings =
+    Map(
+      OS -> Set(Ungrouped,TumorEntity,ObtainedTherapy),
+      PFS -> Set(Therapy)
     )
+/*
+  private val defaultGroupings =
+    Map(
+      OS -> ObtainedTherapy,
+      PFS -> Therapy
+    )
+*/
 
   override val survivalConfig: Config =
     Config(
-      Seq(
-        Entry(
-          Coding(OS),
-          Seq(Ungrouped,ByTumorEntity).map(Coding(_))
-        ),
-        Entry(
-          Coding(PFS),
-          Seq(ByTherapy).map(Coding(_))
-        )
-      ),
-      defaults  
+      possibleGroupings.map { 
+        case (typ,groupings) => Entry(Coding(typ), groupings.toSeq.map(Coding(_)))
+      }
+      .toSeq,
+      Config.Defaults(OS,ObtainedTherapy)
     )
 
+  override def rawSurvivalStatistics(
+    survivalType: SurvivalType.Value,
+    grouping: Grouping.Value,
+    timeUnit: Option[UnitOfTime],
+    cohort: Seq[Snapshot[MTBPatientRecord]]
+  ): RawSurvivalStatistics = {
+/*
+    val (survivalType,grouping) = survivalTypeAndGrouping match { 
+      case Some(typ -> grp) =>
+        typ -> grp.filter(value => possibleGroupings.get(typ).exists(_ contains value)).getOrElse(defaultGroupings(typ))
+      
+      case None => (OS,defaultGroupings(OS))
+    }
+*/
+    val theTimeUnit = timeUnit.getOrElse(UnitOfTime.Days)
+
+    implicit val chronoUnit = UnitOfTime.chronoUnit(theTimeUnit)
+
+    RawSurvivalStatistics(
+      Site.local,
+      Coding(survivalType),
+      Coding(grouping),
+      theTimeUnit,
+      cohort
+        .flatMap(projector(survivalType,grouping))
+        .toSeq
+        .sortBy(_.time)
+    )
+  }
 
   override def survivalStatistics(
-    survivalType: Option[SurvivalType.Value],
-    grouping: Option[Grouping.Value],
+    optSurvivalType: Option[SurvivalType.Value],
+    optGrouping: Option[Grouping.Value],
     cohort: Seq[Snapshot[MTBPatientRecord]],
     timeUnit: UnitOfTime
   )(
-    implicit
-    estimator: KaplanMeierEstimator[cats.Id]
+    implicit estimator: KaplanMeierEstimator[cats.Id]
   ): SurvivalStatistics = {
 
-    val chronoUnit =
-      UnitOfTime.chronoUnit(timeUnit)
+    implicit val chronoUnit = UnitOfTime.chronoUnit(timeUnit)
 
-    val survType = survivalType.getOrElse(defaults.`type`)
-    val grping   = grouping.getOrElse(defaults.grouping)
+    val survivalType = optSurvivalType.getOrElse(survivalConfig.defaults.`type`)
+    val grouping     = optGrouping.getOrElse(survivalConfig.defaults.grouping)
 
     cohort
-      .flatMap(projectors(survType -> grping))
-      .groupMap(_._1){
-        case (_,startDate,endDate,status) => chronoUnit.between(startDate,endDate) -> status
+      .flatMap(projector(survivalType,grouping))
+      .groupMap(_.groupLabel){
+        case RawDataPoint(_,duration,status) => duration -> status
       }
       .map {
-        case (group,data) =>
-          Entry(
-            group,
-            estimator.cohortResult(data)
-          )
+        case (group,data) => Entry(group,estimator.cohortResult(data))
       }
       .toSeq
       .sortBy(_.key)
       .pipe(
         SurvivalStatistics(
-          Coding(survType),
-          Coding(grping),
+          Coding(survivalType),
+          Coding(grouping),
           timeUnit,
           _
         )
@@ -200,299 +447,118 @@ extends KaplanMeierModule[cats.Id]
   }
 
 
-  private val progressionRecist =
-    Set(
-      RECIST.PD,
-      RECIST.SD
-    )
-    .map(Coding(_))
-
-
-  private val dateOfDeathOrCensoring: Snapshot[MTBPatientRecord] => (LocalDate,Boolean) = {
-
-    case Snapshot(record,t) =>
-    
-      record
-        .patient
-        .dateOfDeath
-        .map(_ -> true)
-        .getOrElse(
-          // 1. Censoring time strategy: fall back to date of last therapy follow-up
-          record
-            .getSystemicTherapies
-            .flatMap(_.history.map(_.recordedOn).toList)
-            .maxOption
-            // 2. Censoring time strategy: fall back to upload date
-            .getOrElse(LocalDate.ofInstant(Instant.ofEpochMilli(t),ZoneId.systemDefault)) -> false
-          )
-
-  }
-
-
-  private def progressionOrCensoringDate(
-    therapy: MTBSystemicTherapy,
-    patient: Patient
+  private def projector(
+    survivalType: SurvivalType.Value,
+    grouping: Grouping.Value
   )(
-    implicit lastResponses: Map[Id[MTBSystemicTherapy],Response]
-  ): (LocalDate,Boolean) =
-    lastResponses
-      .get(therapy.id)
-      // 1. Look for date of latest response with recorded progression
-      .collect {
-        case response if progressionRecist contains response.value =>
-          response.effectiveDate
-      }
-      // 2. Check whether therapy was stopped due to progression and take the end or recording date
-      .orElse(
-        therapy
-          .statusReason
-          .collect { 
-            case MTBTherapy.StatusReason(Progression) =>
-              therapy.period
-                .flatMap(_.endOption)
-                .getOrElse(therapy.recordedOn)
-          }
-      )
-      // 3. Use patient date of death as "progression" date
-      .orElse(patient.dateOfDeath)
-      .map(_ -> true)
-      // 4. Censoring: therapy recording date
-      .getOrElse(therapy.recordedOn -> false)
-  
+    implicit chronoUnit: ChronoUnit
+  ): Snapshot[MTBPatientRecord] => Iterable[RawDataPoint] =
+    survivalType match {   
 
-  private val projectors: Map[
-    (SurvivalType.Value,Grouping.Value),
-    Snapshot[MTBPatientRecord] => Iterable[(String,LocalDate,LocalDate,Boolean)]
-  ] =
-    Map(
-      (OS,ByTumorEntity) -> {
-        snp =>
-          val (observationDate,status) = dateOfDeathOrCensoring(snp)
-        
-          snp.data
-            .diagnoses
-            .map(
-              diagnosis =>
-                (
-                  diagnosis.code
-                    .parentOfKind(Category)
-                    .getOrElse(diagnosis.code)
-                    .code.value,
-                  diagnosis.recordedOn,
-                  observationDate,
-                  status
-                )
-            )
-            .toList
+      case OS =>
 
-      },
-      (OS,Ungrouped) -> {
-        snp =>
-          val (observationDate,status) = dateOfDeathOrCensoring(snp)
+        val survival: (MTBDiagnosis,Snapshot[MTBPatientRecord]) => Option[(Long,Boolean)] = overallSurvival(_,_)
 
-          snp.data
-            .diagnoses
-            .map(_.recordedOn)
-            .toList
-            .minOption
-            .map(
-              date =>
-                (
-                  "Alle",
-                  date,
-                  observationDate,
-                  status
-                )
-            )
-      },
-      (PFS,ByTherapy) -> { 
-        case Snapshot(record,_) =>
-        
-          implicit val lastResponses =
-            record
-              .getResponses
-              .groupBy(_.therapy)
-              .collect { 
-                case (ref,responses) => ref.id -> responses.maxBy(_.effectiveDate)
-              }
-          
-          record
-            .getSystemicTherapies
-            .map(_.latest)
-            .flatMap {
-              therapy =>
-          
-                val (observationDate,status) =
-                  progressionOrCensoringDate(therapy,record.patient)
+        val groupLabel: (MTBDiagnosis,MTBPatientRecord) => String =
+          grouping match {
+            case TumorEntity =>
+              (diagnosis,_) => diagnosis.code.parentOfKind(Category).getOrElse(diagnosis.code).code.value
 
-                for { 
-                  start <-
-                    therapy.period.map(_.start) 
-          
-                  medClasses <-
-                    therapy
-                      .medication
-                      .map(_.flatMap(_.currentGroup))
-                      .map(_.flatMap(_.display))
-          
-                } yield (
-                  medClasses.mkString(" + "),
-                  start,
-                  observationDate,
-                  status
-                )
-          
-            }
-      },
-      (PFS,Ungrouped) -> { 
-        case Snapshot(record,_) =>
-        
-          implicit val lastResponses =
-            record
-              .getResponses
-              .groupBy(_.therapy)
-              .collect { 
-                case (ref,responses) => ref.id -> responses.maxBy(_.effectiveDate)
-              }
-          
-          record
-            .getSystemicTherapies
-            .map(_.latest)
-            .flatMap {
-              therapy =>
-          
-                val (observationDate,status) =
-                  progressionOrCensoringDate(therapy,record.patient)
-
-                therapy.period
-                  .map(_.start) 
-                  .map(date =>
-                    (
-                      "Alle",
-                      date,
-                      observationDate,
-                      status
-                    )
+            case ObtainedTherapy =>
+              (_,record) => {
+                val hasObtainedTherapy =
+                  record.systemicTherapies.exists(_.exists { 
+                    history =>
+                      val latest = history.latestBy(_.recordedOn)
+                      latest.period.isDefined && latest.medication.exists(_.nonEmpty)
+                    }
                   )
-                     
+                /* Groups:
+                 - Obtained therapy
+                 - No therapy w/ recommendation
+                 - No therapy w/o recommendation
+                */
+                if (hasObtainedTherapy)
+                  "Therapie erhalten"
+                else if (record.therapyBoardPlans.exists(_.medicationRecommendations.exists(_.nonEmpty)))
+                  "Keine Therapie erhalten (mit Empfehlungen)"
+                else 
+                  "Keine Therapie erhalten (ohne Empfehlungen)"
+                
+              }
+
+            case Ungrouped => (_,_) => "Alle"
           }
-      }
+            
+        snp => snp.data.diagnoses.toList.flatMap {
+          diagnosis =>
+            for { (os,status) <- survival(diagnosis,snp) } yield RawDataPoint(groupLabel(diagnosis,snp.data),os,status)
+        }
+      
+      case PFS =>
 
-    )
+        val survival: (MTBSystemicTherapy,MTBPatientRecord) => Option[(Long,Boolean)] = progressionFreeSurvival(_,_)
 
+        val groupLabel: MTBSystemicTherapy => String =
+          grouping match {
+            case Therapy =>
+              _.medication.map(_.flatMap(_.currentGroup))
+               .map(_.flatMap(_.display))
+               .mkString(" + ")
+
+            case Ungrouped => _ => "Alle"
+          }
+
+        {
+          case Snapshot(record,_) =>
+            record.getSystemicTherapies.map(_.latest).flatMap {
+              therapy =>
+                for { (pfs,status) <- survival(therapy,record) } yield RawDataPoint(groupLabel(therapy),pfs,status)
+            }
+        }
+
+    }
+
+/*
   override def pfsRatioReport(
     cohort: Seq[Snapshot[MTBPatientRecord]],
-    timeUnit: UnitOfTime = UnitOfTime.Weeks
+    timeUnit: UnitOfTime
   )(
     implicit F: Monad[cats.Id]
   ): PFSRatio.Report = {
 
-    val chronoUnit = UnitOfTime.chronoUnit(timeUnit)
+    implicit val chronoUnit = UnitOfTime.chronoUnit(timeUnit)
 
     PFSRatio.Report(
       timeUnit,
-      cohort
-        .flatMap(snp =>
-          pfsRatio(
-            snp.data,
-            chronoUnit
-          )
-        )
+      cohort.flatMap(snp => pfsRatio(snp.data))
         .groupMap(_._1)(_._2)
         .map {
           case (entity,seq) => Entry(
             entity,
-            seq
-              .pipe {
-                dataPoints =>
-                  PFSRatio.CohortResult(
-                    dataPoints.zipWithIndex
-                      .map {
-                        case (pt,idx) => pt.copy(patient = pt.patient.withDisplay(s"Patient $idx"))
-                      },
-                    ReportingOps.median(dataPoints.map(_.pfsRatio)),
-                    Count.of(
-                      n     = dataPoints.count(_.pfsRatio >= 1.3),
-                      total = dataPoints.size
-                    )
+            seq.pipe {
+              dataPoints =>
+                PFSRatio.CohortResult(
+                  dataPoints.zipWithIndex
+                    .map {
+                      case (pt,idx) => pt.copy(patient = pt.patient.withDisplay(s"Patient $idx"))
+                    },
+                  ReportingOps.median(dataPoints.map(_.pfsRatio)),
+                  Count.of(
+                    n     = dataPoints.count(_.pfsRatio >= responderThreshold),
+                    total = dataPoints.size
                   )
-              }
+                )
+            }
           )
         }
         .toSeq
     )
 
   }
-
-
-  private def pfsRatio(
-    record: MTBPatientRecord,
-    chronoUnit: ChronoUnit
-  ): Option[(Coding[ICD10GM],PFSRatio.DataPoint)] = {
-
-    def progressionTime(
-      therapy: MTBSystemicTherapy,
-      patient: Patient
-    )(
-      implicit lastResponses: Map[Id[MTBSystemicTherapy],Response]
-    ): Option[Long] = {
-      val (observationDate,status) =
-        progressionOrCensoringDate(therapy,record.patient)
-
-      status match {
-        case true  => therapy.period.map(p => chronoUnit.between(p.start,observationDate))
-        case false => None
-      }
-    }
-
-    implicit val lastResponses =
-      record
-        .getResponses
-        .groupBy(_.therapy)
-        .collect { 
-          case (ref,responses) => ref.id -> responses.maxBy(_.effectiveDate)
-        }
-
-    implicit val diagnoses =
-      record.diagnoses
-
-    for {
-      th1 <- record.getGuidelineTherapies.maxByOption(_.recordedOn)
-
-      pfs1 <- progressionTime(th1,record.patient)
-
-      medication1 <- th1.medication
-
-      th2 <- record.getSystemicTherapies.map(_.latest).maxByOption(_.recordedOn)
-
-      pfs2 <- progressionTime(th2,record.patient)
-
-      medication2 <- th2.medication
-
-      tumorEntity <-
-        for {
-          entity2 <- th2.reason.flatMap(_.resolve).map(_.code)
-          entity1 <- th1.reason.flatMap(_.resolve).map(_.code)
-          if entity1 == entity2
-        } yield entity2
-
-    } yield (
-      tumorEntity,
-      PFSRatio.DataPoint(
-        Reference.to(record.patient),
-        medication1,
-        medication2,
-        pfs1,
-        pfs2,
-        pfs2.toDouble/pfs1
-      )
-    )
-          
-  }
+*/
 
 }
-
-
 
 object DefaultKaplanMeierEstimator extends KaplanMeierEstimator[cats.Id]
 {
@@ -500,8 +566,7 @@ object DefaultKaplanMeierEstimator extends KaplanMeierEstimator[cats.Id]
   import scala.math.sqrt
 
 
-  private val z =
-    1.96 // z-Factor for 95% confidence interval
+  private val z = 1.96 // z-Factor for 95% confidence interval
 
 
   override def apply(
@@ -516,62 +581,58 @@ object DefaultKaplanMeierEstimator extends KaplanMeierEstimator[cats.Id]
         .toSeq
         .sortBy(_._1)         // then sort by time to Seq[(Long,Seq[Boolean])]
 
-    statusByTime
-      .foldLeft(
-        (
-          Seq(
-            DataPoint(
-              0L,                     // t = 0
-              1.0,                    // survival rate at t = 0 is 1.0 by definition
-              false,                  // no censored entries at t = 0
-              ClosedInterval(1.0,1.0) // std error vanishes at t = 0
-            ),
+    statusByTime.foldLeft(
+      (
+        Seq(
+          DataPoint(
+            0L,                     // t = 0
+            1.0,                    // survival rate at t = 0 is 1.0 by definition
+            false,                  // no censored entries at t = 0
+            ClosedInterval(1.0,1.0) // std error vanishes at t = 0
           ),
-          0.0  // accumulator for variance sum: Sum_i=1^j{di/(ni*(ni - di))}
+        ),
+        0.0 // accumulator for variance sum: Sum_i=1^j{di/(ni*(ni - di))}
+      )
+    ){
+      case ((dataPoints,varAcc),(t,eventStatus)) =>
+
+        // num of events at t
+        val d = eventStatus.count(_ == true)
+
+        // num of "patients at risk" at and after this time
+        val n =
+          statusByTime
+            .dropWhile(_._1 < t)
+            .map(_._2.size)
+            .sum 
+
+        val st = dataPoints.last.survRate * (1.0 - d.toDouble/n)
+
+        // At the last data point, n = d if no event is censored,
+        // which would lead to division by 0 in the sum entering into the variance.
+        // But given that the above survival rate st becomes 0 due to d/n = 1, thus also the std error,
+        // avoid NaN issues by skipping this uninformative term in the sum
+        val varianceSum =
+          if (d != n) varAcc + d.toDouble/(n*(n - d))
+          else varAcc 
+
+        val stdErr = st * sqrt(varianceSum)
+
+        (
+          dataPoints :+ DataPoint(
+            t,
+            st,
+            eventStatus.forall(_ == false),
+            ClosedInterval(   // Greenwood method for the confidence interval
+              st - z*stdErr,
+              st + z*stdErr,
+            )
+          ),
+          varianceSum
         )
-      ){
-        case ((dataPoints,varAcc),(t,eventStatus)) =>
 
-          // num of events at t
-          val d =
-            eventStatus.count(_ == true)
-
-          // num of "patients at risk" at and after this time
-          val n =
-            statusByTime
-              .dropWhile(_._1 < t)
-              .map(_._2.size)
-              .sum 
-
-          val st =
-            dataPoints.last.survRate * (1.0 - d.toDouble/n)
-
-          // At the last data point, n = d if no event is censored,
-          // which would lead to division by 0 in the sum entering into the variance.
-          // But given that the above survival rate st becomes 0 due to d/n = 1, thus also the std error,
-          // avoid NaN issues by skipping this uninformative term in the sum
-          val varianceSum =
-            if (d != n) varAcc + d.toDouble/(n*(n - d))
-            else varAcc 
-
-          val stdErr =
-            st * sqrt(varianceSum)
-
-          (
-            dataPoints :+ DataPoint(
-              t,
-              st,
-              eventStatus.forall(_ == false),
-              ClosedInterval(   // Greenwood method for the confidence interval
-                st - z*stdErr,
-                st + z*stdErr,
-              )
-            ),
-            varianceSum
-          )
-
-      }
-      ._1
+    }
+    ._1
 
   }
 

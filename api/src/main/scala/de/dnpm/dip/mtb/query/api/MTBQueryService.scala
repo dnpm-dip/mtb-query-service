@@ -1,7 +1,10 @@
 package de.dnpm.dip.mtb.query.api
 
 
-import scala.concurrent.Future
+import scala.concurrent.{
+  ExecutionContext,
+  Future
+}
 import cats.Monad
 import de.dnpm.dip.util.{
   SPI,
@@ -15,6 +18,7 @@ trait MTBQueryService extends QueryService[
   Monad[Future],
   MTBConfig
 ]
+with GlobalKaplanMeierOps[Future,ExecutionContext]
 {
   def survivalConfig: KaplanMeier.Config
 }

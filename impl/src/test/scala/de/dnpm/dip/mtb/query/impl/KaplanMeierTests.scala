@@ -256,8 +256,7 @@ class KaplanMeierTests extends AnyFlatSpec
     implicit val estimator: KaplanMeierEstimator[cats.Id] =
       DefaultKaplanMeierEstimator
 
-    val kmModule =
-      new DefaultKaplanMeierModule
+    val kmModule = new DefaultKaplanMeierModule
 
     forAll(
       kmModule
@@ -277,6 +276,8 @@ class KaplanMeierTests extends AnyFlatSpec
         .map(_.survivalRates)
     ){
       dataPoints =>
+
+        dataPoints must not be (empty)
 
         // Check that all values are in interval [0.0,1.0]
         forAll(dataPoints){_.survRate must be (0.5 +- 0.5) }

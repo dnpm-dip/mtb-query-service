@@ -6,7 +6,7 @@ import scala.util.Properties.envOrElse
 name := "mtb-query-service"
 ThisBuild / organization := "de.dnpm.dip"
 ThisBuild / scalaVersion := "2.13.18"
-ThisBuild / version      := envOrElse("VERSION","1.1.3-SNAPSHOT")
+ThisBuild / version      := envOrElse("VERSION","1.2.0-SNAPSHOT")
 
 val ownerRepo  = envOrElse("REPOSITORY","dnpm-dip/mtb-query-service").split("/")
 ThisBuild / githubOwner      := ownerRepo(0)
@@ -68,15 +68,15 @@ lazy val impl = project
 lazy val dependencies =
   new {
     val scalatest      = "org.scalatest"  %% "scalatest"              % "3.2.20" % Test
-    val service_base   = "de.dnpm.dip"    %% "service-base"           % "1.5.0"
+    val service_base   = "de.dnpm.dip"    %% "service-base"           % "1.5.2"
     val mtb_model      = "de.dnpm.dip"    %% "mtb-dto-model"          % "1.2.3"
     val mtb_generators = "de.dnpm.dip"    %% "mtb-dto-generators"     % "1.2.3"
     val connector_base = "de.dnpm.dip"    %% "connector-base"         % "1.2.1"
     val icd10gm        = "de.dnpm.dip"    %% "icd10gm-impl"           % "1.1.4" % Test
     val icdo3          = "de.dnpm.dip"    %% "icdo3-impl"             % "1.1.4" % Test
     val icd_catalogs   = "de.dnpm.dip"    %% "icd-claml-packaged"     % "1.1.4" % Test
-    val atc_impl       = "de.dnpm.dip"    %% "atc-impl"               % "1.1.2" % Test
-    val atc_catalogs   = "de.dnpm.dip"    %% "atc-catalogs-packaged"  % "1.1.2" % Test
+    val atc_impl       = "de.dnpm.dip"    %% "atc-impl"               % "1.1.3" % Test
+    val atc_catalogs   = "de.dnpm.dip"    %% "atc-catalogs-packaged"  % "1.1.3" % Test
     val hgnc_geneset   = "de.dnpm.dip"    %% "hgnc-gene-set-impl"     % "1.1.3" % Test
   }
 
