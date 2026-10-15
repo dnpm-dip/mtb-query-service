@@ -277,6 +277,7 @@ with Completers
           .collect {
             case Ior.Right(Some(globalResults))  => globalResults.asRight
             case Ior.Both(_,Some(globalResults)) => globalResults.asRight
+            case Ior.Both(errors,None)           => KaplanMeier.ConnectionErrors(errors).asLeft
             case Ior.Left(errors)                => KaplanMeier.ConnectionErrors(errors).asLeft
           }
           .getOrElse(KaplanMeier.NoResults.asLeft)
