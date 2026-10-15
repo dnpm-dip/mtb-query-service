@@ -231,7 +231,7 @@ trait GlobalKaplanMeierOps[F[_],Env]
   ): F[Either[String,RawSurvivalStatistics]]
 
 
-  def survivalStatistics(
+  def globalSurvivalStatistics(
     survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])],
   )(
     implicit env: Env

@@ -11,10 +11,13 @@ import cats.{
   Applicative,
   Monad
 }
-import cats.data.EitherNel
+import cats.data.{
+  EitherNel,
+  Ior
+}
 import cats.syntax.apply._
 import cats.syntax.either._
-import cats.syntax.ior._
+//import cats.syntax.ior._
 import de.dnpm.dip.util.Logging
 import de.dnpm.dip.service.{
   Cache,
@@ -55,6 +58,7 @@ import de.dnpm.dip.mtb.query.api._
 import KaplanMeier.{
   GlobalSurvivalStatistics,
   Grouping,
+//  RawDataPoint,
   RawSurvivalStatistics,
   RawSurvivalStatisticsRequest,
   SurvivalType
@@ -229,7 +233,60 @@ with Completers
   }
 
 
-  override def survivalStatistics(
+  override def globalSurvivalStatistics(
+    survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])],
+  )(
+    implicit env: ExecutionContext
+  ): Future[Either[KaplanMeier.Error,GlobalSurvivalStatistics]] = {
+
+    val (survivalType,grouping) = valuesOrDefaults(survivalTypeAndGrouping)
+ 
+    log.info(s"Compiling GlobalSurvivalStatistics - Type: $survivalType, Grouping: $grouping")
+
+    val timeUnit = Days
+
+    for {
+      resultsBySite <- (
+        connector ! RawSurvivalStatisticsRequest(Site.local,survivalTypeAndGrouping,Some(timeUnit)),
+        rawSurvivalStatistics(survivalType,grouping,Some(timeUnit))
+          .map(result => Some(Site.local -> result))
+      )
+      .mapN(
+        (externalResultsBySite,localResult) => externalResultsBySite ++ localResult
+      )
+
+      outcome = 
+        resultsBySite.values
+          .map(_.map(_.data).toIor.toIorNel)
+          .reduceOption(_ combine _)
+          .map(
+            _.map(
+              dataPoints => Option.when(dataPoints.nonEmpty)(
+                GlobalSurvivalStatistics(
+                  Coding(survivalType),
+                  Coding(grouping),
+                  timeUnit,
+                  dataPoints.groupMap(_.groupLabel)(dataPoint => dataPoint.time -> dataPoint.event)
+                    .map { case (group,data) => Entry(group,kmEstimator.cohortResult(data)) }
+                    .toSeq,
+                  ConnectionStatus.from(resultsBySite)
+                )
+              )
+            )
+          )
+          .collect {
+            case Ior.Right(Some(globalResults))  => globalResults.asRight
+            case Ior.Both(_,Some(globalResults)) => globalResults.asRight
+            case Ior.Left(errors)                => KaplanMeier.ConnectionErrors(errors).asLeft
+          }
+          .getOrElse(KaplanMeier.NoResults.asLeft)
+
+    } yield outcome
+
+  }
+
+/*
+  override def globalSurvivalStatistics(
     survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])],
   )(
     implicit env: ExecutionContext
@@ -255,12 +312,10 @@ with Completers
         resultsBySite.values
           .map(_.map(_.data).toIor.toIorNel)
           .reduceOption(_ combine _)
-          .getOrElse(Seq.empty.rightIor)
-          .toEither
+          .getOrElse(Seq.empty.rightIor.toIorNel)
 
-      outcome = combinedResults match { 
-
-        case Right(dataPoints) if dataPoints.nonEmpty => 
+      outcome = combinedResults.map(
+        dataPoints => Option.when(dataPoints.nonEmpty)(
           GlobalSurvivalStatistics(
             Coding(survivalType),
             Coding(grouping),
@@ -270,16 +325,17 @@ with Completers
               .toSeq,
             ConnectionStatus.from(resultsBySite)
           )
-          .asRight
-
-        case Right(_) => KaplanMeier.NoResults.asLeft
-
-        case Left(errors) => KaplanMeier.ConnectionErrors(errors).asLeft
+        )
+      ) match { 
+        case Ior.Right(globalResults)  => globalResults.toRight(KaplanMeier.NoResults)
+        case Ior.Both(_,globalResults) => globalResults.toRight(KaplanMeier.NoResults)
+        case Ior.Left(errors)          => KaplanMeier.ConnectionErrors(errors).asLeft
       }
 
     } yield outcome
 
   }
+*/
 
   private def rawSurvivalStatistics(
     survivalType: SurvivalType.Value,
