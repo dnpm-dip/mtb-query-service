@@ -1,11 +1,12 @@
 package de.dnpm.dip.mtb.query.api
 
-
+import cats.data.NonEmptyList
 import de.dnpm.dip.model.{
   ClosedInterval,
   Medications,
   Patient,
   Reference,
+  Site,
   UnitOfTime
 }
 import de.dnpm.dip.coding.{
@@ -15,12 +16,15 @@ import de.dnpm.dip.coding.{
 }
 import de.dnpm.dip.coding.icd.ICD10GM
 import de.dnpm.dip.service.{
+  ConnectionStatus,
   Count,
-  Entry
+  Entry,
+  PeerToPeerRequest
 }
 import play.api.libs.json.{
   Json,
   Format,
+  OFormat,
   OWrites
 }
 
@@ -87,15 +91,17 @@ object KaplanMeier
   extends CodedEnum("dnpm-dip/kaplan-meier-analysis/grouping")
   with DefaultCodeSystem
   {
-    val ByTherapy     = Value("by-therapy")
-    val ByTumorEntity = Value("by-tumor-entity")
-    val Ungrouped     = Value("none")
+    val Therapy         = Value("therapy")
+    val TumorEntity     = Value("tumor-entity")
+    val ObtainedTherapy = Value("treatment-obtained")
+    val Ungrouped       = Value("none")
 
     override val display =
       Map(
-        ByTherapy     -> "Nach Therapie",
-        ByTumorEntity -> "Nach Tumor-Entität",
-        Ungrouped     -> "Keine"
+        TumorEntity     -> "Tumor-Entität",
+        Therapy         -> "Therapie",
+        ObtainedTherapy -> "Therapie erhalten: ja/nein",
+        Ungrouped       -> "Keine"
       )
 
     implicit val format: Format[Value] =
@@ -125,6 +131,47 @@ object KaplanMeier
 
   }
 
+  final case class RawDataPoint
+  (
+    groupLabel: String,
+    time: Long,
+    event: Boolean
+  )
+
+  final case class RawSurvivalStatistics
+  (
+    site: Coding[Site],
+    survivalType: Coding[SurvivalType.Value],
+    grouping: Coding[Grouping.Value],
+    timeUnit: UnitOfTime,
+    data: Seq[RawDataPoint]
+  )
+
+  final case class RawSurvivalStatisticsRequest
+  (  
+    origin: Coding[Site] = Site.local,
+    survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])] = None,
+    timeUnit: Option[UnitOfTime] = None
+  )
+  extends PeerToPeerRequest
+  {
+    type ResultType = RawSurvivalStatistics 
+  }
+
+  final case class GlobalSurvivalStatistics
+  (
+    survivalType: Coding[SurvivalType.Value],
+    grouping: Coding[Grouping.Value],
+    timeUnit: UnitOfTime,
+    data: Seq[Entry[String,CohortResult]],
+    peers: Seq[ConnectionStatus]
+  )
+
+  sealed trait Error
+  final case object NoResults extends Error
+  final case class ConnectionErrors(messages: NonEmptyList[String]) extends Error
+  final case class GenericError(message: String) extends Error
+
 
   final case class DataPoint
   (
@@ -133,7 +180,6 @@ object KaplanMeier
     censored: Boolean,
     confInterval: ClosedInterval[Double]
   )
-
 
   final case class CohortResult
   (
@@ -149,6 +195,14 @@ object KaplanMeier
     data: Seq[Entry[String,CohortResult]]
   )
 
+  implicit val formatRawDataPoint: OFormat[RawDataPoint] =
+    Json.format[RawDataPoint]
+
+  implicit val formatRawSurvivalStatistics: OFormat[RawSurvivalStatistics] =
+    Json.format[RawSurvivalStatistics]
+
+  implicit val writeRawSurvivalStatisticsRequest: OWrites[RawSurvivalStatisticsRequest] =
+    Json.writes[RawSurvivalStatisticsRequest]
 
   implicit val writesDataPoint: OWrites[DataPoint] =
     Json.writes[DataPoint]
@@ -159,11 +213,33 @@ object KaplanMeier
   implicit val writesSurvivalStatistics: OWrites[SurvivalStatistics] =
     Json.writes[SurvivalStatistics]
 
+  implicit val writeGlobalSurvivalStatistics: OWrites[GlobalSurvivalStatistics] =
+    Json.writes[GlobalSurvivalStatistics]
+
 }
 
 
 import KaplanMeier._
 
+trait GlobalKaplanMeierOps[F[_],Env]
+{
+
+  def !(
+    request: RawSurvivalStatisticsRequest
+  )(
+    implicit env: Env
+  ): F[Either[String,RawSurvivalStatistics]]
+
+
+  def globalSurvivalStatistics(
+    survivalTypeAndGrouping: Option[(SurvivalType.Value,Option[Grouping.Value])],
+  )(
+    implicit env: Env
+  ): F[Either[Error,GlobalSurvivalStatistics]]
+
+}
+
+//TODO: remove once fully switched to globalSurvivalStatistics
 trait KaplanMeierOps[F[_],Env]
 {
 

@@ -75,81 +75,22 @@ trait Completers extends BaseCompleters
 
   implicit protected val criteriaCompleter: Completer[MTBQueryCriteria] = {
 
-    implicit val snvCriteriaCompleter: Completer[SNVCriteria] = 
-      snv => snv.copy(
-        gene          = snv.gene.complete,
-        proteinChange = snv.proteinChange.map(proteinChangeCompleter)
-      )
-
-    implicit val cnvCriteriaCompleter: Completer[CNVCriteria] =
-      cnv => cnv.copy(
-        affectedGenes = cnv.affectedGenes.complete,
-        `type`        = cnv.`type`.complete
-      )
-
-    implicit val fusionCriteriaCompleter: Completer[FusionCriteria] =
-      fusion => fusion.copy(
-        fusionPartner5pr = fusion.fusionPartner5pr.complete,
-        fusionPartner3pr = fusion.fusionPartner3pr.complete,
-      )
-
     implicit val alterationCriteriaCompleter: Completer[GeneAlterationCriteria] =
-      alteration => alteration.copy(
-        gene = alteration.gene.complete,
-        variant  = alteration.variant.collect {
-          case snv: GeneAlterationCriteria.SNVCriteria =>
-            snv.copy(
-              proteinChange = snv.proteinChange.complete
-            )              
-          case cnv: GeneAlterationCriteria.CNVCriteria =>
-            cnv.copy(
-              copyNumberType = cnv.copyNumberType.complete
-            )              
-          case fusion: GeneAlterationCriteria.FusionCriteria =>
-            fusion.copy(
-              partner = fusion.partner.complete
-            )
+      criteria => criteria.copy(
+        gene = criteria.gene.complete,
+        alteration  = criteria.alteration.collect {
+          case snv: GeneAlterationCriteria.OnSNV => snv.copy(proteinChange = snv.proteinChange.complete)              
+          case cnv: GeneAlterationCriteria.OnCNV => cnv.copy(copyNumberType = cnv.copyNumberType.complete)              
+          case fusion: GeneAlterationCriteria.OnFusion => fusion.copy(partner = fusion.partner.complete)
         }         
       )
-/*
-    implicit val alterationCriteriaCompleter: Completer[GeneAlterationCriteria] =
-      Completer.of(
-        alteration => alteration.copy(
-          gene = alteration.gene.complete,
-          snv  = alteration.snv.map(
-            crit => crit.copy(
-              dnaChange = crit.dnaChange.complete,
-              proteinChange = crit.proteinChange.complete
-            )              
-          ),
-          cnv  = alteration.cnv.map(
-            crit => crit.copy(
-              `type` = crit.`type`.complete
-            )              
-          ),
-          fusion = alteration.fusion.map(
-            crit => crit.copy(
-              partner = crit.partner.complete
-            )
-          )
-        )
-      )
-*/
 
     criteria => criteria.copy(
-      diagnoses         = criteria.diagnoses.complete,
+      tumorEntities     = criteria.tumorEntities.complete,
       tumorMorphologies = criteria.tumorMorphologies.complete,
       geneAlterations   = criteria.geneAlterations.map(
         obj => obj.copy(
           items = obj.items.complete
-        )
-      ),
-      variants          = criteria.variants.map(
-        vs => vs.copy(
-          simpleVariants     = vs.simpleVariants.complete,
-          copyNumberVariants = vs.copyNumberVariants.complete,
-          dnaFusions         = vs.dnaFusions.complete,
-          rnaFusions         = vs.rnaFusions.complete,
         )
       ),
       medication         = criteria.medication.complete,
@@ -158,8 +99,7 @@ trait Completers extends BaseCompleters
 
   }
 
-
-  @deprecated("-","")
+  @deprecated("","")
   val CriteriaExpander: Completer[MTBQueryCriteria] = {
 
     implicit val icd10Expander: Completer[Set[Coding[ICD10GM]]] =
@@ -178,27 +118,24 @@ trait Completers extends BaseCompleters
       )
 
     criteria => criteria.copy(
-      diagnoses =
-        criteria.diagnoses.complete,
-      tumorMorphologies =
-        criteria.tumorMorphologies.complete,
-      medication =
-        criteria.medication.map {
-          _.complete
-           .tap(mc =>
-             mc.expandedDrugs =
-               mc.items.flatMap {
-                 coding => coding.system match {
-                   case sys if sys == Coding.System[ATC].uri =>
-                     coding.asInstanceOf[Coding[ATC]]
-                      .expand
-                      .map(_.asInstanceOf[Tree[Coding[Medications]]])
+      tumorEntities = criteria.tumorEntities.complete,
+      tumorMorphologies = criteria.tumorMorphologies.complete,
+      medication = criteria.medication.map {
+        _.complete
+         .tap(mc =>
+           mc.expandedDrugs =
+             mc.items.flatMap {
+               coding => coding.system match {
+                 case sys if sys == Coding.System[ATC].uri =>
+                   coding.asInstanceOf[Coding[ATC]]
+                    .expand
+                    .map(_.asInstanceOf[Tree[Coding[Medications]]])
 
-                   case _ => Some(Tree(coding.complete))
-                 }
-              }
-          )
-        }
+                 case _ => Some(Tree(coding.complete))
+               }
+            }
+        )
+      }
     )
 
   }
