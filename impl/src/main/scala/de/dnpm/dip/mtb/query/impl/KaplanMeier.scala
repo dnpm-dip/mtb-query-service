@@ -12,6 +12,7 @@ import cats.{
   Applicative,
   Monad,
 }
+import de.dnpm.dip.util.Logging
 import de.dnpm.dip.coding.{
   Coding,
   CodeSystemProvider
@@ -355,6 +356,7 @@ class DefaultKaplanMeierModule(
   override implicit val icd10gm: CodeSystemProvider[ICD10GM,cats.Id,Applicative[cats.Id]]
 )
 extends KaplanMeierModule[cats.Id]
+with Logging
 {
 
   import ICD.extensions._
@@ -364,13 +366,6 @@ extends KaplanMeierModule[cats.Id]
       OS -> Set(Ungrouped,TumorEntity,ObtainedTherapy),
       PFS -> Set(Therapy)
     )
-/*
-  private val defaultGroupings =
-    Map(
-      OS -> ObtainedTherapy,
-      PFS -> Therapy
-    )
-*/
 
   override val survivalConfig: Config =
     Config(
@@ -387,14 +382,7 @@ extends KaplanMeierModule[cats.Id]
     timeUnit: Option[UnitOfTime],
     cohort: Seq[Snapshot[MTBPatientRecord]]
   ): RawSurvivalStatistics = {
-/*
-    val (survivalType,grouping) = survivalTypeAndGrouping match { 
-      case Some(typ -> grp) =>
-        typ -> grp.filter(value => possibleGroupings.get(typ).exists(_ contains value)).getOrElse(defaultGroupings(typ))
-      
-      case None => (OS,defaultGroupings(OS))
-    }
-*/
+
     val theTimeUnit = timeUnit.getOrElse(UnitOfTime.Days)
 
     implicit val chronoUnit = UnitOfTime.chronoUnit(theTimeUnit)
@@ -493,6 +481,9 @@ extends KaplanMeierModule[cats.Id]
         snp => snp.data.diagnoses.toList.flatMap {
           diagnosis =>
             for { (os,status) <- survival(diagnosis,snp) } yield RawDataPoint(groupLabel(diagnosis,snp.data),os,status)
+        }
+        .tapEach {
+          case RawDataPoint(group,time,event) => log.info(s"$OS Patient ${snp.data.id}, Group: $group, Time: $time, Event $event")
         }
       
       case PFS =>
