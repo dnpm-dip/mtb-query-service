@@ -189,9 +189,13 @@ with Completers
 
   override def validate(
     criteria: MTBQueryCriteria
-  ): EitherNel[String,MTBQueryCriteria] =
-    //TODO: Adapt to check that criteria be non-empty after having announced this as a breaking change
-    criteria.asRight 
+  ): EitherNel[String,MTBQueryCriteria] = {
+ 
+    import MTBQueryCriteriaOps.Extensions
+
+    if (criteria.nonEmpty) criteria.asRight
+    else "Query criteria must not be empty".asLeft.toEitherNel
+  } 
     
 
   override val survivalConfig: KaplanMeier.Config =
