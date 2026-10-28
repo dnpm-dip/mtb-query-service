@@ -202,6 +202,13 @@ with Completers
     new MTBResultSetImpl(query.id,query.criteria,results)
 
 
+  override def validate(
+    criteria: MTBQueryCriteria
+  ): EitherNel[String,MTBQueryCriteria] =
+    //TODO: Adapt to check that criteria be non-empty after having announced this as a breaking change
+    criteria.asRight
+
+
   override val survivalConfig: KaplanMeier.Config =
     kmModule.survivalConfig
 

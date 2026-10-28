@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.1.6](https://github.com/dnpm-dip/mtb-query-service/compare/v1.1.5...v1.1.6) (2026-10-21)
+
+
+### Bug Fixes
+
+* Bump dependencies ([2d5fbf9](https://github.com/dnpm-dip/mtb-query-service/commit/2d5fbf9013900c459d2650ae7e0b5579f7991a2d))
+
+## [1.1.5](https://github.com/dnpm-dip/mtb-query-service/compare/v1.1.4...v1.1.5) (2026-08-12)
+
+
+### Bug Fixes
+
+* Bump connector-base to 1.2.1 ([88efd7c](https://github.com/dnpm-dip/mtb-query-service/commit/88efd7caca8d00fd7501e8a0c2c12eaf15a20791))
+* Bump dependency versions, esp. service-base to 1.5.0 ([#11](https://github.com/dnpm-dip/mtb-query-service/issues/11)) ([7c73115](https://github.com/dnpm-dip/mtb-query-service/commit/7c731152dceb30908b7262a763ab70c5dc94d1e3))
+
 ## [1.1.4](https://github.com/dnpm-dip/mtb-query-service/compare/v1.1.3...v1.1.4) (2026-06-01)
 
 
