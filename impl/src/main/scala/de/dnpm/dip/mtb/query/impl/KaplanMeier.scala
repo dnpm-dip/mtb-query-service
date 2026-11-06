@@ -482,9 +482,6 @@ with Logging
           diagnosis =>
             for { (os,status) <- survival(diagnosis,snp) } yield RawDataPoint(groupLabel(diagnosis,snp.data),os,status)
         }
-        .tapEach {
-          case RawDataPoint(group,time,event) => log.info(s"$OS Patient ${snp.data.id}, Group: $group, Time: $time, Event $event")
-        }
       
       case PFS =>
 
