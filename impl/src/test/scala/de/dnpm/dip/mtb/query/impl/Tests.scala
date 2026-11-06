@@ -8,12 +8,19 @@ import org.scalatest.EitherValues._
 import org.scalatest.Inspectors._
 import scala.util.Random
 import scala.concurrent.Future
+import cats.Applicative
 import de.dnpm.dip.model.{
   Gender,
   Site
 }
-import de.dnpm.dip.coding.Coding
+import de.dnpm.dip.coding.{
+  Coding,
+  CodeSystemProvider
+}
 import de.dnpm.dip.coding.atc.ATC
+import de.dnpm.dip.coding.icd.ICD10GM
+import de.dnpm.dip.coding.icd.ClassKinds.Category
+import de.dnpm.dip.coding.icd.ICD.extensions._
 import de.dnpm.dip.mtb.query.api._
 import de.dnpm.dip.mtb.model.MTBPatientRecord
 import de.dnpm.dip.mtb.model.Completers._
@@ -23,7 +30,10 @@ import de.dnpm.dip.service.query.{
   PreparedQuery,
 }
 import de.dnpm.dip.service.query.PatientFilter
-import de.dnpm.dip.service.query.QueryService.Save
+import de.dnpm.dip.service.query.QueryService.{
+  Save,
+  Saved
+}
 import de.dnpm.dip.connector.HttpConnector
 import de.ekut.tbi.generators.Gen
 
@@ -39,15 +49,16 @@ class Tests extends AsyncFlatSpec
   System.setProperty(MTBLocalDB.dataGenProp,"0")
 
 
-  implicit val rnd: Random =
-    new Random
+  implicit val rnd: Random = new Random
 
-  implicit val querier: Querier =
-    Querier("Dummy-Querier-ID")
+  implicit val querier: Querier = Querier("Dummy-Querier-ID")
 
+  implicit lazy val icd10gm: CodeSystemProvider[ICD10GM,cats.Id,Applicative[cats.Id]] =
+    ICD10GM.Catalogs
+      .getInstance[cats.Id]
+      .get
  
-  val serviceTry =
-    MTBQueryService.getInstance
+  val serviceTry = MTBQueryService.getInstance
 
   lazy val service = serviceTry.get
 
@@ -65,30 +76,9 @@ class Tests extends AsyncFlatSpec
 
       icd10 = patRec.diagnoses.head.code
 
-      ngs = 
-        patRec
-          .getNgsReports.head
+      ngs = patRec.getNgsReports.head
 
-      snvCriteria =
-        ngs.results
-          .simpleVariants
-          .get
-          .take(2)
-          .map(snv =>
-            SNVCriteria(
-              Some(snv.gene),
-              None,
-              snv.proteinChange
-                // Change the protein change to just a substring of the occurring one
-                // to test that matches are also returned by substring match of the protein (or DNA) change
-                .map(
-                  pch => pch.copy( 
-                    value = pch.value.substring(2,pch.value.size-1)
-                  )
-                )
-            )
-          )
-          .toSet
+      snv = ngs.results.simpleVariants.get.head
 
       medicationCriteria =
         patRec
@@ -98,36 +88,24 @@ class Tests extends AsyncFlatSpec
             case th if th.medication.isDefined =>
               MedicationCriteria(
                 Some(LogicalOperator.And),
-                th.medication
-                  .get
-                  .map(_.asInstanceOf[Coding[ATC]]),
+                th.medication.get.map(_.asInstanceOf[Coding[ATC]]),
                 Some(Set(Coding(MedicationUsage.Used)))
              )
           }
 
     } yield MTBQueryCriteria(
-      Some(Set(icd10)),
-      None,
-      Some(
+      tumorEntities = Some(Set(icd10)),
+      geneAlterations = Some(
         GeneAlterations(
-          Some(LogicalOperator.Or),
-          snvCriteria.map(
-            crit =>
+          Set(
             GeneAlterationCriteria(
-              crit.gene.get,
-              Some(
-                GeneAlterationCriteria.SNVCriteria(
-                  crit.dnaChange,
-                  crit.proteinChange
-                )
-              )
+              snv.gene,
+              Some(GeneAlterationCriteria.OnSNV(None,snv.proteinChange))
             )
           )
         )
       ),
-      None,
-      medicationCriteria,
-      None
+      medication = medicationCriteria,
     )
 
 
@@ -141,24 +119,18 @@ class Tests extends AsyncFlatSpec
 
     for {
       outcomes <- Future.traverse(dataSets)(service ! Save(_))
-    } yield all (outcomes.map(_.isRight)) mustBe true 
+    } yield all (outcomes) must matchPattern { case Right(Saved(_)) => } 
     
   }
 
 
-  val queryMode =
-    Coding(Query.Mode.Local)
+  val queryMode = Coding(Query.Mode.Local)
 
 
   "Query ResultSet" must "contain the total number of data sets for a query without criteria" in {
 
     for {
-      result <-
-        service ! Query.Submit(
-          queryMode,
-          None,
-          None
-        )
+      result <- service ! Query.Submit(queryMode,None,None)
 
       query = result.value
 
@@ -174,12 +146,7 @@ class Tests extends AsyncFlatSpec
     import MTBQueryCriteriaOps._
 
     for {
-      result <-
-        service ! Query.Submit(
-          queryMode,
-          None,
-          Some(genCriteria.next)
-        )
+      result <- service ! Query.Submit(queryMode,None,Some(genCriteria.next))
 
       query = result.value
 
@@ -198,8 +165,55 @@ class Tests extends AsyncFlatSpec
       _ = all (matchingCriteria) must be (defined)
 
     } yield forAll(matchingCriteria){ 
-      matches => assert( (queryCriteria intersect matches.value).nonEmpty )
+      matches => assert((queryCriteria intersect matches.value).nonEmpty)
     }
+
+  }
+
+
+  it must "contain the expected Patient for a query by supporting gene alteration" in { 
+    
+    // Get a MTBPatientRecord with supportingVariants
+    val record =
+      dataSets.find(
+        _.getCarePlans.exists(
+          _.medicationRecommendations.exists(
+            _.exists(_.supportingVariants.isDefined)
+          )
+        )
+      )
+      .get
+
+    val supportingAlteredGene =
+      record.getCarePlans(1)
+        .medicationRecommendations.get.head
+        .supportingVariants.get.head
+        .gene.get
+
+    val queryCriteria =
+      MTBQueryCriteria(
+        geneAlterations = Some(
+          GeneAlterations(
+            Set(
+              GeneAlterationCriteria(
+                gene = supportingAlteredGene,
+                supporting = Some(true),
+                alteration = None
+              )
+            )
+          )
+        )
+      )
+
+    for {
+
+      result <- service ! Query.Submit(queryMode,None,Some(queryCriteria))
+
+      query = result.value
+
+      resultSet <- service.resultSet(query.id).map(_.value)
+
+    } yield resultSet.patientRecord(record.id) must be (defined)
 
   }
 
@@ -207,12 +221,7 @@ class Tests extends AsyncFlatSpec
   "Filtering" must "have worked" in {
 
     for {
-      result <-
-        service ! Query.Submit(
-          queryMode,
-          None,
-          None
-        )
+      result <- service ! Query.Submit(queryMode,None,None)
 
       query = result.value
 
@@ -231,14 +240,78 @@ class Tests extends AsyncFlatSpec
   }
 
 
+  "Relevance ranking" must "have worked on GeneAlterationInfo and TherapyResponses" in { 
+
+    // Get a MTBPatientRecord with supportingVariants
+    val record =
+      dataSets.find(
+        _.getCarePlans.exists(
+          _.medicationRecommendations.exists(
+            _.exists(_.supportingVariants.isDefined)
+          )
+        )
+      )
+      .get
+
+    val queriedEntity = record.diagnoses.head.code
+
+    // Resolve the ICD-10 catgeory of the entity code
+    val queriedEntityCategory = queriedEntity.parentOfKind(Category).getOrElse(queriedEntity)
+
+    val queriedAlteredGene =
+      record.getCarePlans(1)
+        .medicationRecommendations.get.head
+        .supportingVariants.get.head
+        .gene.get    
+
+    val queryCriteria =
+      MTBQueryCriteria(
+        tumorEntities = Some(Set(queriedEntityCategory)),
+        geneAlterations = Some(
+          GeneAlterations(
+            Set(
+              GeneAlterationCriteria(
+                gene = queriedAlteredGene,
+                supporting = Some(true)
+              )
+            )
+          )
+        )
+      )
+
+    for {
+
+      result <- service ! Query.Submit(queryMode,None,Some(queryCriteria))
+
+      query = result.value
+
+      resultSet <- service.resultSet(query.id).map(_.value)
+
+      geneAlterationsInfos = resultSet.geneAlterations()
+
+      therapyResponses = resultSet.therapyResponses()
+
+      // The first entrie(s) must match the queried attributes:
+
+      // Here, check for identity with queriedEntityCategory because in GeneAlterationInfos, ICD-10 codes are resolved to their parent category
+      _ = geneAlterationsInfos.takeWhile(r => r.tumorEntity == queriedEntityCategory && r.alteration.gene == queriedAlteredGene) must not be (empty) 
+
+      // But here, compare explicitly with queriedEntity, because ICD-10 codes are retained "as is" in TherapyResponses
+      _ = therapyResponses.takeWhile(r => r.tumorEntity == queriedEntity && r.supportingAlteration.gene == queriedAlteredGene) must not be (empty) 
+
+    } yield succeed // If this point is reached, test passed
+
+  }
+
+
   "PreparedQuery" must "have been successfully created" in {
 
     for {
       result <- service ! PreparedQuery.Create("Dummy Prepared Query",genCriteria.next)
-
     } yield result.isRight mustBe true 
 
   }
+
 
   it must "have been successfully retrieved" in {
 

@@ -30,7 +30,6 @@ import play.api.libs.json.{
   Reads,
   OWrites,
   OFormat,
-  JsString
 }
 
 
@@ -52,138 +51,66 @@ sealed trait CombinableItems[T]
 }
 
 
-sealed trait Negatable
-{
-  val negated: Option[Boolean]
-
-/*
-  def asNegated(cond: Boolean) =
-    if (negated.getOrElse(false)) !cond
-    else cond
-*/
-
-  def asNegated(cond: Boolean) =
-    negated.map {
-      case true  => !cond
-      case false => cond
-    }
-    .getOrElse(cond)
-}
-
-
-sealed trait Supportable
-{
-  val supporting: Option[Boolean]
-}
-
-
-final case class SNVCriteria
-(
-  gene: Option[Coding[HGNC]],
-  dnaChange: Option[Code[HGVS.DNA]],
-  proteinChange: Option[Code[HGVS.Protein]],
-  supporting: Option[Boolean] = None,
-  negated: Option[Boolean] = None
-)
-extends Supportable
-with Negatable
-
-
-final case class CNVCriteria
-(
-  affectedGenes: Option[Set[Coding[HGNC]]],
-  `type`: Option[Coding[CNV.Type.Value]],
-  supporting: Option[Boolean] = None,
-  negated: Option[Boolean] = None
-)
-extends Supportable
-with Negatable
-
-
-final case class FusionCriteria
-(
-  fusionPartner5pr: Option[Coding[HGNC]],
-  fusionPartner3pr: Option[Coding[HGNC]],
-  supporting: Option[Boolean] = None,
-  negated: Option[Boolean] = None
-)
-extends Supportable
-with Negatable
-
-
-final case class VariantCriteria
-(
-  operator: Option[LogicalOperator.Value],
-  simpleVariants: Option[Set[SNVCriteria]],
-  copyNumberVariants: Option[Set[CNVCriteria]],
-  dnaFusions: Option[Set[FusionCriteria]],
-  rnaFusions: Option[Set[FusionCriteria]],
-) 
-
-
-
 // --------------------------------------------------------
 
 final case class GeneAlterationCriteria
 (
   gene: Coding[HGNC],
-  variant: Option[GeneAlterationCriteria.VariantCriteria],
+  alteration: Option[GeneAlterationCriteria.OnVariant] = None,
   supporting: Option[Boolean] = None,
-  negated: Option[Boolean] = None
+  wildtype: Option[Boolean] = None
 )
-extends Supportable
-with Negatable
 
 object GeneAlterationCriteria
 {
 
-  sealed abstract class VariantCriteria
+  sealed abstract class OnVariant
 
-  final case class SNVCriteria 
+  final case class OnSNV 
   (
     dnaChange: Option[Code[HGVS.DNA]],
     proteinChange: Option[Code[HGVS.Protein]]
   )
-  extends VariantCriteria
+  extends OnVariant
 
-  final case class CNVCriteria
+  final case class OnCNV
   (
     copyNumberType: Option[Set[Coding[CNV.Type.Value]]],
   )
-  extends VariantCriteria
+  extends OnVariant
 
-  final case class FusionCriteria
+  final case class OnFusion
   (
     partner: Option[Coding[HGNC]]
   )
-  extends VariantCriteria
+  extends OnVariant
 
 
-  implicit val formatSNVCriteria: OFormat[SNVCriteria] =
-    Json.format[SNVCriteria]
+  implicit val formatOnSNV: OFormat[OnSNV] =
+    Json.format[OnSNV]
 
-  implicit val formatCNVCriteria: OFormat[CNVCriteria] =
-    Json.format[CNVCriteria]
+  implicit val formatOnCNV: OFormat[OnCNV] =
+    Json.format[OnCNV]
 
-  implicit val formatFusionCriteria: OFormat[FusionCriteria] =
-    Json.format[FusionCriteria]
+  implicit val formatOnFusion: OFormat[OnFusion] =
+    Json.format[OnFusion]
 
-  implicit val readsVariantCriteria: Reads[VariantCriteria] =
+
+  implicit val readsOnVariant: Reads[OnVariant] =
     Reads(
-      js => (js \ "type").validate[String].flatMap {
-        case "SNV"    => Json.fromJson[SNVCriteria](js)
-        case "CNV"    => Json.fromJson[CNVCriteria](js) 
-        case "Fusion" => Json.fromJson[FusionCriteria](js)
+      js => (js \ "type").validate[GeneAlteration.Type.Value].flatMap {
+        case GeneAlteration.Type.SNV    => Json.fromJson[OnSNV](js)
+        case GeneAlteration.Type.CNV    => Json.fromJson[OnCNV](js) 
+        case GeneAlteration.Type.Fusion => Json.fromJson[OnFusion](js)
       }
     )
 
-  implicit val writesVariantCriteria: OWrites[VariantCriteria] =
+  implicit val writesOnVariant: OWrites[OnVariant] =
    OWrites {
-     case snv: SNVCriteria       => Json.toJsObject(snv)    + ("type" -> JsString("SNV"))
-     case cnv: CNVCriteria       => Json.toJsObject(cnv)    + ("type" -> JsString("CNV"))
-     case fusion: FusionCriteria => Json.toJsObject(fusion) + ("type" -> JsString("Fusion"))
+     case snv: OnSNV       => Json.toJsObject(snv)    + ("type" -> Json.toJson(GeneAlteration.Type.SNV))
+     case cnv: OnCNV       => Json.toJsObject(cnv)    + ("type" -> Json.toJson(GeneAlteration.Type.CNV))
+     case fusion: OnFusion => Json.toJsObject(fusion) + ("type" -> Json.toJson(GeneAlteration.Type.Fusion))
    }
-  
 
   implicit val format: OFormat[GeneAlterationCriteria] =
     Json.format[GeneAlterationCriteria]
@@ -193,8 +120,8 @@ object GeneAlterationCriteria
 
 final case class GeneAlterations
 (
-  operator: Option[LogicalOperator.Value],
-  items: Set[GeneAlterationCriteria]
+  items: Set[GeneAlterationCriteria],
+  operator: Option[LogicalOperator.Value] = None,
 )
 extends CombinableItems[GeneAlterationCriteria]
 
@@ -278,31 +205,16 @@ object MedicationCriteria
 
 final case class MTBQueryCriteria
 (
-  diagnoses: Option[Set[Coding[ICD10GM]]],
-  tumorMorphologies: Option[Set[Coding[ICDO3.M]]],
-  geneAlterations: Option[GeneAlterations],
-  variants: Option[VariantCriteria],
-  medication: Option[MedicationCriteria],
-  responses: Option[Set[Coding[RECIST.Value]]]
+  tumorEntities: Option[Set[Coding[ICD10GM]]] = None,
+  tumorMorphologies: Option[Set[Coding[ICDO3.M]]] = None,
+  geneAlterations: Option[GeneAlterations] = None,
+  medication: Option[MedicationCriteria] = None,
+  responses: Option[Set[Coding[RECIST.Value]]] = None
 )
 
 
 object MTBQueryCriteria
 {
-
-  implicit val formatSNVCriteria: OFormat[SNVCriteria] =
-    Json.format[SNVCriteria]
-
-  implicit val formatCNVCriteria: OFormat[CNVCriteria] =
-    Json.format[CNVCriteria]
-
-  implicit val formatFusionCriteria: OFormat[FusionCriteria] =
-    Json.format[FusionCriteria]
-
-  implicit val formatVariantCriteria: OFormat[VariantCriteria] =
-    Json.format[VariantCriteria]
-
   implicit val format: OFormat[MTBQueryCriteria] =
     Json.format[MTBQueryCriteria]
-
 }
