@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.7](https://github.com/dnpm-dip/mtb-query-service/compare/v1.1.6...v1.1.7) (2026-11-06)
+
+
+### Bug Fixes
+
+* Adapted percentage of PFS responder to total therapies in CoarseTherapyResponses entries ([29120c2](https://github.com/dnpm-dip/mtb-query-service/commit/29120c23f9d3ef0fda676b25fed82106e839741c))
+* Bump codesystem dependencies ([29120c2](https://github.com/dnpm-dip/mtb-query-service/commit/29120c23f9d3ef0fda676b25fed82106e839741c))
+* Bump dependencies ([29120c2](https://github.com/dnpm-dip/mtb-query-service/commit/29120c23f9d3ef0fda676b25fed82106e839741c))
+* Bump service-base to 1.5.5 ([5afcea5](https://github.com/dnpm-dip/mtb-query-service/commit/5afcea5eaa712338eb2996b7367ef4682701a582))
+
 ## [1.1.6](https://github.com/dnpm-dip/mtb-query-service/compare/v1.1.5...v1.1.6) (2026-10-21)
 
 
